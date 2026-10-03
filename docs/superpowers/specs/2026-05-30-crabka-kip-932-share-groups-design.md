@@ -7,15 +7,15 @@
 
 ## Background
 
-Share groups give Kafka queue semantics: many consumers in a *share group*
+Share groups give Kafka queue semantics: many consumers in a _share group_
 cooperatively consume a topic's partitions, with per-record acknowledgement and
 redelivery instead of per-partition offset commits. Records are handed out under
-a time-limited *acquisition lock*; a consumer Accepts, Releases, or Rejects each
+a time-limited _acquisition lock_; a consumer Accepts, Releases, or Rejects each
 record; unacknowledged records are redelivered up to a delivery-attempt limit.
 
 KIP-932 introduces three new server-side subsystems:
 
-- **Share group coordinator** — membership and assignment. This *is* the
+- **Share group coordinator** — membership and assignment. This _is_ the
   existing (KIP-848) group coordinator, extended to handle a `share` group type.
   Group metadata persists to `__consumer_offsets`.
 - **Share coordinator (persister)** — durably persists per-share-partition
@@ -54,20 +54,20 @@ broker does nothing with them.
 
 Client-facing RPCs and ApiKeys (from `crates/protocol/schemas/*.json`):
 
-| RPC | ApiKey | validVersions | Slice |
-|-----|:------:|:-------------:|:-----:|
-| ShareGroupHeartbeat | 76 | 1 | **A** |
-| ShareGroupDescribe | 77 | 1 | **A** |
-| ShareFetch | 78 | 1–2 | C |
-| ShareAcknowledge | 79 | 1–2 | C |
-| InitializeShareGroupState | 83 | 0 | B |
-| ReadShareGroupState | 84 | 0 | B |
-| WriteShareGroupState | 85 | 0–1 | B |
-| DeleteShareGroupState | 86 | 0 | B |
-| ReadShareGroupStateSummary | 87 | 0–1 | B |
-| DescribeShareGroupOffsets | 90 | 0–1 | D |
-| AlterShareGroupOffsets | 91 | 0 | D |
-| DeleteShareGroupOffsets | 92 | 0 | D |
+| RPC                        | ApiKey | validVersions | Slice |
+| -------------------------- | :----: | :-----------: | :---: |
+| ShareGroupHeartbeat        |   76   |       1       | **A** |
+| ShareGroupDescribe         |   77   |       1       | **A** |
+| ShareFetch                 |   78   |      1–2      |   C   |
+| ShareAcknowledge           |   79   |      1–2      |   C   |
+| InitializeShareGroupState  |   83   |       0       |   B   |
+| ReadShareGroupState        |   84   |       0       |   B   |
+| WriteShareGroupState       |   85   |      0–1      |   B   |
+| DeleteShareGroupState      |   86   |       0       |   B   |
+| ReadShareGroupStateSummary |   87   |      0–1      |   B   |
+| DescribeShareGroupOffsets  |   90   |      0–1      |   D   |
+| AlterShareGroupOffsets     |   91   |       0       |   D   |
+| DeleteShareGroupOffsets    |   92   |       0       |   D   |
 
 New error codes (from Kafka `Errors.java`): `INVALID_RECORD_STATE(121)`,
 `SHARE_SESSION_NOT_FOUND(122)`, `INVALID_SHARE_SESSION_EPOCH(123)`,
@@ -80,14 +80,14 @@ six slices (mirroring the KIP-848 roadmap pattern in this repo). This document
 specifies **Slice A** in detail; B–F are roadmap-level scope only and get their
 own spec when reached.
 
-| Slice | Name | Delivers | Key new pieces |
-|------|------|----------|----------------|
-| **A** | Membership foundation | A client can join a share group and receive a partition assignment; observable via `ShareGroupDescribe`. No record delivery. | `share.version` gate, ApiVersions advertisement, share error codes, `ShareGroupHeartbeat`, `ShareGroupDescribe`, ShareGroup\* records in `__consumer_offsets`, a share assignor |
-| **B** | Share coordinator (persister) | Durable per-share-partition state, independently testable. | `__share_group_state` topic, `ShareSnapshot`/`ShareUpdate` records, persister RPCs 83–87, snapshot/prune loop, `FindCoordinator SHARE(2)` |
-| **C** | Share-partition leader + ShareFetch/Acknowledge | End-to-end consume+ack on a single broker. | acquisition state machine (Available/Acquired/Acknowledged/Archived, locks, delivery counts, SPSO/SPEO), share sessions, `ShareFetch(78)`/`ShareAcknowledge(79)`, leader↔persister wiring |
-| **D** | Admin offsets surface | Operators inspect/reset queue head. | `DescribeShareGroupOffsets(90)`, `AlterShareGroupOffsets(91)`, `DeleteShareGroupOffsets(92)`, Initialize/Delete lifecycle |
-| **E** | Native share consumer client | `krabka-client-consumer` drives a share group. | client heartbeat loop, share-fetch+ack, poll API, implicit/explicit ack modes |
-| **F** | GA parity extras | 4.3 fidelity. | `RENEW` ack type (KIP-1222), read_committed isolation, lag persistence/metrics, full config bounds |
+| Slice | Name                                            | Delivers                                                                                                                     | Key new pieces                                                                                                                                                                            |
+| ----- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A** | Membership foundation                           | A client can join a share group and receive a partition assignment; observable via `ShareGroupDescribe`. No record delivery. | `share.version` gate, ApiVersions advertisement, share error codes, `ShareGroupHeartbeat`, `ShareGroupDescribe`, ShareGroup\* records in `__consumer_offsets`, a share assignor           |
+| **B** | Share coordinator (persister)                   | Durable per-share-partition state, independently testable.                                                                   | `__share_group_state` topic, `ShareSnapshot`/`ShareUpdate` records, persister RPCs 83–87, snapshot/prune loop, `FindCoordinator SHARE(2)`                                                 |
+| **C** | Share-partition leader + ShareFetch/Acknowledge | End-to-end consume+ack on a single broker.                                                                                   | acquisition state machine (Available/Acquired/Acknowledged/Archived, locks, delivery counts, SPSO/SPEO), share sessions, `ShareFetch(78)`/`ShareAcknowledge(79)`, leader↔persister wiring |
+| **D** | Admin offsets surface                           | Operators inspect/reset queue head.                                                                                          | `DescribeShareGroupOffsets(90)`, `AlterShareGroupOffsets(91)`, `DeleteShareGroupOffsets(92)`, Initialize/Delete lifecycle                                                                 |
+| **E** | Native share consumer client                    | `krabka-client-consumer` drives a share group.                                                                               | client heartbeat loop, share-fetch+ack, poll API, implicit/explicit ack modes                                                                                                             |
+| **F** | GA parity extras                                | 4.3 fidelity.                                                                                                                | `RENEW` ack type (KIP-1222), read_committed isolation, lag persistence/metrics, full config bounds                                                                                        |
 
 ---
 
@@ -112,7 +112,7 @@ Slices B/C).
 
 ## Coordinator discovery
 
-Share-group *membership* is served by the ordinary group coordinator, located by
+Share-group _membership_ is served by the ordinary group coordinator, located by
 clients via the existing `FindCoordinator GROUP(0)` path keyed by `group.id`,
 which already returns this broker. The new `FindCoordinator SHARE(2)` coordinator
 type locates the **persister** (keyed by `groupId:topicId:partition`) and is

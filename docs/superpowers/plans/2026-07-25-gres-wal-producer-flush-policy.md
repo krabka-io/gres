@@ -44,11 +44,13 @@ CLI/environment parsing, kube/schemars CRDs.
 ### Task 1: Validate and honor the generic producer flush deadline
 
 **Files:**
+
 - Modify: `crates/client-producer/src/builder.rs`
 - Modify: `crates/client-producer/src/producer.rs`
 - Modify: `crates/client-producer/src/lib.rs`
 
 **Interfaces:**
+
 - Produces:
   `ProducerFlushTimeout::new(Duration) -> Result<ProducerFlushTimeout, String>`
 - Produces: `ProducerFlushTimeout::{duration, milliseconds}`
@@ -249,11 +251,13 @@ task's implementer and commit remediations separately.
 ### Task 2: Carry the flush timeout through Gres CLI and runtime
 
 **Files:**
+
 - Modify: `crates/gres-substrate/src/recovery.rs`
 - Modify: `crates/gres/src/lib.rs`
 - Modify: `crates/gres/tests/runtime.rs`
 
 **Interfaces:**
+
 - Consumes: `ProducerFlushTimeout` and `DEFAULT_PRODUCER_FLUSH_TIMEOUT`
 - Produces:
   `LiveRecoveryConfig::{with_producer_flush_timeout, producer_flush_timeout}`
@@ -361,11 +365,13 @@ Obtain independent spec and quality approval and remediate every finding.
 ### Task 3: Add the fleet CRD flush timeout
 
 **Files:**
+
 - Modify: `crates/operator/src/crd/gres.rs`
 - Modify: `crates/operator/src/controller/gres_tenant.rs`
 - Modify: `deploy/crds/crabka.io_greses.yaml`
 
 **Interfaces:**
+
 - Consumes: `ProducerFlushTimeout`
 - Produces: `GresComputeSpec::wal_producer_flush_timeout_ms: Option<u64>`
 - Produces:
@@ -480,9 +486,11 @@ Obtain independent spec and quality approval and remediate every finding.
 ### Task 4: Audit, verify, and publish
 
 **Files:**
+
 - Modify: `docs/configuration-audit.md`
 
 **Interfaces:**
+
 - Consumes the completed generic, Gres, and operator implementation
 - Produces audit evidence and updates draft PR #904
 

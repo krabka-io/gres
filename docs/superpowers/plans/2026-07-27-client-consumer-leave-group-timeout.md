@@ -45,12 +45,14 @@
 ### Task 1: Validate and propagate the classic Consumer timeout
 
 **Files:**
+
 - Modify: `crates/client-consumer/Cargo.toml`
 - Modify: `crates/client-consumer/src/consumer.rs`
 - Modify: `crates/client-consumer/src/coordinator.rs`
 - Modify: `crates/client-consumer/src/lib.rs`
 
 **Interfaces:**
+
 - Produces:
   `pub const DEFAULT_CONSUMER_LEAVE_GROUP_TIMEOUT: Duration = Duration::from_secs(5)`
 - Produces: `pub struct ConsumerLeaveGroupTimeout(Duration)`
@@ -437,6 +439,7 @@ git commit -m "feat(consumer): configure leave timeout"
 ### Task 2: Expose the demo Consume setting
 
 **Files:**
+
 - Modify: `crates/observability-demo-app/src/main.rs`
 - Create:
   `crates/observability-demo-app/tests/consumer_leave_group_timeout_config.rs`
@@ -445,6 +448,7 @@ git commit -m "feat(consumer): configure leave timeout"
 - Modify: `demo/observability/docker-compose.yml`
 
 **Interfaces:**
+
 - Consumes: `ConsumerLeaveGroupTimeout`
 - Produces: `--consumer-leave-group-timeout-ms`
 - Produces: `KRABKA_DEMO_CONSUMER_LEAVE_GROUP_TIMEOUT_MS`
@@ -641,9 +645,11 @@ git commit -m "feat(demo): expose consumer leave timeout"
 ### Task 3: Record the completed owner and final verification
 
 **Files:**
+
 - Modify: `docs/configuration-audit.md`
 
 **Interfaces:**
+
 - Consumes: completed classic Consumer and demo behavior from Tasks 1-2
 - Produces: exclusive focused-search classification and the next
   production-consumed configuration owner

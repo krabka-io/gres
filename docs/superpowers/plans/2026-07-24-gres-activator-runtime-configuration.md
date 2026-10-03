@@ -42,17 +42,17 @@ Cargo nextest.
 
 ## Effective Settings
 
-| Setting | Direct CLI/environment | Gres CRD | Default | Constraint |
-|---|---|---|---:|---|
-| listen | `--listen` / `KRABKA_GRES_ACTIVATOR_LISTEN` | derived | required | `SocketAddr` |
-| bootstrap | `--bootstrap` / `KRABKA_GRES_ACTIVATOR_BOOTSTRAP` | derived | required | non-empty |
-| registry replication | `--registry-replication-factor` / `KRABKA_GRES_ACTIVATOR_REGISTRY_REPLICATION_FACTOR` | `spec.activator.registryReplicationFactor` | 1 | `1..=32767` |
-| registry poll | `--registry-poll-ms` / `KRABKA_GRES_ACTIVATOR_REGISTRY_POLL_MS` | `spec.activator.registryPollMs` | 250 | `>= 1` |
-| cold-start timeout | `--cold-start-timeout-ms` / `KRABKA_GRES_ACTIVATOR_COLD_START_TIMEOUT_MS` | `spec.activator.coldStartTimeoutMs` | 30000 | `>= 1` |
-| backend template | `--backend-endpoint-template` / `KRABKA_GRES_ACTIVATOR_BACKEND_ENDPOINT_TEMPLATE` | derived | `{tenant}:5432` | non-empty |
-| image | n/a | `spec.activator.image` | operator `--default-gres-activator-image` | non-empty |
-| replicas | n/a | `spec.activator.replicas` | `max(pgdog.replicas, 1)` | `>= 1` |
-| readiness period | n/a | `spec.activator.readinessProbePeriodSeconds` | 5 | `>= 1` |
+| Setting              | Direct CLI/environment                                                                | Gres CRD                                     |                                   Default | Constraint   |
+| -------------------- | ------------------------------------------------------------------------------------- | -------------------------------------------- | ----------------------------------------: | ------------ |
+| listen               | `--listen` / `KRABKA_GRES_ACTIVATOR_LISTEN`                                           | derived                                      |                                  required | `SocketAddr` |
+| bootstrap            | `--bootstrap` / `KRABKA_GRES_ACTIVATOR_BOOTSTRAP`                                     | derived                                      |                                  required | non-empty    |
+| registry replication | `--registry-replication-factor` / `KRABKA_GRES_ACTIVATOR_REGISTRY_REPLICATION_FACTOR` | `spec.activator.registryReplicationFactor`   |                                         1 | `1..=32767`  |
+| registry poll        | `--registry-poll-ms` / `KRABKA_GRES_ACTIVATOR_REGISTRY_POLL_MS`                       | `spec.activator.registryPollMs`              |                                       250 | `>= 1`       |
+| cold-start timeout   | `--cold-start-timeout-ms` / `KRABKA_GRES_ACTIVATOR_COLD_START_TIMEOUT_MS`             | `spec.activator.coldStartTimeoutMs`          |                                     30000 | `>= 1`       |
+| backend template     | `--backend-endpoint-template` / `KRABKA_GRES_ACTIVATOR_BACKEND_ENDPOINT_TEMPLATE`     | derived                                      |                           `{tenant}:5432` | non-empty    |
+| image                | n/a                                                                                   | `spec.activator.image`                       | operator `--default-gres-activator-image` | non-empty    |
+| replicas             | n/a                                                                                   | `spec.activator.replicas`                    |                  `max(pgdog.replicas, 1)` | `>= 1`       |
+| readiness period     | n/a                                                                                   | `spec.activator.readinessProbePeriodSeconds` |                                         5 | `>= 1`       |
 
 ---
 

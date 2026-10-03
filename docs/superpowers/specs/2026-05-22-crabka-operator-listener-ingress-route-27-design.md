@@ -21,7 +21,7 @@ Kafka's protocol is not HTTP: a client connects to a bootstrap address, receives
 a `Metadata` response listing every broker's advertised `host:port`, then opens a
 direct TCP connection to each broker. To multiplex many brokers behind one
 ingress IP on port 443, the ingress controller must route by **SNI** — it
-inspects the TLS `ClientHello` server-name and forwards the *raw* TLS byte
+inspects the TLS `ClientHello` server-name and forwards the _raw_ TLS byte
 stream to the matching broker Service. The controller does **not** terminate
 TLS; the broker does. SNI routing therefore requires `tls: true`, and each
 broker needs a distinct externally-resolvable hostname whose name is carried in
@@ -102,13 +102,13 @@ flow onto the bootstrap ClusterIP Service.
 
 `compute_advertised` gains an ingress/route arm:
 
-| Source (first match wins) | Host | Port |
-|---|---|---|
-| `brokers[b].advertisedHost` | override | — |
-| `brokers[b].host` | the ingress/route hostname | — |
-| (else) | → `IngressBrokerHostMissing` error | — |
-| `brokers[b].advertisedPort` | — | override |
-| (else) | — | `443` |
+| Source (first match wins)   | Host                               | Port     |
+| --------------------------- | ---------------------------------- | -------- |
+| `brokers[b].advertisedHost` | override                           | —        |
+| `brokers[b].host`           | the ingress/route hostname         | —        |
+| (else)                      | → `IngressBrokerHostMissing` error | —        |
+| `brokers[b].advertisedPort` | —                                  | override |
+| (else)                      | —                                  | `443`    |
 
 Ingress and Route resolve identically (both terminate at the controller on 443).
 Bootstrap status (`status.listeners[].bootstrapServers`) uses
@@ -140,10 +140,10 @@ ClusterRole gains:
 ```yaml
 - apiGroups: ["networking.k8s.io"]
   resources: ["ingresses"]
-  verbs: ["get","list","watch","create","update","patch","delete"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 - apiGroups: ["route.openshift.io"]
   resources: ["routes"]
-  verbs: ["get","list","watch","create","update","patch","delete"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 ```
 
 ## Out of scope / deferred
@@ -163,7 +163,7 @@ ClusterRole gains:
 1. `cargo build -p krabka-operator` clean; `cargo test -p krabka-operator`
    passes the new unit + integration tests.
 2. Validation: ingress/route without `tls` → `ListenersValid=False reason=
-   ListenerIngressRequiresTls`; ingress/route without bootstrap host →
+ListenerIngressRequiresTls`; ingress/route without bootstrap host →
    `ListenerIngressBootstrapHostMissing`.
 3. An ingress listener renders ClusterIP backends + Ingress objects, a
    ConfigMap whose `advertised` is `<host>:443`, and `ListenersReady=True`.

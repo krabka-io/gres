@@ -42,96 +42,96 @@ The repository-wide goal is complete only after those plans pass and the final a
 
 Tasks 3–5 implement every row in this table. Integer constraints are inclusive unless stated otherwise.
 
-| Field | Type | Default | Constraint |
-|---|---:|---:|---|
-| `startup_leader_wait_timeout_ms` | `u64` | `120000` | `>= 1` |
-| `self_registration_backoff_min_ms` | `u64` | `100` | `>= 1`, `<= max` |
-| `self_registration_backoff_max_ms` | `u64` | `5000` | `>= min` |
-| `observer_poll_interval_ms` | `u64` | `100` | `>= 1` |
-| `audit_spool_replay_interval_ms` | `u64` | `2000` | `>= 1` |
-| `audit_stats_poll_interval_ms` | `u64` | `1000` | `>= 1` |
-| `audit_partition_wait_timeout_ms` | `u64` | `10000` | `>= 1` |
-| `liveness_tick_interval_ms` | `u64` | `1000` | `>= 1` |
-| `gauge_poll_interval_ms` | `u64` | `1000` | `>= 1` |
-| `isr_scan_interval_ms` | `u64` | `1000` | `>= 1` |
-| `cleaner_interval_ms` | `u64` | `30000` | `>= 1` |
-| `future_log_move_retry_backoff_ms` | `u64` | `50` | `>= 1` |
-| `client_metrics_eviction_tick_ms` | `u64` | `60000` | `>= 1` |
-| `client_metrics_stale_floor_ms` | `u64` | `600000` | `>= eviction tick` |
-| `client_metrics_default_interval_ms` | `i32` | `300000` | `>= 1` |
-| `client_metrics_telemetry_max_bytes` | `i32` | `1048576` | `>= 1` |
-| `client_metrics_prom_snapshot_ttl_ms` | `u64` | `300000` | `>= 1` |
-| `rlmm_reconcile_tick_ms` | `u64` | `30000` | `>= 1` |
-| `rlmm_bootstrap_backoff_initial_ms` | `u64` | `250` | `>= 1`, `<= max` |
-| `rlmm_bootstrap_backoff_max_ms` | `u64` | `10000` | `>= initial` |
-| `connection_creation_throttle_max_ms` | `u64` | `1000` | `>= 1` |
-| `opa_http_timeout_ms` | `u64` | `5000` | `>= 1` |
-| `oauth_jwks_http_timeout_ms` | `u64` | `10000` | `>= 1` |
-| `auto_join_retry_backoff_ms` | `u64` | `500` | `>= 1` |
-| `replication_fetch_max_bytes` | `i32` | `1048576` | `>= 1` |
-| `replication_fetch_max_wait_ms` | `i32` | `500` | `>= 1` |
-| `replication_fetch_min_bytes` | `i32` | `1` | `>= 1`, `<= max bytes` |
-| `replication_throttle_exhausted_backoff_ms` | `u64` | `100` | `>= 1` |
-| `replication_send_error_backoff_ms` | `u64` | `1000` | `>= 1` |
-| `replication_unknown_topic_retry_delay_ms` | `u64` | `100` | `>= 1` |
-| `replication_epoch_fence_backoff_ms` | `u64` | `200` | `>= 1` |
-| `replication_unexpected_error_backoff_ms` | `u64` | `500` | `>= 1` |
-| `replication_reconnect_initial_delay_ms` | `u64` | `100` | `>= 1`, `<= cap` |
-| `replication_reconnect_delay_cap_ms` | `u64` | `5000` | `>= initial` |
-| `coordinator_session_expiry_tick_ms` | `u64` | `1000` | `>= 1` |
-| `coordinator_shutdown_ack_timeout_ms` | `u64` | `5000` | `>= 1` |
-| `consumer_group_session_timeout_ms` | `u64` | `45000` | within min/max |
-| `consumer_group_heartbeat_interval_ms` | `u64` | `5000` | within min/max |
-| `consumer_group_min_session_timeout_ms` | `u64` | `45000` | `>= 1`, `<= max` |
-| `consumer_group_max_session_timeout_ms` | `u64` | `60000` | `>= min` |
-| `consumer_group_min_heartbeat_interval_ms` | `u64` | `5000` | `>= 1`, `<= max` |
-| `consumer_group_max_heartbeat_interval_ms` | `u64` | `15000` | `>= min` |
-| `consumer_group_max_size` | `usize` | `200` | `>= 1` |
-| `classic_group_initial_rebalance_delay_ms` | `u64` | `3000` | `>= 1` |
-| `sync_group_follower_wait_ms` | `u64` | `30000` | `>= 1` |
-| `unclean_recovery_aggressive_deadline_ms` | `u64` | `2000` | `>= 1` |
-| `unclean_recovery_balanced_deadline_ms` | `u64` | `30000` | `>= aggressive` |
-| `operator_recovery_deadline_ms` | `u64` | `25000` | `>= 1` |
-| `quota_throttle_max_ms` | `u64` | `1000` | `>= 1` |
+| Field                                       |    Type |   Default | Constraint             |
+| ------------------------------------------- | ------: | --------: | ---------------------- |
+| `startup_leader_wait_timeout_ms`            |   `u64` |  `120000` | `>= 1`                 |
+| `self_registration_backoff_min_ms`          |   `u64` |     `100` | `>= 1`, `<= max`       |
+| `self_registration_backoff_max_ms`          |   `u64` |    `5000` | `>= min`               |
+| `observer_poll_interval_ms`                 |   `u64` |     `100` | `>= 1`                 |
+| `audit_spool_replay_interval_ms`            |   `u64` |    `2000` | `>= 1`                 |
+| `audit_stats_poll_interval_ms`              |   `u64` |    `1000` | `>= 1`                 |
+| `audit_partition_wait_timeout_ms`           |   `u64` |   `10000` | `>= 1`                 |
+| `liveness_tick_interval_ms`                 |   `u64` |    `1000` | `>= 1`                 |
+| `gauge_poll_interval_ms`                    |   `u64` |    `1000` | `>= 1`                 |
+| `isr_scan_interval_ms`                      |   `u64` |    `1000` | `>= 1`                 |
+| `cleaner_interval_ms`                       |   `u64` |   `30000` | `>= 1`                 |
+| `future_log_move_retry_backoff_ms`          |   `u64` |      `50` | `>= 1`                 |
+| `client_metrics_eviction_tick_ms`           |   `u64` |   `60000` | `>= 1`                 |
+| `client_metrics_stale_floor_ms`             |   `u64` |  `600000` | `>= eviction tick`     |
+| `client_metrics_default_interval_ms`        |   `i32` |  `300000` | `>= 1`                 |
+| `client_metrics_telemetry_max_bytes`        |   `i32` | `1048576` | `>= 1`                 |
+| `client_metrics_prom_snapshot_ttl_ms`       |   `u64` |  `300000` | `>= 1`                 |
+| `rlmm_reconcile_tick_ms`                    |   `u64` |   `30000` | `>= 1`                 |
+| `rlmm_bootstrap_backoff_initial_ms`         |   `u64` |     `250` | `>= 1`, `<= max`       |
+| `rlmm_bootstrap_backoff_max_ms`             |   `u64` |   `10000` | `>= initial`           |
+| `connection_creation_throttle_max_ms`       |   `u64` |    `1000` | `>= 1`                 |
+| `opa_http_timeout_ms`                       |   `u64` |    `5000` | `>= 1`                 |
+| `oauth_jwks_http_timeout_ms`                |   `u64` |   `10000` | `>= 1`                 |
+| `auto_join_retry_backoff_ms`                |   `u64` |     `500` | `>= 1`                 |
+| `replication_fetch_max_bytes`               |   `i32` | `1048576` | `>= 1`                 |
+| `replication_fetch_max_wait_ms`             |   `i32` |     `500` | `>= 1`                 |
+| `replication_fetch_min_bytes`               |   `i32` |       `1` | `>= 1`, `<= max bytes` |
+| `replication_throttle_exhausted_backoff_ms` |   `u64` |     `100` | `>= 1`                 |
+| `replication_send_error_backoff_ms`         |   `u64` |    `1000` | `>= 1`                 |
+| `replication_unknown_topic_retry_delay_ms`  |   `u64` |     `100` | `>= 1`                 |
+| `replication_epoch_fence_backoff_ms`        |   `u64` |     `200` | `>= 1`                 |
+| `replication_unexpected_error_backoff_ms`   |   `u64` |     `500` | `>= 1`                 |
+| `replication_reconnect_initial_delay_ms`    |   `u64` |     `100` | `>= 1`, `<= cap`       |
+| `replication_reconnect_delay_cap_ms`        |   `u64` |    `5000` | `>= initial`           |
+| `coordinator_session_expiry_tick_ms`        |   `u64` |    `1000` | `>= 1`                 |
+| `coordinator_shutdown_ack_timeout_ms`       |   `u64` |    `5000` | `>= 1`                 |
+| `consumer_group_session_timeout_ms`         |   `u64` |   `45000` | within min/max         |
+| `consumer_group_heartbeat_interval_ms`      |   `u64` |    `5000` | within min/max         |
+| `consumer_group_min_session_timeout_ms`     |   `u64` |   `45000` | `>= 1`, `<= max`       |
+| `consumer_group_max_session_timeout_ms`     |   `u64` |   `60000` | `>= min`               |
+| `consumer_group_min_heartbeat_interval_ms`  |   `u64` |    `5000` | `>= 1`, `<= max`       |
+| `consumer_group_max_heartbeat_interval_ms`  |   `u64` |   `15000` | `>= min`               |
+| `consumer_group_max_size`                   | `usize` |     `200` | `>= 1`                 |
+| `classic_group_initial_rebalance_delay_ms`  |   `u64` |    `3000` | `>= 1`                 |
+| `sync_group_follower_wait_ms`               |   `u64` |   `30000` | `>= 1`                 |
+| `unclean_recovery_aggressive_deadline_ms`   |   `u64` |    `2000` | `>= 1`                 |
+| `unclean_recovery_balanced_deadline_ms`     |   `u64` |   `30000` | `>= aggressive`        |
+| `operator_recovery_deadline_ms`             |   `u64` |   `25000` | `>= 1`                 |
+| `quota_throttle_max_ms`                     |   `u64` |    `1000` | `>= 1`                 |
 
 The exhaustive broker audit found additional production policy after this
 initial table was written. Tasks 3–5 must also carry these values through the
 same `BrokerConfig` → CLI/environment/file → CRD path:
 
-| Field | Type | Default | Constraint |
-|---|---:|---:|---|
-| `self_registration_max_attempts` | `u32` | `8` | `>= 1` |
-| `observer_fetch_max_bytes` | `u32` | `1048576` | `>= 1` |
-| `audit_event_queue_capacity` | `usize` | `8192` | `>= 1` |
-| `audit_tail_window_offsets` | `i64` | `4096` | `>= 1` |
-| `audit_tail_read_max_bytes` | `usize` | `1048576` | `>= 1` |
-| `offsets_topic_metadata_wait_timeout_ms` | `u64` | `30000` | `>= 1` |
-| `client_metrics_stale_push_intervals` | `u32` | `3` | `>= 1` |
-| `client_metrics_otlp_queue_capacity` | `usize` | `256` | `>= 1` |
-| `coordinator_actor_mailbox_capacity` | `usize` | `64` | `>= 1` |
-| `unclean_recovery_queue_capacity` | `usize` | `256` | `>= 1` |
-| `share_recovery_read_max_bytes` | `usize` | `1048576` | `>= 1` |
-| `share_session_cache_max_when_unlimited` | `usize` | `10000` | `>= 1` |
-| `socket_request_max_bytes` | `usize` | `104857600` | `1..=u32::MAX` |
-| `sendfile_min_bytes` | `usize` | `32768` | `>= 1` |
-| `socket_send_buffer_bytes` | `usize` | `1048576` | `>= 1` |
-| `socket_receive_buffer_bytes` | `usize` | `1048576` | `>= 1` |
-| `acl_max_principal_bytes` | `usize` | `256` | `>= 1` |
-| `acl_max_resource_name_bytes` | `usize` | `256` | `>= 1` |
-| `telemetry_max_decompression_ratio` | `usize` | `100` | `>= 1` |
-| `telemetry_decompressed_output_floor_bytes` | `usize` | `16777216` | `>= 1`, `<= ceiling` |
-| `telemetry_decompressed_output_ceiling_bytes` | `usize` | `1073741824` | `>= floor` |
-| `inter_broker_server_name` | `String` | `"localhost"` | nonempty |
-| `producer_id_expiration_ms` | `i64` | `86400000` | `>= 1` |
-| `producer_id_expiration_scan_interval_ms` | `u64` | `600000` | `>= 1` |
-| `max_produce_group` | `usize` | `1024` | `>= 1` |
-| `partition_writer_queue_depth` | `usize` | `64` | `>= 1` |
-| `default_min_insync_replicas` | `i32` | `1` | `>= 1` |
-| `future_log_move_read_chunk_bytes` | `usize` | `1048576` | `>= 1` |
-| `share_state_num_partitions` | `i32` | `50` | `>= 1` |
-| `transaction_state_num_partitions` | `i32` | `50` | `>= 1` |
-| `transaction_min_timeout_ms` | `i32` | `1000` | `>= 1`, `< max` |
-| `transaction_max_timeout_ms` | `i32` | `900000` | `>= min`, `< i32::MAX` |
+| Field                                         |     Type |       Default | Constraint             |
+| --------------------------------------------- | -------: | ------------: | ---------------------- |
+| `self_registration_max_attempts`              |    `u32` |           `8` | `>= 1`                 |
+| `observer_fetch_max_bytes`                    |    `u32` |     `1048576` | `>= 1`                 |
+| `audit_event_queue_capacity`                  |  `usize` |        `8192` | `>= 1`                 |
+| `audit_tail_window_offsets`                   |    `i64` |        `4096` | `>= 1`                 |
+| `audit_tail_read_max_bytes`                   |  `usize` |     `1048576` | `>= 1`                 |
+| `offsets_topic_metadata_wait_timeout_ms`      |    `u64` |       `30000` | `>= 1`                 |
+| `client_metrics_stale_push_intervals`         |    `u32` |           `3` | `>= 1`                 |
+| `client_metrics_otlp_queue_capacity`          |  `usize` |         `256` | `>= 1`                 |
+| `coordinator_actor_mailbox_capacity`          |  `usize` |          `64` | `>= 1`                 |
+| `unclean_recovery_queue_capacity`             |  `usize` |         `256` | `>= 1`                 |
+| `share_recovery_read_max_bytes`               |  `usize` |     `1048576` | `>= 1`                 |
+| `share_session_cache_max_when_unlimited`      |  `usize` |       `10000` | `>= 1`                 |
+| `socket_request_max_bytes`                    |  `usize` |   `104857600` | `1..=u32::MAX`         |
+| `sendfile_min_bytes`                          |  `usize` |       `32768` | `>= 1`                 |
+| `socket_send_buffer_bytes`                    |  `usize` |     `1048576` | `>= 1`                 |
+| `socket_receive_buffer_bytes`                 |  `usize` |     `1048576` | `>= 1`                 |
+| `acl_max_principal_bytes`                     |  `usize` |         `256` | `>= 1`                 |
+| `acl_max_resource_name_bytes`                 |  `usize` |         `256` | `>= 1`                 |
+| `telemetry_max_decompression_ratio`           |  `usize` |         `100` | `>= 1`                 |
+| `telemetry_decompressed_output_floor_bytes`   |  `usize` |    `16777216` | `>= 1`, `<= ceiling`   |
+| `telemetry_decompressed_output_ceiling_bytes` |  `usize` |  `1073741824` | `>= floor`             |
+| `inter_broker_server_name`                    | `String` | `"localhost"` | nonempty               |
+| `producer_id_expiration_ms`                   |    `i64` |    `86400000` | `>= 1`                 |
+| `producer_id_expiration_scan_interval_ms`     |    `u64` |      `600000` | `>= 1`                 |
+| `max_produce_group`                           |  `usize` |        `1024` | `>= 1`                 |
+| `partition_writer_queue_depth`                |  `usize` |          `64` | `>= 1`                 |
+| `default_min_insync_replicas`                 |    `i32` |           `1` | `>= 1`                 |
+| `future_log_move_read_chunk_bytes`            |  `usize` |     `1048576` | `>= 1`                 |
+| `share_state_num_partitions`                  |    `i32` |          `50` | `>= 1`                 |
+| `transaction_state_num_partitions`            |    `i32` |          `50` | `>= 1`                 |
+| `transaction_min_timeout_ms`                  |    `i32` |        `1000` | `>= 1`, `< max`        |
+| `transaction_max_timeout_ms`                  |    `i32` |      `900000` | `>= min`, `< i32::MAX` |
 
 Behaviorally consumed Share and Streams group fields remain owned by their
 existing component config structs and must receive CLI/file/CRD values rather
@@ -141,30 +141,30 @@ them.
 
 The following broker settings already have direct CLI/environment inputs. Task 5 adds their missing typed CRD path; Tasks 1 and 4 replace ad hoc scalar validation with refined parsers where a constraint exists.
 
-| Existing field | Type | Default | Constraint |
-|---|---:|---:|---|
-| `partition_disk_scan_interval_secs` | `u64` | `60` | any value; `0` disables |
-| `observer_lag_bound` | `u64` | `100` | any value |
-| `heartbeat_interval_ms` | `u64` | `3000` | `>= 1`, below timeout |
-| `heartbeat_timeout_ms` | `u64` | `9000` | above interval |
-| `replica_lag_time_max_ms` | `u64` | `30000` | `>= 1` |
-| `controller_election_timeout_ms` | `u64` | `5000` | `>= 1`, above heartbeat |
-| `controller_heartbeat_interval_ms` | `u64` | `500` | `>= 1`, below election timeout |
-| `controlled_shutdown_drain_timeout_ms` | `u64` | `20000` | `>= 1` |
-| `metadata_max_bytes_between_snapshots` | `u64` | `20971520` | `>= 1` |
-| `metadata_max_snapshot_interval_ms` | `u64` | `3600000` | any value; `0` disables |
-| `metadata_snapshot_interval_records` | `u64` | `10000` | `>= 1` |
-| `txn_abort_cleanup_interval_ms` | `u64` | `10000` | any value; `0` disables |
-| `leader_imbalance_check_interval_secs` | `u64` | `300` | `>= 1` |
-| `leader_imbalance_per_broker_percentage` | `u32` | `10` | `0..=100` |
-| `tls_reload_interval_ms` | `u64` | `30000` | any value; `0` disables |
-| `max_incremental_fetch_session_cache_slots` | `usize` | `1000` | any value; `0` disables caching |
-| `max_connections` | `usize` | `usize::MAX` | any value; `0` rejects connections |
-| `max_connections_per_ip` | `usize` | `usize::MAX` | any value; `0` rejects connections |
-| `delegation_token_max_lifetime_ms` | `i64` | `604800000` | `>= 1` |
-| `delegation_token_expiry_check_interval_ms` | `i64` | `3600000` | `>= 1` |
-| `delegation_token_default_renew_period_ms` | `i64` | `86400000` | `>= 1`, at most max lifetime |
-| `remote_log_manager_interval_ms` | `u64` | `30000` | `>= 1` |
+| Existing field                              |    Type |      Default | Constraint                         |
+| ------------------------------------------- | ------: | -----------: | ---------------------------------- |
+| `partition_disk_scan_interval_secs`         |   `u64` |         `60` | any value; `0` disables            |
+| `observer_lag_bound`                        |   `u64` |        `100` | any value                          |
+| `heartbeat_interval_ms`                     |   `u64` |       `3000` | `>= 1`, below timeout              |
+| `heartbeat_timeout_ms`                      |   `u64` |       `9000` | above interval                     |
+| `replica_lag_time_max_ms`                   |   `u64` |      `30000` | `>= 1`                             |
+| `controller_election_timeout_ms`            |   `u64` |       `5000` | `>= 1`, above heartbeat            |
+| `controller_heartbeat_interval_ms`          |   `u64` |        `500` | `>= 1`, below election timeout     |
+| `controlled_shutdown_drain_timeout_ms`      |   `u64` |      `20000` | `>= 1`                             |
+| `metadata_max_bytes_between_snapshots`      |   `u64` |   `20971520` | `>= 1`                             |
+| `metadata_max_snapshot_interval_ms`         |   `u64` |    `3600000` | any value; `0` disables            |
+| `metadata_snapshot_interval_records`        |   `u64` |      `10000` | `>= 1`                             |
+| `txn_abort_cleanup_interval_ms`             |   `u64` |      `10000` | any value; `0` disables            |
+| `leader_imbalance_check_interval_secs`      |   `u64` |        `300` | `>= 1`                             |
+| `leader_imbalance_per_broker_percentage`    |   `u32` |         `10` | `0..=100`                          |
+| `tls_reload_interval_ms`                    |   `u64` |      `30000` | any value; `0` disables            |
+| `max_incremental_fetch_session_cache_slots` | `usize` |       `1000` | any value; `0` disables caching    |
+| `max_connections`                           | `usize` | `usize::MAX` | any value; `0` rejects connections |
+| `max_connections_per_ip`                    | `usize` | `usize::MAX` | any value; `0` rejects connections |
+| `delegation_token_max_lifetime_ms`          |   `i64` |  `604800000` | `>= 1`                             |
+| `delegation_token_expiry_check_interval_ms` |   `i64` |    `3600000` | `>= 1`                             |
+| `delegation_token_default_renew_period_ms`  |   `i64` |   `86400000` | `>= 1`, at most max lifetime       |
+| `remote_log_manager_interval_ms`            |   `u64` |      `30000` | `>= 1`                             |
 
 ## File Structure
 

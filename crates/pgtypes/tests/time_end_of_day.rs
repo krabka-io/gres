@@ -10,6 +10,7 @@
 //! `DateStyle = 'ISO, MDY'` and `TimeZone = 'Etc/UTC'`.
 
 use assert2::assert;
+use jiff::tz::TimeZone;
 use krabka_pgtypes::{
     TypeError,
     datetime::{
@@ -18,7 +19,6 @@ use krabka_pgtypes::{
         timestamp_to_text, timetz_from_binary, timetz_to_binary, timetz_to_text,
     },
 };
-use jiff::tz::TimeZone;
 
 fn utc() -> TimeZone {
     TimeZone::UTC

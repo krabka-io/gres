@@ -30,13 +30,13 @@ they do not have a corresponding environment variable.
 
 Operator-facing values use:
 
-| Dimension | Rust boundary type | Examples |
-| --- | --- | --- |
-| elapsed time | `krabka_units::Time` | `500ms`, `30s`, `8h` |
-| byte size | `krabka_units::ByteSize` | `1MiB`, `1.5GB` |
-| byte throughput | `krabka_units::ByteRate` | `10MiB/s` |
-| frequency | `krabka_units::Frequency` | `5Hz` |
-| ratio | `krabka_units::Ratio` | `25%`, `0.25` |
+| Dimension       | Rust boundary type        | Examples             |
+| --------------- | ------------------------- | -------------------- |
+| elapsed time    | `krabka_units::Time`      | `500ms`, `30s`, `8h` |
+| byte size       | `krabka_units::ByteSize`  | `1MiB`, `1.5GB`      |
+| byte throughput | `krabka_units::ByteRate`  | `10MiB/s`            |
+| frequency       | `krabka_units::Frequency` | `5Hz`                |
+| ratio           | `krabka_units::Ratio`     | `25%`, `0.25`        |
 
 Nonzero values require an explicit unit. Bare nonzero numbers are rejected
 rather than assigned an implicit scale. Zero remains accepted only for

@@ -10,7 +10,7 @@ survey groupings below are retained as decision history; they are not an
 unchecked implementation list. Candidates without a concrete conversion and
 byte-compatibility gate need a new scoped design before they become work.
 
-**Observed at the batch boundary:** promql and metrics-service each grew their own crate-local `Offset`/`PartitionIndex`, and they meet at `apply_wal_record_at`, forcing a `.0.into()` bridge through the raw primitive. That friction is the concrete argument for treating `Offset`/`PartitionIndex` (and the other core ids) as a *single* shared type owned by one crate rather than duplicating them.
+**Observed at the batch boundary:** promql and metrics-service each grew their own crate-local `Offset`/`PartitionIndex`, and they meet at `apply_wal_record_at`, forcing a `.0.into()` bridge through the raw primitive. That friction is the concrete argument for treating `Offset`/`PartitionIndex` (and the other core ids) as a _single_ shared type owned by one crate rather than duplicating them.
 
 ### Cross-crate program — progress
 
@@ -57,9 +57,11 @@ A survey of all 43 domain crates (excluding the generated protocol codec) found 
 Grouped into batches with non-overlapping file sets so each batch runs in parallel and is verified (`cargo check`/`clippy`/`test -p <crate>`) before the next.
 
 ### Batch 1 — cleanest leaf crates
+
 `throttle` (`plan_consume` 4×`u64` — the textbook swap), `audit` (`Seq`/`EpochMs`/count types), `bench-driver` (metric/sample types), `connect` (`SourceOffset::new` two `OffsetMap`s), `connect-postgres` (`CommitLsn`/`TransactionId`/`RelationId`), `pprof` (`TimestampMs`/`Ticks`), `logql` (query-AST duration/label types), `records-legacy` (`Offset` in `ParsedRecord`).
 
 ### Batch 2 — observability stores
+
 `blockstore`, `traces`, `traceql`, `profiles`, `promql`, `metrics`, `metrics-service`, `observability` — mostly `UnixNano`/`Offset`/timestamp pairs in store and query layers; several wrap serde/WAL structs and need `#[serde(transparent)]`.
 
 ### Historical survey candidates — not an open batch
@@ -75,14 +77,14 @@ High-value but wire-crossing. Each is a staged rollout: **define the canonical n
 
 All six live in **`krabka-ids`** (the canonical home), owned there rather than in `protocol`/`metadata` so the observability stack (which doesn't depend on `protocol`) can name them.
 
-| Rank | Newtype | Status | Blast radius |
-| :--- | :--- | :--- | :--- |
-| 1 | `Offset(i64)` | ✅ **done** — log/raft/broker (full) + observability/metrics/records-legacy; on-disk & wire byte-exact | Very large |
-| 2 | `PartitionIndex(i32)` | ✅ **done** — broker (full) | Very large |
-| 3 | `NodeId(u64)` | ✅ **done** — unified the 3 colliding `type NodeId = u64` aliases into one newtype across 11 crates | Large (rename+merge) |
-| 5 | `ProducerId(i64)` | ✅ **done** — log + broker (idempotent/txn paths) | Medium |
-| 4 | `LeaderEpoch(i32)` | ✅ **done** — log/metadata/raft/broker/client-consumer/remote-storage(+topic); `kraft-core`'s consensus epoch renamed to `Epoch(u32)`, converted at the raft boundary. Wire/on-disk byte-exact (JVM golden + stateright) | Medium-large |
-| 6 | `ApiKey(i16)` / `ApiVersion(i16)` | ✅ **done** — the two adjacent `int16`s of a request header threaded through kafka-tap / client-core (internal + SASL header helpers) / raft (KIP-595 RPC header) / client-admin; deliberately distinct from the typed `krabka_protocol::ApiKey` enum. client-core's public API stays `i16` so its 16 reverse-deps don't ripple. Wire header bytes unchanged | Small |
+| Rank | Newtype                           | Status                                                                                                                                                                                                                                                                                                                                                       | Blast radius         |
+| :--- | :-------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------- |
+| 1    | `Offset(i64)`                     | ✅ **done** — log/raft/broker (full) + observability/metrics/records-legacy; on-disk & wire byte-exact                                                                                                                                                                                                                                                       | Very large           |
+| 2    | `PartitionIndex(i32)`             | ✅ **done** — broker (full)                                                                                                                                                                                                                                                                                                                                  | Very large           |
+| 3    | `NodeId(u64)`                     | ✅ **done** — unified the 3 colliding `type NodeId = u64` aliases into one newtype across 11 crates                                                                                                                                                                                                                                                          | Large (rename+merge) |
+| 5    | `ProducerId(i64)`                 | ✅ **done** — log + broker (idempotent/txn paths)                                                                                                                                                                                                                                                                                                            | Medium               |
+| 4    | `LeaderEpoch(i32)`                | ✅ **done** — log/metadata/raft/broker/client-consumer/remote-storage(+topic); `kraft-core`'s consensus epoch renamed to `Epoch(u32)`, converted at the raft boundary. Wire/on-disk byte-exact (JVM golden + stateright)                                                                                                                                     | Medium-large         |
+| 6    | `ApiKey(i16)` / `ApiVersion(i16)` | ✅ **done** — the two adjacent `int16`s of a request header threaded through kafka-tap / client-core (internal + SASL header helpers) / raft (KIP-595 RPC header) / client-admin; deliberately distinct from the typed `krabka_protocol::ApiKey` enum. client-core's public API stays `i16` so its 16 reverse-deps don't ripple. Wire header bytes unchanged | Small                |
 
 **All six cross-crate core identifiers are now landed** — the `(partition, offset)` coordinate plus `NodeId`, `ProducerId`, `LeaderEpoch`, and the `ApiKey`/`ApiVersion` header pair all resolve to a single shared type in `krabka-ids`, verified byte-exact against the JVM differential oracle (675 tests) and each crate's on-disk / consensus tests.
 

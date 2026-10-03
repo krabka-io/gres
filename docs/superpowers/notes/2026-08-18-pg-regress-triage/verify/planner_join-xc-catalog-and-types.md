@@ -9,6 +9,7 @@ only ~100 flip to pass without the planner).
 ## Per-item findings (evidence: diffs + source)
 
 ### 1. information_schema domains (cardinal_number, sql_identifier)
+
 - join.diff 4231-4268 (38) + 4276-4280 (5); equivclass 480 (1) + 483-489 (7,
   cascade "relation overview does not exist"); subselect 1344-1353 (10) +
   1359-1364 (6). Total 67.
@@ -24,13 +25,15 @@ only ~100 flip to pass without the planner).
   subselect 6-line result blocks flip.
 
 ### 2. information_schema.column_udt_usage
+
 - join.diff 4646-4653 (8). catalog_rel.rs INFORMATION_SCHEMA_RELATIONS
   (line ~165) lacks it; views are Rust row generators. Fail longer: expected
   plan `Result / One-Time Filter: false` (planner constant folding of `on null`).
 - Hidden: select_parallel line 1399 `information_schema.foreign_data_wrapper_options`
   currently masked by an aborted transaction (4 more lines when unblocked).
 
-### 3. Table row types as types (mki8/mki4)  -- FIX LOCATION WRONG
+### 3. Table row types as types (mki8/mki4) -- FIX LOCATION WRONG
+
 - join.diff 4926-4972: 39 lines (analyst said 68).
 - routine.rs:468 `resolve_type` ALREADY accepts a relation name for RETURNS
   (get_table/get_view lookup). The failure is the SQL body
@@ -43,10 +46,11 @@ only ~100 flip to pass without the planner).
   (register on CREATE/ALTER/DROP TABLE|VIEW, pg_type row with typrelid, parser
   resolution). Size L, not part of a "catalog grab-bag".
 - Fail longer: the two EXPLAIN blocks want `Function Scan on mki8 / Function
-  Call: '(1,2)'::int8_tbl` = SQL-function inlining + const-folding (planner
+Call: '(1,2)'::int8_tbl` = SQL-function inlining + const-folding (planner
   territory) and Gres prints a bare `Function Scan`.
 
-### 4. varbit / composite oids in EXPLAIN (union)  -- LOCATION RIGHT BUT INCOMPLETE
+### 4. varbit / composite oids in EXPLAIN (union) -- LOCATION RIGHT BUT INCOMPLETE
+
 - union.diff: 270-280 (11), 284-294 (11) oid 1562; 573-583 (11), 585-592 (8)
   oid 300236 (ct1). 41 lines. exec.rs:24973 `column_type_from_oid` has no
   BIT/VARBIT arm (trivial) and cannot resolve a user composite oid because it
@@ -56,26 +60,29 @@ only ~100 flip to pass without the planner).
   `krabka_pgtypes::usertype::column_type_for_oid` fallback (registry) for
   user types.
 - Fail longer: 3 EXPLAIN blocks want `Unique -> Sort -> Append -> Values Scan on
-  "*VALUES*_1"` (planner: sort-based dedupe for non-hashable type; Gres prints
+"*VALUES*_1"` (planner: sort-based dedupe for non-hashable type; Gres prints
   HashAggregate + Subquery Scan). Only the 8-line ct1 SELECT flips.
 
 ### 5. arrays of varbit (union 371-381, 383-390 = 19)
+
 - pgtypes datum.rs:261 `ElemType` has no Bit/VarBit variant
   (`from_column_type` returns None at datum.rs:427). Needs new ElemType
   variants + `code()`/`from_code` (datum.rs:563/594) = row-encoding change.
   Fail longer for the EXPLAIN block (planner Sort/Unique); 8-line SELECT flips.
 
 ### 6. jsonb #- (explain 479-645, 167 lines)
+
 - lexer.rs:926 lexes `#>`/`#>>`/`##` but not `#-` -> falls to `#` + unary `-`.
   `jsonb_delete_path` already exists (json_fn.rs:1925). Fix: lexer token +
   ast BinaryOp + parser.rs:1092 precedence + eval dispatch. Size S.
 - Fail longer massively: the block is `explain (analyze, verbose, buffers,
-  format json) select * from tenk1 order by tenthous` under
+format json) select * from tenk1 order by tenthous` under
   max_parallel_workers_per_gather=4 => Gather Merge/Sort/Parallel Seq Scan
   JSON with Buffers/Planning/Triggers sections. Also explain_filter_to_json is a
   plpgsql loop over EXECUTE of EXPLAIN. `#-` owns 2 lines of the 167.
 
-### 7. pg_temp functions (explain 651 = 1, + 653-660 = 8)  -- LOCATION WRONG
+### 7. pg_temp functions (explain 651 = 1, + 653-660 = 8) -- LOCATION WRONG
+
 - parser.rs:14319 `routine_name` rejects any qualifier but `public` with
   3F000 at parse time; routines have no schema in the catalog (Routine.name is
   a bare String). Fix = schema-qualified routines (parser + pgcatalog Routine
@@ -84,7 +91,8 @@ only ~100 flip to pass without the planner).
   select list (explain_filter) and `Seq Scan on pg_temp.t1` schema
   qualification in EXPLAIN verbose.
 
-### 8. current_timestamp(0) (join 7898-7903 = 6, 8031-8035 = 5)  -- LOCATION WRONG
+### 8. current_timestamp(0) (join 7898-7903 = 6, 8031-8035 = 5) -- LOCATION WRONG
+
 - Not func.rs: datetime_fn.rs:66 maps current_timestamp to
   DtFunc::TransactionTimestamp and :127/:~200 `require_arity(fc, n == 0)`.
   Fix: accept optional precision (0..=6) for current_timestamp/current_time/
@@ -95,6 +103,7 @@ only ~100 flip to pass without the planner).
   plan there, so they are NOT this root.
 
 ### 9. pg_stats / pg_stat_database / pg_stat_force_next_flush
+
 - join 8925-8928 (4): pg_stats missing (catalog_rel.rs has pg_stat_activity
   only). Expected output is itself an ERROR about column atts.relid, so an
   empty pg_stats with PG's column list suffices.
@@ -104,6 +113,7 @@ only ~100 flip to pass without the planner).
   grew) => needs parallel execution or a fake counter tied to Gather nodes.
 
 ### 10. int -> text assignment cast (subselect 335, 338 = 2)
+
 - exec.rs:12839 catch-all: comment says "int <-> text keeps erroring with
   42804". PG: pg_cast has int4->text castcontext 'a' (I/O conversion casts to
   string types are assignment-level). exec.rs:12763 already routes
@@ -112,12 +122,14 @@ only ~100 flip to pass without the planner).
 - The shipped_view result blocks are a CREATE RULE cascade, not this.
 
 ## Recount (whole-block)
+
 join 105, equivclass 8, subselect 18, union 60, select_parallel 23,
 explain 176 => ~390 (analyst 700, +79%). Lines that flip to pass with only
 these fixes and no planner: ~100 (join 5+24+11+4, equivclass 0, subselect 8,
 union 16, select_parallel 17, explain 0).
 
 ## Brief corrections
+
 - Claim says the mki8 hunk costs 68 lines; it is 39.
 - "routine.rs return-type resolution" is not the fix: RETURNS int8_tbl already
   resolves; the parser's `::int8_tbl` cast does not.

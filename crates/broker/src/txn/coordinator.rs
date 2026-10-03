@@ -9,6 +9,7 @@ use std::{collections::HashSet, sync::Arc};
 
 use async_trait::async_trait;
 use bytes::Bytes;
+use dashmap::DashMap;
 use krabka_ids::PartitionIndex;
 use krabka_log::{Offset, ProducerId};
 use krabka_metadata::MetadataImage;
@@ -21,7 +22,6 @@ use krabka_protocol::{
 };
 use krabka_security::ListenerProtocol;
 use krabka_units::ByteSize;
-use dashmap::DashMap;
 use tokio::sync::{Mutex, RwLock};
 use tracing::{info, warn};
 

@@ -97,11 +97,11 @@ in this slice).
 
 ## Per-format type model (derive / reflection)
 
-| Format    | Rust type                                              | Schema source                                  | Wire body                                                     |
-|-----------|-------------------------------------------------------|------------------------------------------------|--------------------------------------------------------------|
-| Avro      | `apache-avro` derive (`AvroSchema + Serialize + Deserialize`) | `AvroSchema::get_schema()` → JSON               | avro binary; deserialize resolves **writer→reader** schema   |
-| Protobuf  | `prost` struct + `prost-reflect::ReflectMessage`      | descriptor → normalized `.proto` text          | **message-index** (`[0]`→single `0x00`) + protobuf payload   |
-| JSON      | serde struct + `schemars::JsonSchema`                 | `schemars` → JSON Schema text                  | UTF-8 JSON; optional payload validation vs writer schema     |
+| Format   | Rust type                                                     | Schema source                         | Wire body                                                  |
+| -------- | ------------------------------------------------------------- | ------------------------------------- | ---------------------------------------------------------- |
+| Avro     | `apache-avro` derive (`AvroSchema + Serialize + Deserialize`) | `AvroSchema::get_schema()` → JSON     | avro binary; deserialize resolves **writer→reader** schema |
+| Protobuf | `prost` struct + `prost-reflect::ReflectMessage`              | descriptor → normalized `.proto` text | **message-index** (`[0]`→single `0x00`) + protobuf payload |
+| JSON     | serde struct + `schemars::JsonSchema`                         | `schemars` → JSON Schema text         | UTF-8 JSON; optional payload validation vs writer schema   |
 
 Notes:
 

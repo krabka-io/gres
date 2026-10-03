@@ -28,12 +28,14 @@
 ### Task 1: Add the validated schema fetch retry policy
 
 **Files:**
+
 - Modify: `crates/schema-serde/Cargo.toml`
 - Modify: `crates/schema-serde/src/cache.rs`
 - Modify: `crates/schema-serde/src/lib.rs`
 - Modify selected dependency hunk only: `Cargo.lock`
 
 **Interfaces:**
+
 - Produces: `DEFAULT_SCHEMA_FETCH_RETRY_INITIAL_BACKOFF: Time`
 - Produces: `DEFAULT_SCHEMA_FETCH_RETRY_MAX_BACKOFF: Time`
 - Produces: `SchemaFetchRetryPolicy::new(Time, Time) -> Result<Self, String>`
@@ -202,6 +204,7 @@ git commit -m "feat(schema): configure fetch retry range"
 ### Task 2: Wire the observability demo and existing Client Streams boundary
 
 **Files:**
+
 - Modify: `crates/client-streams/src/streams_app.rs`
 - Modify: `crates/observability-demo-app/src/main.rs`
 - Create: `crates/observability-demo-app/tests/schema_fetch_retry_config.rs`
@@ -209,6 +212,7 @@ git commit -m "feat(schema): configure fetch retry range"
 - Modify: `demo/observability/docker-compose.yml`
 
 **Interfaces:**
+
 - Consumes: `SchemaFetchRetryPolicy::new(Time, Time) -> Result<Self, String>`
 - Consumes: `CacheConfig::fetch_retry_policy`
 - Consumes: `SchemaCache::fetch_retry_policy()`
@@ -334,10 +338,12 @@ Stage only the named Client Streams, demo, test, and compose hunks.
 ### Task 3: Thread the policy through Gres and Kafka FDW
 
 **Files:**
+
 - Modify: `crates/gres-fdw/src/lib.rs`
 - Modify: `crates/gres/src/lib.rs`
 
 **Interfaces:**
+
 - Consumes: `SchemaFetchRetryPolicy`
 - Produces: `KafkaFdw::with_schema_fetch_retry_policy(Self, SchemaFetchRetryPolicy) -> Self`
 - Produces: `KafkaFdw::schema_fetch_retry_policy(&self) -> SchemaFetchRetryPolicy`
@@ -452,6 +458,7 @@ Stage only the schema-fetch retry hunks in the two dirty files.
 ### Task 4: Expose and render the Gres compute CRD policy
 
 **Files:**
+
 - Modify: `crates/operator/Cargo.toml`
 - Modify: `crates/operator/src/crd/gres.rs`
 - Modify: `crates/operator/src/controller/gres_tenant.rs`
@@ -459,6 +466,7 @@ Stage only the schema-fetch retry hunks in the two dirty files.
 - Modify selected dependency hunk only: `Cargo.lock`
 
 **Interfaces:**
+
 - Consumes: `SchemaFetchRetryPolicy::new(Time, Time)`
 - Extends: `GresComputeSpec::schema_fetch_retry_initial_backoff: Option<Time>`
 - Extends: `GresComputeSpec::schema_fetch_retry_max_backoff: Option<Time>`
@@ -583,6 +591,7 @@ Include only the corresponding operator dependency hunk from `Cargo.lock`.
 ### Task 5: Close the audit slice and verify the repository boundary
 
 **Files:**
+
 - Modify: `docs/configuration-audit.md`
 - Modify checkboxes only: `docs/superpowers/plans/2026-07-30-schema-serde-fetch-retry-policy.md`
 

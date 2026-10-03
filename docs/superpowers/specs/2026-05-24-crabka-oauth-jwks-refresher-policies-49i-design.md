@@ -73,7 +73,7 @@ parity for fast-key-rotation deployments.
 - New `ignore_key_use: bool`. Filter toggle for JWKS parsing.
 - Loop becomes `tokio::select!` over periodic-tick + `signal_rx.recv()`.
   On-demand refresh fires only when `now - last_on_demand_refresh >=
-  min_on_demand_pause`; otherwise the signal is dropped silently.
+min_on_demand_pause`; otherwise the signal is dropped silently.
 - `parse_jwks` filters keys: drop `use=enc` keys unless
   `ignore_key_use: true`. `use` absent → always kept (existing
   behavior).
@@ -165,10 +165,10 @@ authentication:
   type: oauth
   validIssuerUri: https://...
   jwksEndpointUri: https://.../jwks
-  jwksRefreshSeconds: 300         # slice 49b — periodic cadence
-  jwksMinRefreshPauseSeconds: 1   # 49i — on-demand refresh rate-limit
-  jwksExpirySeconds: 3600         # 49i — hard cache expiry
-  jwksIgnoreKeyUse: false         # 49i — JWKS key-filter toggle
+  jwksRefreshSeconds: 300 # slice 49b — periodic cadence
+  jwksMinRefreshPauseSeconds: 1 # 49i — on-demand refresh rate-limit
+  jwksExpirySeconds: 3600 # 49i — hard cache expiry
+  jwksIgnoreKeyUse: false # 49i — JWKS key-filter toggle
 ```
 
 ## Architecture
@@ -453,8 +453,8 @@ the 3 fields is set:
 
 ```yaml
 jwksMinRefreshPauseSeconds: 1
-jwksExpirySeconds: 3600   # 1 hour — long enough not to interfere
-jwksIgnoreKeyUse: false   # default; explicit to exercise the wire
+jwksExpirySeconds: 3600 # 1 hour — long enough not to interfere
+jwksIgnoreKeyUse: false # default; explicit to exercise the wire
 ```
 
 `kind-oauth-introspection` job's CR is NOT touched (would be
@@ -472,11 +472,11 @@ JVM admin tools don't read OAuth listener config.
 ## File touch list
 
 - `crates/security/src/oauthbearer.rs` — `SignedJwsValidator.expiry_ms`
-  + `validate()` body changes + tests.
+  - `validate()` body changes + tests.
 - `crates/broker/src/oauthbearer/jwks_refresher.rs` (or wherever the
   slice-49b refresher lives — TBD at plan time) — `select!` loop
-  + on-demand refresh + `last_successful_fetch` tracking +
-  `parse_jwks` filter.
+  - on-demand refresh + `last_successful_fetch` tracking +
+    `parse_jwks` filter.
 - `crates/broker/src/file_config.rs` — 3 new fields + `apply_to`
   threading.
 - `crates/broker/src/config.rs` — BrokerConfig fields if needed
@@ -503,14 +503,14 @@ JVM admin tools don't read OAuth listener config.
 
 Six tasks across four batches (mirrors slice 49g/49h pattern):
 
-| Batch | Task | Files |
-|---|---|---|
-| 1 | T1 — Broker: JWKS refresher rework + validator expiry check + signal-on-unknown-kid + parse-filter + FileOAuthBearerConfig + tests | `crates/security/src/oauthbearer.rs`, `crates/broker/src/oauthbearer/jwks_refresher.rs` (path TBD), `crates/broker/src/file_config.rs` |
-| 2 | T2 — Operator CRD: 3 new fields + schema + own-file fixture sweep + round-trip tests | `crates/operator/src/crd/listener.rs` |
-| 2 | T3 — Operator reconciler: render + cross-mode validation + divergence walk + sibling-file fixture sweep + unit tests | `crates/operator/src/controller/listeners.rs`, `controller/kafka.rs`, `controller/kafka_node_pool.rs` |
-| 3 | T4 — Operator integration tests + sample + CRD regen + sibling-test fixture sweep | `crates/operator/tests/reconcile_*.rs`, `sample/oauth-listener.yaml`, `deploy/crds/*` |
-| 3 | T5 — kind-oauth e2e CR YAML extension (introspection NOT touched per cross-mode rejection) | `.github/workflows/operator-e2e.yml` |
-| 4 | T6 — STATUS.md + final gate + OAUTHBEARER umbrella completion note | `STATUS.md` |
+| Batch | Task                                                                                                                               | Files                                                                                                                                  |
+| ----- | ---------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | T1 — Broker: JWKS refresher rework + validator expiry check + signal-on-unknown-kid + parse-filter + FileOAuthBearerConfig + tests | `crates/security/src/oauthbearer.rs`, `crates/broker/src/oauthbearer/jwks_refresher.rs` (path TBD), `crates/broker/src/file_config.rs` |
+| 2     | T2 — Operator CRD: 3 new fields + schema + own-file fixture sweep + round-trip tests                                               | `crates/operator/src/crd/listener.rs`                                                                                                  |
+| 2     | T3 — Operator reconciler: render + cross-mode validation + divergence walk + sibling-file fixture sweep + unit tests               | `crates/operator/src/controller/listeners.rs`, `controller/kafka.rs`, `controller/kafka_node_pool.rs`                                  |
+| 3     | T4 — Operator integration tests + sample + CRD regen + sibling-test fixture sweep                                                  | `crates/operator/tests/reconcile_*.rs`, `sample/oauth-listener.yaml`, `deploy/crds/*`                                                  |
+| 3     | T5 — kind-oauth e2e CR YAML extension (introspection NOT touched per cross-mode rejection)                                         | `.github/workflows/operator-e2e.yml`                                                                                                   |
+| 4     | T6 — STATUS.md + final gate + OAUTHBEARER umbrella completion note                                                                 | `STATUS.md`                                                                                                                            |
 
 **Dependency chain**: T1 → T2 → T3 → (T4 ‖ T5) → T6. Same shape as
 slice 49g/49h.

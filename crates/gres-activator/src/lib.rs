@@ -10,6 +10,7 @@ use std::{collections::BTreeSet, net::SocketAddr, sync::Arc};
 use async_trait::async_trait;
 use bytes::BytesMut;
 pub use config_value::{NonEmptyValue, PositiveMillis};
+pub use hold::{BackendEndpoint, Readiness, WaitForReadyConfig, wait_for_ready};
 use krabka_gres_control::{Registry, TenantName, TenantState};
 use krabka_pgwire::{error::PgError, messages::backend};
 use krabka_units::{
@@ -17,7 +18,6 @@ use krabka_units::{
     convert::{StdDurationExt as _, TimeExt as _},
     fmt::Human as _,
 };
-pub use hold::{BackendEndpoint, Readiness, WaitForReadyConfig, wait_for_ready};
 pub use peek::{Prelude, peek_prelude, peek_prelude_from};
 pub use pipe::pipe_startup_and_session;
 use tokio::{io::AsyncWriteExt, net::TcpStream, sync::Mutex};

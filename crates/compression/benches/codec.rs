@@ -13,8 +13,8 @@
 //! codspeed thus tracks net work that is directly comparable across codecs.
 
 use bytes::Bytes;
-use krabka_compression::{CompressionType, compress, decompress};
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use krabka_compression::{CompressionType, compress, decompress};
 
 // ---------------------------------------------------------------------------
 // Payload generators — deterministic so codspeed sees the same bytes every run.

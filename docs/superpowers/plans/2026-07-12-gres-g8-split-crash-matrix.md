@@ -26,10 +26,12 @@
 ### Task 1: Exhaustive Split kill-point model and predicate truth table
 
 **Files:**
+
 - Create: `crates/gres/tests/topology_process_split_crash.rs`
 - Modify: `crates/gres/Cargo.toml`
 
 **Interfaces:**
+
 - Produces: `enum SplitKillPoint`, `SplitPredicateState`, `SplitKillPoint::ALL`, `family()`, `name()`, `is_ready()`, `restart_hosted_ranges()`, `pause_bound_ms()`, and `operation_bound_ms()`.
 - Consumes later: Tasks 3-6 use the exact 19-case enum and family membership.
 
@@ -102,9 +104,11 @@ git commit -m "test(gres): model exhaustive split crash points"
 ### Task 2: Continuous two-table fsynced payload ledger
 
 **Files:**
+
 - Modify: `crates/gres/tests/topology_process_split_crash.rs`
 
 **Interfaces:**
+
 - Produces: `PayloadEvent`, `PayloadLedger`, `WorkloadChild`, `spawn_split_workload`, `parse_closed_payload_ledger`, `ack_gap_ms`, and per-table physical ownership projections.
 - Consumes: `ProcessHarness` SQL endpoint and a stop-file path.
 
@@ -172,9 +176,11 @@ git commit -m "test(gres): add continuous split payload ledger"
 ### Task 3: Authenticated receipt observation and one-kill production driver
 
 **Files:**
+
 - Modify: `crates/gres/tests/topology_process_split_crash.rs`
 
 **Interfaces:**
+
 - Produces: `ControlObservation`, `RecordingRangeMutationClient`, `SplitCrashObservation`, `probe_completed_receipt`, and `drive_split_with_one_kill`.
 - Consumes: production `MtlsRangeMutationClient`, `Registry`, operator reconciliation functions, `CountingRetirementAdmin`, and Task 1 predicates.
 
@@ -230,9 +236,11 @@ git commit -m "test(gres): drive split crashes at durable boundaries"
 ### Task 4: Exact post-restart verifier and measured evidence
 
 **Files:**
+
 - Modify: `crates/gres/tests/topology_process_split_crash.rs`
 
 **Interfaces:**
+
 - Produces: `SplitCrashEvidence`, `verify_completed_split_case`, and exact JSON serialization.
 - Consumes: closed Task 2 ledger, Task 3 observations, completed journal/tenant, direct scan responses, SQL, broker metadata, and process ledger.
 
@@ -268,6 +276,7 @@ git commit -m "test(gres): verify exact split crash recovery"
 ### Task 5: Fail-closed evidence validator and three CI shards
 
 **Files:**
+
 - Create: `scripts/tests/validate-gres-split-crash-evidence.py`
 - Create: `scripts/tests/gres-topology-process-split-source-restore-ci.sh`
 - Create: `scripts/tests/gres-topology-process-split-publication-ci.sh`
@@ -275,6 +284,7 @@ git commit -m "test(gres): verify exact split crash recovery"
 - Modify: `crates/gres/tests/topology_process_split_crash.rs`
 
 **Interfaces:**
+
 - Produces: `--validate-family FAMILY DIRECTORY` and `--validate-file FAMILY CASE FILE` validator modes.
 - Consumes: Task 4 schema version 1 JSON.
 
@@ -323,10 +333,12 @@ git commit -m "test(gres): shard exhaustive split crash evidence"
 ### Task 6: Full matrix, regression gates, published evidence, and independent review
 
 **Files:**
+
 - Create: `docs/superpowers/evidence/2026-07-12-gres-g8-split-crash-matrix.md`
 - Modify only if a verified defect is found: files from Tasks 1-5
 
 **Interfaces:**
+
 - Produces: reproducible command/result record and final reviewed commits.
 - Consumes: all prior tasks.
 

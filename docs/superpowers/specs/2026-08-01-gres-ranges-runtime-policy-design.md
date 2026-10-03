@@ -23,27 +23,27 @@ configuration subtree or environment reader is needed.
 
 ## Policy
 
-| Setting | Default |
-|---|---:|
-| RPC frame maximum | `1MiB` |
-| RPC request timeout | `5s` |
-| RPC server idle timeout | `1m` |
-| RPC pool idle TTL | `5s` |
-| RPC pool idle connections per endpoint | `32` |
-| hosted remote-session idle retention | `1m` |
-| hosted remote-session maximum | `1024` |
-| range-0 wait timeout | `10s` |
-| range-0 barrier reply budget | `4s` |
-| cross-range lock-wait cap | `2s` |
-| durable-inspection records | `4096` |
-| durable-inspection bytes | `128KiB` |
-| decision-release lag retries | `10` |
-| decision-release retry backoff | `200ms` |
-| timestamp-oracle heartbeat | `10ms` |
-| logical persistence minimum interval | `100ms` |
-| logical persistence base stride | `1024` |
-| logical persistence maximum stride | `16777216` |
-| HLC horizon headroom | `128ms` |
+| Setting                                |    Default |
+| -------------------------------------- | ---------: |
+| RPC frame maximum                      |     `1MiB` |
+| RPC request timeout                    |       `5s` |
+| RPC server idle timeout                |       `1m` |
+| RPC pool idle TTL                      |       `5s` |
+| RPC pool idle connections per endpoint |       `32` |
+| hosted remote-session idle retention   |       `1m` |
+| hosted remote-session maximum          |     `1024` |
+| range-0 wait timeout                   |      `10s` |
+| range-0 barrier reply budget           |       `4s` |
+| cross-range lock-wait cap              |       `2s` |
+| durable-inspection records             |     `4096` |
+| durable-inspection bytes               |   `128KiB` |
+| decision-release lag retries           |       `10` |
+| decision-release retry backoff         |    `200ms` |
+| timestamp-oracle heartbeat             |     `10ms` |
+| logical persistence minimum interval   |    `100ms` |
+| logical persistence base stride        |     `1024` |
+| logical persistence maximum stride     | `16777216` |
+| HLC horizon headroom                   |    `128ms` |
 
 The SQL chunk target remains derived from the configured frame maximum and its
 fixed encoding envelope. Internal topic names, range identifiers, format/wire

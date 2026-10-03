@@ -8,14 +8,14 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use assert2::{assert, check};
+use http::{Method, Request};
+use hyper::body::Bytes;
 use krabka_operator::{
     controller::rebalance::reconcile,
     crd::{KafkaCondition, KafkaRebalance, KafkaRebalanceSpec, KafkaRebalanceStatus},
     rebalancer_client::ProposalStatus,
 };
 use krabka_units::mebibytes_per_sec;
-use http::{Method, Request};
-use hyper::body::Bytes;
 
 #[path = "shared/mod.rs"]
 mod shared;

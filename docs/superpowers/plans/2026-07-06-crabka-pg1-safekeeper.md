@@ -48,6 +48,7 @@
 ## Task 1 (∥ Task 2): Frame codec + chunker
 
 **Files:**
+
 - Create: `crates/safekeeper/{Cargo.toml, src/lib.rs, src/frame.rs}`; Modify: `release-plz.toml`
 
 - [ ] **Step 1: Write the failing tests**
@@ -99,6 +100,7 @@ git commit -m "feat(safekeeper): PGW1 frame codec + contiguity-guarded chunker"
 ## Task 2 (∥ Task 1): Replication-protocol messages
 
 **Files:**
+
 - Create: `crates/safekeeper/src/protocol.rs`
 
 - [ ] **Step 1: Write the failing tests** — against the documented byte layouts (all big-endian, per the PG streaming-replication protocol):
@@ -144,6 +146,7 @@ git commit -m "feat(safekeeper): CopyBoth message codecs (XLogData, keepalive, s
 ## Task 3: The replication session (verify-first)
 
 **Files:**
+
 - Create: `crates/safekeeper/src/conn.rs`
 
 - [ ] **Step 1: VERIFY** whether workspace `tokio-postgres 0.7` exposes the `replication=true` startup parameter (look for a `replication` option on `Config` / a `replication_mode` API in the pinned version's docs). Record the finding in a module comment.
@@ -163,9 +166,10 @@ git commit -m "feat(safekeeper): physical replication session (slot, START_REPLI
 ## Task 4: The ingest loop
 
 **Files:**
+
 - Create: `crates/safekeeper/src/ingest.rs`
 
-- [ ] **Step 1: Write the failing integration test** (containerized PG + in-process `Broker::start` — the `producer_integration.rs` boot pattern): run the safekeeper against both; insert rows on PG; assert `__pg_wal.<cluster>` exists (ensure-topic ran), contains ≥1 `PGW1` frame, frames are LSN-contiguous, and a keepalive with `reply_requested` gets a status update whose `flushed` equals the last **acked** frame's end-LSN (not the last *sent*).
+- [ ] **Step 1: Write the failing integration test** (containerized PG + in-process `Broker::start` — the `producer_integration.rs` boot pattern): run the safekeeper against both; insert rows on PG; assert `__pg_wal.<cluster>` exists (ensure-topic ran), contains ≥1 `PGW1` frame, frames are LSN-contiguous, and a keepalive with `reply_requested` gets a status update whose `flushed` equals the last **acked** frame's end-LSN (not the last _sent_).
 
 - [ ] **Step 2: Implement**
 
@@ -196,6 +200,7 @@ git commit -m "feat(safekeeper): ingest loop with acks-gated feedback"
 ## Task 5: Restart / resume
 
 **Files:**
+
 - Modify: `crates/safekeeper/src/ingest.rs`; `tests/integration.rs`
 
 - [ ] **Step 1: Write the failing test** — run ingest; stop the safekeeper mid-stream (drop it); write more rows; start a new safekeeper instance; assert the topic's frame sequence is **gap-free and overlap-free across the restart seam** (scan all frames, verify `start == prev.end` throughout).
@@ -212,6 +217,7 @@ git commit -m "feat(safekeeper): tail-read resume with cross-restart contiguity"
 ## Task 6: The decode gate (PG-2 as oracle)
 
 **Files:**
+
 - Modify: `crates/safekeeper/tests/integration.rs` (+ dev-dep `krabka-postgres-wal`)
 
 - [ ] **Step 1: Write the gate test** — after the Task 4/5 runs (including the restart seam): consume **all** of `__pg_wal.<cluster>`, decode every `PGW1` frame, feed the byte runs in order into `krabka_postgres_wal::WalStreamDecoder` (`feed(start_lsn, bytes)`), and poll to exhaustion: every record CRC-valid, LSNs monotone, zero framing errors — across every chunk boundary and the restart seam. Cross-check the record count is > 0 and the last decoded LSN ≥ the last produced frame's start.

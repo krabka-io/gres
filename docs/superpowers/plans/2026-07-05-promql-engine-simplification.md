@@ -36,10 +36,12 @@
 ### Task 1: Extract Aggregation Internals
 
 **Files:**
+
 - Rename: `crates/promql/src/engine.rs` -> `crates/promql/src/engine/mod.rs`
 - Create: `crates/promql/src/engine/aggregation.rs`
 
 **Interfaces:**
+
 - Consumes: existing private engine helpers/types currently in `engine.rs`, including `aggregate_labels`, `labels_key`, `InstantSample`, `SampleValue`, `PromqlError`, `Result`, `LabelModifier`, `AggregateExpr`, `Call`, `Expr`, and `TokenType`.
 - Produces: `pub(super)` aggregation helpers imported by `engine/mod.rs`, including `aggregate_k`, `aggregate_quantile`, `apply_simple_aggregate`, `apply_k_aggregate`, `apply_quantile_aggregate`, `apply_count_values_aggregate`, and feature-gated experimental aggregate helpers when present.
 

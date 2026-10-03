@@ -37,6 +37,7 @@ Add no library type, wrapper, dependency, or CRD.
 ### Task 1: Expose Consume-Role Timing
 
 **Files:**
+
 - Modify: `crates/observability-demo-app/src/main.rs`
 - Create:
   `crates/observability-demo-app/tests/consumer_timing_config.rs`
@@ -45,12 +46,13 @@ Add no library type, wrapper, dependency, or CRD.
 - Modify: `demo/observability/docker-compose.yml`
 
 **Interfaces:**
+
 - Consumes: existing `Consumer::builder()` setters
   `.session_timeout(Time)`, `.rebalance_timeout(Time)`,
   `.heartbeat_interval(Time)`, and `.request_timeout(Time)`
 - Produces:
   `effective_consumer_timing(&Cli) ->
-  std::io::Result<(Time, Time, Time, Time)>`
+std::io::Result<(Time, Time, Time, Time)>`
 
 - [x] **Step 1: Write failing resolver tests**
 
@@ -168,11 +170,13 @@ git commit -m "feat(demo): expose consumer timing"
 ### Task 2: Audit and Close the Slice
 
 **Files:**
+
 - Modify: `docs/configuration-audit.md`
 - Modify:
   `docs/superpowers/plans/2026-07-31-observability-demo-consumer-timing.md`
 
 **Interfaces:**
+
 - Records the direct demo-to-builder timing flow and preserves the broader
   repository audit as active
 

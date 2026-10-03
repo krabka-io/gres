@@ -115,7 +115,7 @@ These are the only edits outside `website/` and `crates/docgen`:
   built from the existing consts/doc-comments. Re-export from the crate root.
 - **`crates/broker/src/handlers/api_versions.rs`** — make the advertised-API
   table reachable from outside the handler (e.g. `pub fn advertised_apis()
-  -> Vec<ApiVersion>` at the crate root delegating to the existing
+-> Vec<ApiVersion>` at the crate root delegating to the existing
   `supported_apis()`), and ensure `ApiKey` → display-name mapping is `pub`.
 
 No serde/wire/raft formats change. Per CLAUDE.md (greenfield, no compat
@@ -137,6 +137,7 @@ Trigger: `push` to `main` (paths: `website/**`, the generating crates,
 (without deploy) on PRs touching those paths, to catch breakage.
 
 Steps:
+
 1. Checkout.
 2. Rust toolchain (pinned via `rust-toolchain.toml`).
 3. `cargo run -p krabka-docgen -- all --out website/content/reference`.

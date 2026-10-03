@@ -261,6 +261,7 @@ hex-encoded bytes.
 Three layers, mirroring `krabka-protocol`:
 
 **Layer 1 — Unit (per codec module).**
+
 - Round-trip a short known input (`b"hello kafka"`).
 - Empty-input behaviour per codec.
 - Malformed input → `InvalidData`, never panic.
@@ -268,10 +269,12 @@ Three layers, mirroring `krabka-protocol`:
   to prove the framing layer is right before any encode work runs.
 
 **Layer 2 — Proptest (`tests/proptest.rs`).**
+
 - Per codec: `decompress(c, &compress(c, &x)?)? == x` for `Vec<u8>` of
   size 0–32 KiB, default 256-case budget.
 
 **Layer 3 — JVM differential (`tests/differential.rs`, `#[ignore]`-gated).**
+
 - Per codec, both directions:
   - `jvm_decompress(c, rust_compress(c, x)?)? == x`
   - `rust_decompress(c, jvm_compress(c, x))? == x`
@@ -281,6 +284,7 @@ Three layers, mirroring `krabka-protocol`:
   implementer's choice in the plan.
 
 **Layer 4 — CodSpeed (`benches/codec.rs`).**
+
 - Compress + decompress at 1 KiB / 64 KiB / 1 MiB input sizes per
   codec. Baseline numbers for future regression detection.
 

@@ -38,10 +38,12 @@
 ### Task 1: Add Validated Connection Policy Types
 
 **Files:**
+
 - Modify: `crates/client-core/src/connection.rs`
 - Modify: `crates/client-core/src/lib.rs`
 
 **Interfaces:**
+
 - Produces: `ConnectionDispatchQueueCapacity::new(usize) -> Result<Self, String>`
 - Produces: `ConnectionDispatchQueueCapacity::get(self) -> usize`
 - Produces: `ClientFrameMax::try_from(ByteSize) -> Result<Self, String>`
@@ -163,10 +165,12 @@ git commit -m "feat(client): validate connection resource policy"
 ### Task 2: Apply the Configured Frame Limit to Normal Transport
 
 **Files:**
+
 - Modify: `crates/client-core/src/transport.rs`
 - Modify: `crates/client-core/src/connection.rs`
 
 **Interfaces:**
+
 - Consumes: `ClientFrameMax`
 - Produces: `transport::codec_with_max(ClientFrameMax) -> LengthDelimitedCodec`
 - Preserves: `transport::codec()` as a default compatibility wrapper
@@ -257,11 +261,13 @@ git commit -m "feat(client): bound configured frames"
 ### Task 3: Store Connection Policy in Options and the Client Builder
 
 **Files:**
+
 - Modify: `crates/client-core/src/connection.rs`
 - Modify: `crates/client-core/src/client.rs`
 - Modify: all `ConnectionOptions` literals reported by `rg -n 'ConnectionOptions \\{' crates --glob '*.rs'`
 
 **Interfaces:**
+
 - Consumes: the two Task 1 policy types
 - Produces: `ConnectionOptions.dispatch_queue_capacity`
 - Produces: `ConnectionOptions.frame_max`
@@ -375,10 +381,12 @@ git commit -m "feat(client): carry connection resource policy"
 ### Task 4: Reuse Client Policy During SASL
 
 **Files:**
+
 - Modify: `crates/client-core/src/sasl.rs`
 - Modify: `crates/client-core/src/connection.rs`
 
 **Interfaces:**
+
 - Consumes: `&ConnectionOptions.client_id`
 - Consumes: `ConnectionOptions.frame_max`
 - Produces: `outbound_sasl(stream, credentials, server_name, client_id, frame_max)`
@@ -500,6 +508,7 @@ git commit -m "fix(client): reuse policy in SASL"
 ### Task 5: Add the Typed Isolated-Fetch Minimum
 
 **Files:**
+
 - Modify: `crates/client-core/src/fetch.rs`
 - Modify: `crates/client-core/src/lib.rs`
 - Modify: `crates/client-streams/src/runtime/io_broker.rs`
@@ -510,6 +519,7 @@ git commit -m "fix(client): reuse policy in SASL"
 - Modify: existing tests that construct `IsolatedFetch`
 
 **Interfaces:**
+
 - Produces: `FetchMinBytes::try_from(ByteSize) -> Result<Self, String>`
 - Produces: `FetchMinBytes::bytes(self) -> i32`
 - Produces: `FetchMinBytes::size(self) -> ByteSize`
@@ -616,9 +626,11 @@ git commit -m "feat(client): type isolated fetch minimum"
 ### Task 6: Verify and Record the Generic Phase
 
 **Files:**
+
 - Modify: `docs/configuration-audit.md`
 
 **Interfaces:**
+
 - Consumes: all Task 1-5 behavior
 - Produces: an audit record distinguishing generic closure from deployment propagation
 

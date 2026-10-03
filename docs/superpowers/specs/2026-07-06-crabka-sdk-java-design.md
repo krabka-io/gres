@@ -6,11 +6,11 @@
 
 ## Context
 
-The JVM is the one non-Rust ecosystem the repo already builds in CI (the Gradle-driven JVM differential oracle under `tools/oracle`), which makes Java the cheapest breadth win after TS. The Connect protocol's only JVM implementation is **connect-kotlin** (Buf's), which generates Kotlin APIs — so the load-bearing decision here is how a *Java-first* SDK sits on a Kotlin transport.
+The JVM is the one non-Rust ecosystem the repo already builds in CI (the Gradle-driven JVM differential oracle under `tools/oracle`), which makes Java the cheapest breadth win after TS. The Connect protocol's only JVM implementation is **connect-kotlin** (Buf's), which generates Kotlin APIs — so the load-bearing decision here is how a _Java-first_ SDK sits on a Kotlin transport.
 
 ## The Kotlin-core / Java-facade decision
 
-The SDK is implemented as a **Kotlin core** (using connect-kotlin's generated clients and okhttp transport) wrapped in a **deliberately Java-idiomatic facade**: builder-pattern construction, `CompletableFuture` for async, checked-exception-free error hierarchy, `Iterator`/`Stream` subscribe surface, `@JvmStatic`/`@JvmOverloads` throughout, and the public API defined as Java-visible types only (no suspend functions, no Kotlin-only types across the boundary). Java consumers never see Kotlin idioms; Kotlin consumers get the core for free. *Alternative rejected — pure-Java hand-rolled Connect client:* re-implements framing/streaming okhttp+connect-kotlin already solve, for no consumer-visible gain.
+The SDK is implemented as a **Kotlin core** (using connect-kotlin's generated clients and okhttp transport) wrapped in a **deliberately Java-idiomatic facade**: builder-pattern construction, `CompletableFuture` for async, checked-exception-free error hierarchy, `Iterator`/`Stream` subscribe surface, `@JvmStatic`/`@JvmOverloads` throughout, and the public API defined as Java-visible types only (no suspend functions, no Kotlin-only types across the boundary). Java consumers never see Kotlin idioms; Kotlin consumers get the core for free. _Alternative rejected — pure-Java hand-rolled Connect client:_ re-implements framing/streaming okhttp+connect-kotlin already solve, for no consumer-visible gain.
 
 ## Design Goals
 

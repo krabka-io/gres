@@ -6,7 +6,7 @@
 
 ## Context — the decisions that shape this
 
-Three user decisions fix the frame: **(1) full-vision surface with stubs** — every module's interface is defined day one; unbuilt modules fail with documented, machine-readable `Unimplemented` errors naming their gating work; **(2) phased, Go reference first** — one cycle ships the contract + conformance suite + Go; each other language is its own later cycle; **(3) contract-as-conformance-suite** (approach A) — semantic uniformity is proven by *execution against a live system*, the same discipline as the JVM-differential and Postgres standby oracles, applied to our own surface.
+Three user decisions fix the frame: **(1) full-vision surface with stubs** — every module's interface is defined day one; unbuilt modules fail with documented, machine-readable `Unimplemented` errors naming their gating work; **(2) phased, Go reference first** — one cycle ships the contract + conformance suite + Go; each other language is its own later cycle; **(3) contract-as-conformance-suite** (approach A) — semantic uniformity is proven by _execution against a live system_, the same discipline as the JVM-differential and Postgres standby oracles, applied to our own surface.
 
 Honesty constraints inherited from the substrate: over the landed gateway only publish/CloudEvents/subscribe-with-filter/webhooks are serveable; queue-consume needs a net-new gateway share-group RPC (broker side fully built); the database face needs Chapter C executed; identity needs Chapter E designed; blob has no server API (Chapter B deprioritized).
 
@@ -14,14 +14,14 @@ Honesty constraints inherited from the substrate: over the landed gateway only p
 
 One client object, six modules. Identical **semantics** everywhere; idiomatic **shape** per language (Go returns `(T, error)`, TS returns promises, Rust returns `Result` — the conformance suite tests behavior, not signatures).
 
-| Module | v1 state | Surface | Gated on |
-|---|---|---|---|
-| `client` | live | endpoint config; credentials (bearer / mTLS); the error taxonomy; telemetry hooks (pluggable logger/metrics callbacks) | — |
-| `messaging` | **live** | `publish(topic, value, opts)`, `publishEvent(topic, cloudEvent)` (binary-mode CE: `ce_*` underscore headers per MSG-2), `subscribe(topics, {group, filter})` (auto-commit; `filter` = the Chapter-G surface, EQUALS-only today — documented); manual per-offset ack **experimental** | ack: MSG-3 + the h2c listener |
-| `queues` | stub | `acquire(topic, {group, max, lockDuration})` → messages with `deliveryCount`; per-message `ack` / `release` / `reject` — the API mirrors the **landed KIP-932 broker semantics** so the stub interface will not churn when the RPC lands | the gateway share-group RPC |
-| `database` | stub | **connection handoff only**: `connect(name)` → Postgres connection parameters (host/port/db/credentials) for the language's standard driver. The SDK never wraps SQL — the compute speaks plain Postgres wire | Chapter C execution + a control plane |
-| `auth` | split | credential **configuration** is live (bearer token — dev/test-grade unsecured JWS, documented; mTLS cert paths). Identity APIs (sign-in, sessions, user management) are **versioned out entirely** — no stubbed guess for Chapter E to break | Chapter E design |
-| `blob` | stub | `put(key, bytes)`, `get(key)`, `list(prefix)` | Chapter B server API |
+| Module      | v1 state | Surface                                                                                                                                                                                                                                                                              | Gated on                              |
+| ----------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------- |
+| `client`    | live     | endpoint config; credentials (bearer / mTLS); the error taxonomy; telemetry hooks (pluggable logger/metrics callbacks)                                                                                                                                                               | —                                     |
+| `messaging` | **live** | `publish(topic, value, opts)`, `publishEvent(topic, cloudEvent)` (binary-mode CE: `ce_*` underscore headers per MSG-2), `subscribe(topics, {group, filter})` (auto-commit; `filter` = the Chapter-G surface, EQUALS-only today — documented); manual per-offset ack **experimental** | ack: MSG-3 + the h2c listener         |
+| `queues`    | stub     | `acquire(topic, {group, max, lockDuration})` → messages with `deliveryCount`; per-message `ack` / `release` / `reject` — the API mirrors the **landed KIP-932 broker semantics** so the stub interface will not churn when the RPC lands                                             | the gateway share-group RPC           |
+| `database`  | stub     | **connection handoff only**: `connect(name)` → Postgres connection parameters (host/port/db/credentials) for the language's standard driver. The SDK never wraps SQL — the compute speaks plain Postgres wire                                                                        | Chapter C execution + a control plane |
+| `auth`      | split    | credential **configuration** is live (bearer token — dev/test-grade unsecured JWS, documented; mTLS cert paths). Identity APIs (sign-in, sessions, user management) are **versioned out entirely** — no stubbed guess for Chapter E to break                                         | Chapter E design                      |
+| `blob`      | stub     | `put(key, bytes)`, `get(key)`, `list(prefix)`                                                                                                                                                                                                                                        | Chapter B server API                  |
 
 ## The error taxonomy (what makes stubs honest)
 

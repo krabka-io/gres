@@ -13,20 +13,21 @@ should treat the API sequences below as copy-pasteable.
 
 ## 0. TL;DR / decision gate
 
-| # | Operation | Result |
-|---|-----------|--------|
-| 1 | Load service key from keytab → server credentials | **WORKS** (needs our own keytab parser — see §5) |
-| 2 | Client `initialize_security_context` (AS+TGS+AP-REQ) | **WORKS, but only with the §6 patch** (upstream sspi has an MIT-KDC interop bug) |
-| 3 | Server `accept_security_context` + recover source principal | **WORKS** (the original biggest risk — fully implemented in sspi) |
-| 4 | `encrypt_message` / `decrypt_message` (GSS wrap/unwrap, conf off) | **WORKS** |
+| #   | Operation                                                         | Result                                                                           |
+| --- | ----------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| 1   | Load service key from keytab → server credentials                 | **WORKS** (needs our own keytab parser — see §5)                                 |
+| 2   | Client `initialize_security_context` (AS+TGS+AP-REQ)              | **WORKS, but only with the §6 patch** (upstream sspi has an MIT-KDC interop bug) |
+| 3   | Server `accept_security_context` + recover source principal       | **WORKS** (the original biggest risk — fully implemented in sspi)                |
+| 4   | `encrypt_message` / `decrypt_message` (GSS wrap/unwrap, conf off) | **WORKS**                                                                        |
 
 **Decision: GO.** The server-accept path — the single biggest unknown going in —
 is fully implemented in sspi and works first-try. The only blocker is a trivial,
-RFC-justified strictness bug on the *client* AS-REP decode that a one-line fork
+RFC-justified strictness bug on the _client_ AS-REP decode that a one-line fork
 patch fixes. With that patch, the spike runs end-to-end and prints
 `== ALL FOUR OPERATIONS SUCCEEDED -> GO ==`.
 
 Two integration costs the plan did not anticipate, both documented below:
+
 - The workspace `pbkdf2` dependency must move to `=0.13.0-rc.10` (§2).
 - `sspi` needs the one-line AS-REP tag patch (§6). Task 5 must decide: carry a
   small fork, vendor the crate, or upstream the fix to devolutions/sspi-rs.
@@ -48,17 +49,18 @@ sspi = { version = "0.21", default-features = false, features = ["network_client
 
 Resolved at build time (from `Cargo.lock`):
 
-| crate | version | notes |
-|-------|---------|-------|
-| `sspi` | **0.21.0** | `checksum 3db83308…0fb0` |
-| `picky-krb` | 0.12.3 | the Kerberos guts sspi rides on |
-| `picky` | 7.0.0-rc.23 | (RC — upstream has not shipped a stable picky 7) |
-| `pbkdf2` | **0.13.0-rc.10** | forced by `picky-krb 0.12.3`; see §2 |
+| crate       | version          | notes                                            |
+| ----------- | ---------------- | ------------------------------------------------ |
+| `sspi`      | **0.21.0**       | `checksum 3db83308…0fb0`                         |
+| `picky-krb` | 0.12.3           | the Kerberos guts sspi rides on                  |
+| `picky`     | 7.0.0-rc.23      | (RC — upstream has not shipped a stable picky 7) |
+| `pbkdf2`    | **0.13.0-rc.10** | forced by `picky-krb 0.12.3`; see §2             |
 
 The `network_client` feature pulls in the reqwest-based KDC transport used by
 `resolve_with_default_network_client()` (the client AS/TGS exchange).
 
 Versions probed and rejected:
+
 - `0.16.1` — `picky 7.0.0-rc.23` vs workspace `rsa`/`crypto-bigint`: compile error.
 - `0.17.0` — resolves but sspi's own source fails to compile against the
   `picky-krb 0.11.1` / `rand_core 0.6.4` the workspace lock forces on it
@@ -397,6 +399,7 @@ plus the §2 pbkdf2 bump, the spike runs end-to-end:
 
 **Task 5 decision needed:** how to carry the patch. Options, in rough order of
 preference:
+
 1. **Upstream it** to `devolutions/sspi-rs` (tiny, RFC-justified) and pin a git
    rev until released. Lowest long-term maintenance.
 2. **Vendor a minimal fork** under e.g. `crates/security/vendor/sspi` (~1.5 MB)
@@ -412,7 +415,7 @@ prints the GO-conditional message + a pointer to this doc, then exits 2.
 ## 7. Other behaviors worth carrying into downstream tasks
 
 - **Pre-auth is mandatory** on client principals for sspi's client path (§3).
-  The broker's own service principal does not need it (the broker only *accepts*).
+  The broker's own service principal does not need it (the broker only _accepts_).
 - **`network_client` feature** is required for the client/initiate path
   (inter-broker auth, Task 9). The server/accept path (Task 6/8) does **not**
   touch the network — it only needs the keytab key — so the broker can accept

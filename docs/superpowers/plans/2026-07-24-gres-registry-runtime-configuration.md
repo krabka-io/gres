@@ -50,12 +50,12 @@ Cargo nextest.
 
 ## Effective Settings
 
-| Setting | CLI/environment suffix | Kafka CRD field | Default | Constraint |
-|---|---|---|---:|---|
-| registry replication | `REGISTRY_REPLICATION_FACTOR` | `spec.gresRegistry.replicationFactor` | 1 | `1..=32767` |
-| topic-create timeout | `REGISTRY_TOPIC_CREATE_TIMEOUT_MS` | `spec.gresRegistry.topicCreateTimeoutMs` | 15000 | positive `i32` |
-| reader retry backoff | `REGISTRY_READER_RETRY_BACKOFF_MS` | `spec.gresRegistry.readerRetryBackoffMs` | 250 | positive `u64` |
-| fetch max wait | `REGISTRY_FETCH_MAX_WAIT_MS` | `spec.gresRegistry.fetchMaxWaitMs` | 500 | positive `i32` |
+| Setting               | CLI/environment suffix               | Kafka CRD field                            | Default | Constraint     |
+| --------------------- | ------------------------------------ | ------------------------------------------ | ------: | -------------- |
+| registry replication  | `REGISTRY_REPLICATION_FACTOR`        | `spec.gresRegistry.replicationFactor`      |       1 | `1..=32767`    |
+| topic-create timeout  | `REGISTRY_TOPIC_CREATE_TIMEOUT_MS`   | `spec.gresRegistry.topicCreateTimeoutMs`   |   15000 | positive `i32` |
+| reader retry backoff  | `REGISTRY_READER_RETRY_BACKOFF_MS`   | `spec.gresRegistry.readerRetryBackoffMs`   |     250 | positive `u64` |
+| fetch max wait        | `REGISTRY_FETCH_MAX_WAIT_MS`         | `spec.gresRegistry.fetchMaxWaitMs`         |     500 | positive `i32` |
 | fetch partition bytes | `REGISTRY_FETCH_PARTITION_MAX_BYTES` | `spec.gresRegistry.fetchPartitionMaxBytes` | 1048576 | positive `i32` |
 
 Every standalone binary uses the exact common names

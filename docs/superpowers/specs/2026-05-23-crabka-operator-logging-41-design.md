@@ -25,7 +25,7 @@ machinery:
   external read happen only in the `Kafka` reconciler), renders it into the
   cluster's broker `ConfigMap` under a `rust.log` key, and points each broker
   pod's `RUST_LOG` env at that key via `configMapKeyRef` (`optional: true`).
-- The filter string is folded into `combined_config_hash`, so a *value* change
+- The filter string is folded into `combined_config_hash`, so a _value_ change
   rolls the cluster via slice 21 (the broker only re-reads `RUST_LOG` at
   startup — a live `ConfigMap` edit alone would not take effect).
 
@@ -34,9 +34,9 @@ machinery:
 ```yaml
 # inline
 logging:
-  type: inline          # default
+  type: inline # default
   loggers:
-    root: info          # `root` (case-insensitive) -> bare global level
+    root: info # `root` (case-insensitive) -> bare global level
     krabka_broker: debug
     krabka_raft: warn
 # external
@@ -94,7 +94,7 @@ collapses to `config_hash(config_part)`.
   spec; the node-pool reads `parent.spec.logging`).
 - Live log-level hot-reload without a restart (broker reads `RUST_LOG` only at
   startup; would need a broker-core control surface — a future core slice).
-- Mapping log4j logger names to tracing targets (loggers keys *are* tracing
+- Mapping log4j logger names to tracing targets (loggers keys _are_ tracing
   targets).
 - OTLP / structured-logging knobs (slice 42 territory).
 

@@ -60,16 +60,16 @@ unchanged.
 
 ## Design decisions (resolved during brainstorming)
 
-| Question | Decision |
-|---|---|
-| Integration point | `Serde<T>` payloads (primary) + optional columnar batch-processing API (secondary) |
-| Feature gating | Three per-library opt-in features: `arrow`, `columnar`, `polars` |
-| Serde wire format | Library-native each (polars IPC, arrow-rs Arrow IPC stream, columnar native bytes) |
-| Batch API shape | Native columnar topology (batches flow along edges end-to-end) |
-| Batch engine | polars `DataFrame` on the edges |
-| Columnar runtime | Same broker runtime (KIP-1071 membership + `KafkaStreams`) |
-| Operator scope (v1) | Stateless transforms + within-batch `group_by`/`agg` |
-| Batch boundary model | Both, pluggable `BatchCodec` (row-assembly + blob impls) |
+| Question             | Decision                                                                           |
+| -------------------- | ---------------------------------------------------------------------------------- |
+| Integration point    | `Serde<T>` payloads (primary) + optional columnar batch-processing API (secondary) |
+| Feature gating       | Three per-library opt-in features: `arrow`, `columnar`, `polars`                   |
+| Serde wire format    | Library-native each (polars IPC, arrow-rs Arrow IPC stream, columnar native bytes) |
+| Batch API shape      | Native columnar topology (batches flow along edges end-to-end)                     |
+| Batch engine         | polars `DataFrame` on the edges                                                    |
+| Columnar runtime     | Same broker runtime (KIP-1071 membership + `KafkaStreams`)                         |
+| Operator scope (v1)  | Stateless transforms + within-batch `group_by`/`agg`                               |
+| Batch boundary model | Both, pluggable `BatchCodec` (row-assembly + blob impls)                           |
 
 ## Section 1 — Module & feature layout
 
@@ -109,11 +109,11 @@ serde. Enabling `polars` yields both `Serde<DataFrame>` and the batch engine.
 Each library gets a library-native `Serde<T>` implementation that plugs into the
 existing boundary (`src/processor/serde.rs`) unchanged.
 
-| Serde | `Serde<T>` for | Wire bytes |
-|---|---|---|
-| `PolarsIpcSerde` | `polars::DataFrame` | Arrow IPC stream (polars `IpcWriter` / `IpcReader`) |
-| `ArrowIpcSerde` | `arrow::array::RecordBatch` | Arrow IPC stream (arrow-rs `StreamWriter` / `StreamReader`) |
-| `ColumnarSerde<T>` | `T: columnar::Columnar` | columnar's native zero-copy byte layout |
+| Serde              | `Serde<T>` for              | Wire bytes                                                  |
+| ------------------ | --------------------------- | ----------------------------------------------------------- |
+| `PolarsIpcSerde`   | `polars::DataFrame`         | Arrow IPC stream (polars `IpcWriter` / `IpcReader`)         |
+| `ArrowIpcSerde`    | `arrow::array::RecordBatch` | Arrow IPC stream (arrow-rs `StreamWriter` / `StreamReader`) |
+| `ColumnarSerde<T>` | `T: columnar::Columnar`     | columnar's native zero-copy byte layout                     |
 
 - All implement `Serde<T>` + `SerdeAssociate`.
 - The unit serdes (`PolarsIpcSerde`, `ArrowIpcSerde`) also implement
@@ -126,7 +126,7 @@ existing boundary (`src/processor/serde.rs`) unchanged.
   library-native).
 
 These serdes are usable **today in the existing row topology**: a record's value
-can simply *be* a whole `DataFrame` / `RecordBatch` / `Columnar` value. They are
+can simply _be_ a whole `DataFrame` / `RecordBatch` / `Columnar` value. They are
 independent of the native columnar topology.
 
 ### Arrow-rs IPC entry points
@@ -176,7 +176,7 @@ Two built-in implementations:
 - **`RowCodec<K, V>`** — records stay ordinary rows. `decode` deserializes each
   `(key, value)` via the inner key/value serdes into `Vec<(K, V)>`, then builds
   columns via a `serde_arrow`-style row→Arrow bridge (`K, V: Serialize +
-  Deserialize`). `encode` reverses it. Topics stay standard-Kafka-consumable.
+Deserialize`). `encode` reverses it. Topics stay standard-Kafka-consumable.
   This is the true vectorized analytical-throughput path.
 
 ### Reserved metadata columns
@@ -190,7 +190,7 @@ Every assembled DataFrame carries, alongside the payload columns:
 
 so the sink codec can faithfully reconstruct records (key, timestamp) and the
 runtime can commit offsets. `BlobCodec` carries the partition/offset of the
-*batch*; `RowCodec` carries per-row values. Payload column names never collide
+_batch_; `RowCodec` carries per-row values. Payload column names never collide
 with the `__`-prefixed reserved names (validated at topology build time).
 
 ### Operators (v1 scope: stateless + within-batch aggregation)

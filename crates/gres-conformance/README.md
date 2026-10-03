@@ -174,8 +174,8 @@ for the M4 milestone.
 `pg_regress` file (up to the `\.` terminator) and replays it over copy-in, and
 `COPY ... TO STDOUT` is collected over copy-out as one text column per output
 line. Sending either down the simple query path instead leaves the connection
-in copy mode, which corrupts every later statement in the run *in both
-directions* — two dead connections compare equal and score as matches — so this
+in copy mode, which corrupts every later statement in the run _in both
+directions_ — two dead connections compare equal and score as matches — so this
 routing is load-bearing for the measurement, not a convenience.
 
 Server-side `COPY table FROM 'file'` reads PostgreSQL's official fixture files
@@ -189,7 +189,7 @@ Neither engine is reset between corpus files, and the primary corpus runs before
 the adopted regress corpus on the same two connections. A relation name reused
 with a different definition therefore does not create an independent table: the
 second `CREATE TABLE` fails with `42P07` and every later statement in that file
-silently runs against the *first* file's schema. Prefix new tables with something
+silently runs against the _first_ file's schema. Prefix new tables with something
 derived from the file name (`setop_a`, `jn_t1`, `msf_m`) and check before adding:
 
 ```sh

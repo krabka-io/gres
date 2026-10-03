@@ -8,10 +8,10 @@
 
 PG-1 plays Neon's safekeeper role: speak `START_REPLICATION … PHYSICAL` to a **stock Postgres 17** primary, land the byte-addressed LSN stream durably, and report `flushed_lsn` back so the primary can recycle WAL. The roadmap originally gated PG-1 on the unbuilt diskless-WAL slices, assuming an in-broker `WalStore` linkage. Designing it dissolved that gate:
 
-**The safekeeper is a standalone component that *produces* framed WAL records to an internal topic with `acks=all` over the ordinary Kafka wire.** The produce path *is* the `WalStore::append_durable` path once diskless slice 1 lands (produce → partition writer → `append_durable`) — entered over the wire instead of by linking the broker. Consequences:
+**The safekeeper is a standalone component that _produces_ framed WAL records to an internal topic with `acks=all` over the ordinary Kafka wire.** The produce path _is_ the `WalStore::append_durable` path once diskless slice 1 lands (produce → partition writer → `append_durable`) — entered over the wire instead of by linking the broker. Consequences:
 
 - **Zero broker changes; buildable today** against the landed broker + `krabka-client-producer`.
-- **The durability tier is inherited and upgrades transparently:** classic topic today (`acks=all` = replicated, page-cache durability), fsync-durable when slice 1 lands, fsync-quorum at 6a — with **no safekeeper code change**. `flushed_lsn` feedback is therefore *tier-qualified*: production use of the feedback (letting the primary discard WAL) is gated on slice 1+, and the docs say so.
+- **The durability tier is inherited and upgrades transparently:** classic topic today (`acks=all` = replicated, page-cache durability), fsync-durable when slice 1 lands, fsync-quorum at 6a — with **no safekeeper code change**. `flushed_lsn` feedback is therefore _tier-qualified_: production use of the feedback (letting the primary discard WAL) is gated on slice 1+, and the docs say so.
 - **Flush-to-bucket, indexing, and Fetch-consumption come free** — the WAL group is just a topic; PG-3's future live-ingest is a consumer.
 
 The roadmap doc is updated alongside this spec.
@@ -54,11 +54,11 @@ stock Postgres 17 primary
 
 ### Produce-path ingest (the gate-dissolving decision)
 
-The safekeeper writes through the broker's front door instead of linking its internals: `acks=all` produce to `__pg_wal.<cluster>`. Rationale: (1) it reaches the *same* `append_durable` seam the in-broker design would, once slice 1 lands, because that seam sits on the partition-writer path the wire already drives; (2) it decouples PG-1's schedule from the diskless program entirely; (3) topic-ness buys flush/index/Fetch for free and makes the WAL stream observable with stock tooling. *Alternative rejected — in-broker `WalStore` linkage:* couples PG-1 to unlanded code, adds a broker surface, and buys nothing the wire doesn't.
+The safekeeper writes through the broker's front door instead of linking its internals: `acks=all` produce to `__pg_wal.<cluster>`. Rationale: (1) it reaches the _same_ `append_durable` seam the in-broker design would, once slice 1 lands, because that seam sits on the partition-writer path the wire already drives; (2) it decouples PG-1's schedule from the diskless program entirely; (3) topic-ness buys flush/index/Fetch for free and makes the WAL stream observable with stock tooling. _Alternative rejected — in-broker `WalStore` linkage:_ couples PG-1 to unlanded code, adds a broker surface, and buys nothing the wire doesn't.
 
 ### Tier-qualified feedback honesty
 
-`flushed_lsn` tells the primary "you may discard this WAL." Its truth equals the topic's durability tier: today `acks=all` means replicated-not-fsynced; slice 1 makes it fsync-durable; 6a quorum-fsync. PG-1 reports acked offsets as flushed **and documents the tier dependency loudly** — the code is final, the *claim* strengthens as the substrate lands. Until slice 1, deployments are dev-grade by definition and the docs say exactly that.
+`flushed_lsn` tells the primary "you may discard this WAL." Its truth equals the topic's durability tier: today `acks=all` means replicated-not-fsynced; slice 1 makes it fsync-durable; 6a quorum-fsync. PG-1 reports acked offsets as flushed **and documents the tier dependency loudly** — the code is final, the _claim_ strengthens as the substrate lands. Until slice 1, deployments are dev-grade by definition and the docs say exactly that.
 
 ### Framing: self-contained values, XLogData-aligned chunks
 

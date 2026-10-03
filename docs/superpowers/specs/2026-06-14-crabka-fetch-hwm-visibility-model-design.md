@@ -17,7 +17,7 @@ The visibility window is the single most safety-critical decision in the read pa
 which offsets a fetch may expose. A wrong clamp is a **dirty read** (records beyond the
 high-watermark become visible) or **effective data loss / stuck consumer** (committed records hidden
 from a `read_committed` consumer), or a wrong replication bound for a follower. The survey ranked
-this #1 by blast radius; it is mostly *confirmation* (the logic is believed correct), with one
+this #1 by blast radius; it is mostly _confirmation_ (the logic is believed correct), with one
 concrete latent hazard this slice eliminates.
 
 ## Background — the decision + the latent hazard
@@ -32,7 +32,7 @@ fetch_offset)`:
   `out.last_stable_offset` (block at `:1017-1024`).
 - else `limit_offset = follower ? log_end : read_committed ? effective_lso : hw`; if
   `fetch_offset >= upper_bound` ⟹ `Empty`; else `Read { limit_offset, effective_lso,
-  read_committed_aborts }`.
+read_committed_aborts }`.
 
 **The latent hazard:** the response fields `out.high_watermark` / `out.last_stable_offset` are
 computed in **two** places — the `OFFSET_OUT_OF_RANGE` block (`:1017-1024`) and the success/`NONE`
@@ -78,6 +78,7 @@ pub(crate) fn compute_visibility_window(
 ```
 
 `do_read` calls it once after taking `hw`/`log_start`/`log_end`/`lso` under the lock, then:
+
 - on `out_of_range`: set `out.error_code = OFFSET_OUT_OF_RANGE`, `out.log_start_offset = log_start`,
   `out.high_watermark = w.response_hw`, `out.last_stable_offset = w.response_lso`; return.
 - else build the `ReadPlan` from `w.empty` / `w.limit_offset` / `w.effective_lso`; after the read,
@@ -96,7 +97,7 @@ Behavior-preserving — gated by the existing fetch handler tests (unit + integr
     while preserving the invariant and staying `<= max_offset`. These model the log progressing
     (appends raise LEO, ISR catch-up raises HW, txn commits raise LSO, retention raises log_start).
     **Monotonicity is asserted here**: for both `is_follower ∈ {false,true}` and `read_committed ∈
-    {…}`, the recomputed `response_hw` and `response_lso` of the new state are `>=` those of the old
+{…}`, the recomputed `response_hw` and `response_lso` of the new state are `>=` those of the old
     state (KIP-227: a consumer's reported HW/LSO never regress across incremental fetches).
   - `Fetch(is_follower, read_committed, fetch_offset)` — `read_committed ⟹ !is_follower`;
     `fetch_offset ∈ [0, max_offset]`. Drives the real `compute_visibility_window` and asserts the
@@ -110,7 +111,7 @@ Behavior-preserving — gated by the existing fetch handler tests (unit + integr
   - **valid targets**: `limit_offset >= 0`, `response_hw >= 0`, `response_lso >= 0`.
   - **response consistency / `lso <= hw`**: `response_lso <= response_hw` for consumers;
     `response_hw == (is_follower ? log_end : hw)`; `response_lso == (read_committed ? lso.min(hw) :
-    is_follower ? log_end : hw)` — the single-source-of-truth contract (the de-dup'd hazard: the OOR
+is_follower ? log_end : hw)` — the single-source-of-truth contract (the de-dup'd hazard: the OOR
     and success paths share this exact computation).
   - **out_of_range / empty correctness**: `out_of_range == (fetch_offset < log_start)`;
     when not out-of-range, `empty == (fetch_offset >= (is_follower ? log_end : hw))`.
@@ -124,7 +125,7 @@ Behavior-preserving — gated by the existing fetch handler tests (unit + integr
 
 ## proptest fuzz (`proptest` already a `krabka-broker` dev-dep)
 
-Generate large-N random *valid* watermark tuples (`log_start <= hw <= log_end`, `lso ∈
+Generate large-N random _valid_ watermark tuples (`log_start <= hw <= log_end`, `lso ∈
 [log_start, hw]`, offsets up to ~1e6) + random `fetch_offset` + the two bools (respecting
 `read_committed ⟹ !is_follower`), drive `compute_visibility_window`, and assert the same per-fetch
 contract. Plus a **relational monotonicity** property: for two states with `hw <= hw'`,
@@ -134,7 +135,7 @@ contract. Plus a **relational monotonicity** property: for two states with `hw <
 ## Out of scope (YAGNI)
 
 - The actual byte read (`read_raw`), the `spawn_blocking` offload, the aborted-txn `.txnindex` scan,
-  and the KIP-405 remote-tier fallback — the model checks the *offset decision*, not the I/O.
+  and the KIP-405 remote-tier fallback — the model checks the _offset decision_, not the I/O.
 - Incremental-fetch session caching mechanics (KIP-227 session state) — only the HW/LSO
   monotonicity property is modeled, not the session cache.
 - Multi-partition fetch aggregation, throttling, max_bytes accounting.

@@ -29,12 +29,12 @@ compatible KRaft is explicitly out of scope and gets its own future slice.
 
 Two new crates plus targeted changes to `krabka-broker`:
 
-| Crate              | Status   | Responsibility                                                                                          |
-|--------------------|----------|---------------------------------------------------------------------------------------------------------|
-| `krabka-raft`      | **new**  | openraft adapters (`RaftLogStorage`, `RaftStateMachine`, `RaftNetworkFactory`) + the `Controller` type. |
-| `krabka-metadata`  | **new**  | Versioned metadata record types + `MetadataImage` read snapshot.                                        |
-| `krabka-broker`    | changed  | Quorum-backed metadata. Two listeners (client + controller). `CreateTopics`/`DeleteTopics` route through `Controller`. |
-| `krabka-protocol`  | unchanged| Controller-private wire types live in `krabka-raft::wire`, not in the codegen schemas.                  |
+| Crate             | Status    | Responsibility                                                                                                         |
+| ----------------- | --------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `krabka-raft`     | **new**   | openraft adapters (`RaftLogStorage`, `RaftStateMachine`, `RaftNetworkFactory`) + the `Controller` type.                |
+| `krabka-metadata` | **new**   | Versioned metadata record types + `MetadataImage` read snapshot.                                                       |
+| `krabka-broker`   | changed   | Quorum-backed metadata. Two listeners (client + controller). `CreateTopics`/`DeleteTopics` route through `Controller`. |
+| `krabka-protocol` | unchanged | Controller-private wire types live in `krabka-raft::wire`, not in the codegen schemas.                                 |
 
 ## Architecture
 
@@ -176,7 +176,7 @@ Kafka requests (`krabka-protocol`'s `length_prefixed` + `RequestHeader` v2,
 flexible):
 
 | api_key | Name                    | Notes                                              |
-|---------|-------------------------|----------------------------------------------------|
+| ------- | ----------------------- | -------------------------------------------------- |
 | 1000    | `CrabkaAppendEntries`   | openraft `AppendEntries`                           |
 | 1001    | `CrabkaVote`            | openraft `Vote`                                    |
 | 1002    | `CrabkaInstallSnapshot` | Stub: returns `NotImplemented`. Reserves the slot. |
@@ -318,7 +318,7 @@ which existed before slice 7.
 ## Observability
 
 - Tracing spans, every async boundary that crosses an RPC: `raft.
-  append_entries`, `raft.vote`, `raft.commit_index_advance`,
+append_entries`, `raft.vote`, `raft.commit_index_advance`,
   `controller.submit_change`.
 - Structured events emitted via `tracing` for: leader-id change, term
   bump, log gap repair, state-machine apply timing.

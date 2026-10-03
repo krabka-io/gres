@@ -2,12 +2,12 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build the **querier role** — a concrete `krabka-promql::MetricStore` impl (`CrabkaMetricStore`) that merges *cold* blockstore data with a *hot* in-memory WAL-tail head, and the **Prometheus HTTP query API** (axum) that drives `PromqlEngine` and serializes `QueryResult` into byte-exact Prometheus JSON for Grafana's built-in Prometheus datasource. Plus the `krabka-metrics --target querier` role binary.
+**Goal:** Build the **querier role** — a concrete `krabka-promql::MetricStore` impl (`CrabkaMetricStore`) that merges _cold_ blockstore data with a _hot_ in-memory WAL-tail head, and the **Prometheus HTTP query API** (axum) that drives `PromqlEngine` and serializes `QueryResult` into byte-exact Prometheus JSON for Grafana's built-in Prometheus datasource. Plus the `krabka-metrics --target querier` role binary.
 
 **Architecture:** Three layers, bottom-up.
 
 1. **WAL-tail head** (`head.rs`): an in-memory, per-`(tenant, fingerprint)` ring of recent samples (float + native-histogram), fed by a `krabka-client-consumer::Consumer` tailing the metrics WAL topic (Slice 4's topic). Decodes each record via Slice 4's `WalRecord`. Bounded by a retention window (default ~3h) and exposed as DataFusion `MemTable`s. The head tracks its **lowest retained offset** and the consumer's **current offset** so it is rebuildable from the WAL purely by replaying offsets — the spec's "no separate ingester WAL" realization (§1, §6.3).
-2. **`CrabkaMetricStore`** (`store.rs`): implements the `MetricStore` trait by, per `scan()`, registering the cold blockstore tables (`BlockStore::scan_context`) *and* the hot head tables into one `SessionContext`, then building a **UNION view** split at the **compaction frontier** (the compactor's committed offset, surfaced as a per-tenant `min_ts` cut) so a sample counted in a sealed block is not also counted from the head. `label_names`/`label_values`/`series` union the blockstore `Index` with the head's live series.
+2. **`CrabkaMetricStore`** (`store.rs`): implements the `MetricStore` trait by, per `scan()`, registering the cold blockstore tables (`BlockStore::scan_context`) _and_ the hot head tables into one `SessionContext`, then building a **UNION view** split at the **compaction frontier** (the compactor's committed offset, surfaced as a per-tenant `min_ts` cut) so a sample counted in a sealed block is not also counted from the head. `label_names`/`label_values`/`series` union the blockstore `Index` with the head's live series.
 3. **HTTP API** (`http/`): an axum `Router` mounted under both bare `/api/v1/` and `/prometheus/api/v1/`, tenant via `X-Scope-OrgID`. `/query` + `/query_range` call `PromqlEngine` and map `QueryResult` → Prometheus JSON with exact shapes; `/series`, `/labels`, `/label/{name}/values`, `/metadata`, `/query_exemplars`, `/status/buildinfo` round out Grafana's discovery calls. Errors use the Prometheus `{"status":"error",...}` envelope. **Response-shape fidelity is the byte-equality analog** and is tested with exact-JSON assertions for vector, matrix, scalar, and error.
 
 **Tech Stack:** Rust 2024 · `datafusion` (git pin below) · `arrow` 59 · `tokio` · `axum` 0.8 (workspace base `http1`,`tokio`; querier adds `json`,`query`) · `serde`/`serde_json` · `async-trait` · `thiserror` · `tracing` · `krabka-promql` (Slices 2–3) · `krabka-blockstore` · `krabka-client-consumer`. Tests: `assert2`, `tower::ServiceExt::oneshot` (in-process router), `krabka-broker` in-process test-support / testcontainers (`#[ignore]`).
@@ -28,7 +28,8 @@
 ## Dependency & slice roadmap
 
 **Depends on:**
-- **`krabka-promql` (Slices 2–3)** — provides the `MetricStore` trait, `ScanResult`, `PromqlEngine<S>`, `QueryResult`, `InstantSample`, `RangeSeries`, `SampleValue`, `NativeHistogram`, `EngineOpts`, `PromqlError`. This slice *consumes* that contract verbatim (see "Shared contract" below) and implements `MetricStore` against it.
+
+- **`krabka-promql` (Slices 2–3)** — provides the `MetricStore` trait, `ScanResult`, `PromqlEngine<S>`, `QueryResult`, `InstantSample`, `RangeSeries`, `SampleValue`, `NativeHistogram`, `EngineOpts`, `PromqlError`. This slice _consumes_ that contract verbatim (see "Shared contract" below) and implements `MetricStore` against it.
 - **`krabka-blockstore`** — `BlockStore::scan_context`, `Index`, `Labels`, `LabelMatcher`/`MatchOp`.
 - **`krabka-metrics` Slice 4 (ingest)** — `WalRecord` (encode/decode) + the metrics WAL topic name + the per-tenant **compaction frontier** the compactor commits (consumer-group committed offset / sealed-block `max_ts`). The real `WalRecord` has **public fields** `tenant: String`, `labels: Vec<(String,String)>`, `payload: SamplePayload`, `exemplars` (no accessor methods); `SamplePayload` is `Float { timestamp_ms, value }` / `Hist { timestamp_ms, hist }` (no `WalSample` enum). Slice 1 — `float_sample_schema()`/`native_histogram_schema()`, `NativeHistogram`, `encode_float_samples`/`decode_*`.
 - **`krabka-client-consumer`** — `Consumer::builder()…subscribe(vec).auto_offset_reset(Earliest).build().await`, `poll(Duration) -> Result<Vec<ConsumerRecord>, ConsumerError>`, `ConsumerRecord{topic,partition,offset,timestamp,key,value,headers}`, `IsolationLevel`, `AutoOffsetReset`.
@@ -39,7 +40,7 @@
 2. `krabka-promql` core — parser + operator pattern + selectors + rate-family + aggregations + binary ops + `.test` harness.
 3. Query completeness — `histogram_quantile`, full function catalog, subqueries, `@`/`offset`.
 4. Ingest service — remote_write v1/v2 + OTLP + Kafka produce + distributor + HA dedup + compactor.
-5. **Querier + Prometheus HTTP API + hot/cold merge** *(this plan)*.
+5. **Querier + Prometheus HTTP API + hot/cold merge** _(this plan)_.
 6. Query-frontend — split / shard / cache.
 7. Ruler — recording + alerting + rule API.
 8. Hardening — multi-tenancy/limits, remote_read, prometheus/compliance + differential-vs-Mimir.
@@ -110,24 +111,24 @@ pub struct RangeSeries  { pub labels: Labels, pub samples: Vec<(i64, SampleValue
 pub enum SampleValue { Float(f64), Histogram(NativeHistogram) }
 ```
 
-> **Verify-before-use (do not fabricate):** the exact field names / enum discriminants of `QueryResult`, `InstantSample`, `RangeSeries`, `SampleValue`, and the `MetricStore` method shapes are owned by Slices 2–3. Before Task 4, run `cargo doc -p krabka-promql --no-deps` (or read `crates/promql/src/lib.rs` re-exports) and reconcile. If a name differs (e.g. `ts_ms` vs `timestamp_ms`, the `Scalar`/`Str` struct-field names), adapt the **mapping code and tests together** — keep the asserted *JSON* exact (that is the contract this slice owns); the Rust field names bend to promql.
+> **Verify-before-use (do not fabricate):** the exact field names / enum discriminants of `QueryResult`, `InstantSample`, `RangeSeries`, `SampleValue`, and the `MetricStore` method shapes are owned by Slices 2–3. Before Task 4, run `cargo doc -p krabka-promql --no-deps` (or read `crates/promql/src/lib.rs` re-exports) and reconcile. If a name differs (e.g. `ts_ms` vs `timestamp_ms`, the `Scalar`/`Str` struct-field names), adapt the **mapping code and tests together** — keep the asserted _JSON_ exact (that is the contract this slice owns); the Rust field names bend to promql.
 
 ---
 
 ## File structure (`crates/metrics/` — extends the Slice 1 crate)
 
-| File | Responsibility |
-|---|---|
-| `src/lib.rs` | add `pub mod querier;` + re-exports (existing data-layer modules unchanged) |
-| `src/querier/mod.rs` | querier module decls + `QuerierConfig` |
-| `src/querier/head.rs` | `WalHead` — in-memory WAL-tail ring + `MemTable` projection + retention/offsets |
-| `src/querier/tailer.rs` | `HeadTailer` — consumer loop feeding `WalHead`; rebuild-from-offset |
-| `src/querier/store.rs` | `CrabkaMetricStore` — the `MetricStore` impl (cold+hot UNION, frontier split) |
-| `src/querier/http/mod.rs` | `router()` (dual mount) + `AppState` + `X-Scope-OrgID` extractor |
-| `src/querier/http/json.rs` | Prometheus JSON value types + `QueryResult`→JSON + `format_sample_value` |
-| `src/querier/http/query.rs` | `/query`, `/query_range` handlers |
-| `src/querier/http/meta.rs` | `/series`, `/labels`, `/label/{name}/values`, `/metadata`, `/query_exemplars`, `/status/buildinfo` |
-| `src/bin/krabka-metrics.rs` | role binary `--target querier` (extended in later slices) |
+| File                        | Responsibility                                                                                     |
+| --------------------------- | -------------------------------------------------------------------------------------------------- |
+| `src/lib.rs`                | add `pub mod querier;` + re-exports (existing data-layer modules unchanged)                        |
+| `src/querier/mod.rs`        | querier module decls + `QuerierConfig`                                                             |
+| `src/querier/head.rs`       | `WalHead` — in-memory WAL-tail ring + `MemTable` projection + retention/offsets                    |
+| `src/querier/tailer.rs`     | `HeadTailer` — consumer loop feeding `WalHead`; rebuild-from-offset                                |
+| `src/querier/store.rs`      | `CrabkaMetricStore` — the `MetricStore` impl (cold+hot UNION, frontier split)                      |
+| `src/querier/http/mod.rs`   | `router()` (dual mount) + `AppState` + `X-Scope-OrgID` extractor                                   |
+| `src/querier/http/json.rs`  | Prometheus JSON value types + `QueryResult`→JSON + `format_sample_value`                           |
+| `src/querier/http/query.rs` | `/query`, `/query_range` handlers                                                                  |
+| `src/querier/http/meta.rs`  | `/series`, `/labels`, `/label/{name}/values`, `/metadata`, `/query_exemplars`, `/status/buildinfo` |
+| `src/bin/krabka-metrics.rs` | role binary `--target querier` (extended in later slices)                                          |
 
 `store.rs` + `head.rs` are the only files touching DataFusion's query layer; `http/json.rs` is the only file owning wire-shape serialization. This keeps the two churn-prone surfaces (DataFusion UNION, Prometheus JSON) each in one file.
 
@@ -136,11 +137,13 @@ pub enum SampleValue { Float(f64), Histogram(NativeHistogram) }
 ### Task 1: Crate deps + querier module scaffold
 
 **Files:**
+
 - Modify: `crates/metrics/Cargo.toml`
 - Modify: `crates/metrics/src/lib.rs`
 - Create: `crates/metrics/src/querier/mod.rs`
 
 **Interfaces:**
+
 - Produces: a compiling `krabka-metrics` with a `querier` module + `QuerierConfig` and a smoke test.
 
 - [ ] **Step 1: Add the Slice-5 dependencies to `crates/metrics/Cargo.toml`**
@@ -266,9 +269,11 @@ git commit -m "feat(metrics): querier module scaffold + QuerierConfig + deps"
 ### Task 2: `WalHead` — in-memory WAL-tail ring + retention + MemTable projection
 
 **Files:**
+
 - Create: `crates/metrics/src/querier/head.rs`
 
 **Interfaces:**
+
 - Consumes: Slice 1 `float_sample_schema()`/`native_histogram_schema()`/`encode_float_samples`/`encode_native_histograms`, `NativeHistogram`; blockstore `Labels`/`SeriesFingerprint`/`LabelMatcher`/`MatchOp`.
 - Produces:
   - `enum HeadSample { Float(f64), Histogram(NativeHistogram) }`
@@ -397,7 +402,7 @@ mod tests {
 }
 ```
 
-> **Partition note:** the test seeds offsets `0,1,2` on a single implied partition. If `ingest` takes a `(partition, offset)` pair (the tailer knows the partition), add `partition` as a parameter and update the seed to pass `0`. Keep offset tracking *per partition* — the head is rebuildable per partition.
+> **Partition note:** the test seeds offsets `0,1,2` on a single implied partition. If `ingest` takes a `(partition, offset)` pair (the tailer knows the partition), add `partition` as a parameter and update the seed to pass `0`. Keep offset tracking _per partition_ — the head is rebuildable per partition.
 
 - [ ] **Step 2: Run to verify it fails**
 
@@ -747,9 +752,11 @@ git commit -m "feat(metrics): WalHead — in-memory WAL-tail ring + retention + 
 ### Task 3: `HeadTailer` — consumer loop feeding the head (structure + behavior-pin)
 
 **Files:**
+
 - Create: `crates/metrics/src/querier/tailer.rs`
 
 **Interfaces:**
+
 - Consumes: `krabka-client-consumer::{Consumer, ConsumerRecord, AutoOffsetReset}`, Slice 4 `WalRecord` (decode), `WalHead`, `HeadSample`.
 - Produces:
   - `struct SharedHead(Arc<RwLock<WalHead>>)` (tokio `RwLock`) with `new(retention)`, `read()`, and `apply_record(&self, &WalRecord, partition, offset)`.
@@ -955,6 +962,7 @@ fn now_ms() -> i64 {
 ```
 
 > **Verify-notes (do before this compiles):**
+>
 > - `WalRecord` fields / `SamplePayload` enum — Slice 4 exposes **public fields** `tenant: String`, `labels: Vec<(String,String)>`, `payload: SamplePayload` (NOT methods, NOT a blockstore `Labels`, NOT a `WalSample` enum). `SamplePayload` is `Float { timestamp_ms, value }` / `Hist { timestamp_ms, hist }`. The mapping rebuilds a `Labels` from the `(name,value)` pairs (or calls `rec.series_fingerprint()`) and matches on `payload`. Confirm these names against Slice 4 before compiling.
 > - `WalRecord::decode(&[u8]) -> Result<…>` — confirm the decode entry point and error type; map it to a `tracing::debug!` (a poison-pill record must not kill the tailer).
 > - `tokio-util` for `CancellationToken` — add `tokio-util = { workspace = true }` if not already a metrics dep.
@@ -979,9 +987,11 @@ git commit -m "feat(metrics): HeadTailer — WAL-tail consumer loop + pure recor
 ### Task 4: `CrabkaMetricStore` — the `MetricStore` impl (cold + hot UNION, frontier split)
 
 **Files:**
+
 - Create: `crates/metrics/src/querier/store.rs`
 
 **Interfaces:**
+
 - Consumes: `krabka-promql::{MetricStore, ScanResult, PromqlError}`, `krabka-blockstore::{BlockStore, Labels, LabelMatcher}`, `SharedHead`, Slice 1 schemas.
 - **Prerequisite (land first):** `krabka-blockstore::Index::series_labels(tenant, fp) -> Option<Labels>` — the `Index` already stores `series: HashMap<fp, Labels>` but exposes no accessor for it; `series` (cold side) needs it to reconstruct cold series labels. Add it to blockstore (trivial lookup) before this task; do not reconstruct from postings.
 - Produces:
@@ -989,7 +999,7 @@ git commit -m "feat(metrics): HeadTailer — WAL-tail consumer loop + pure recor
   - `CrabkaMetricStore::new(blockstore, head, frontier) -> Self`
   - `#[async_trait] impl MetricStore for CrabkaMetricStore` — `scan`/`label_names`/`label_values`/`series`.
 
-The **UNION wiring is the churn-prone DataFusion surface.** Structure it as: (a) get the cold `(SessionContext, cold_table)` from `BlockStore::scan_context` for *each* schema (float, histogram), restricting the cold side to `ts < frontier`; (b) register the head batches as `MemTable`s (`hot_float`, `hot_hist`) into the *same* `SessionContext`, restricting the hot side to `ts >= frontier`; (c) register a UNION view (`float_union`, `histogram_union`) over cold+hot and return its name in `ScanResult`. Behavior-pin the no-double-count property with a test; do not hand-fabricate UNION SQL semantics.
+The **UNION wiring is the churn-prone DataFusion surface.** Structure it as: (a) get the cold `(SessionContext, cold_table)` from `BlockStore::scan_context` for _each_ schema (float, histogram), restricting the cold side to `ts < frontier`; (b) register the head batches as `MemTable`s (`hot_float`, `hot_hist`) into the _same_ `SessionContext`, restricting the hot side to `ts >= frontier`; (c) register a UNION view (`float_union`, `histogram_union`) over cold+hot and return its name in `ScanResult`. Behavior-pin the no-double-count property with a test; do not hand-fabricate UNION SQL semantics.
 
 - [ ] **Step 1: Write the failing test (no broker — head fed directly)**
 
@@ -1326,6 +1336,7 @@ async fn register_union(
 ```
 
 > **Churn-point checklist (verify against the pinned datafusion rev + blockstore/promql APIs if compile fails):**
+>
 > - `SessionContext::table_provider(&self, &str) -> Result<Arc<dyn TableProvider>>` — name may be `table` / `table_provider`; adapt. Used to lift the histogram blocks into the float ctx.
 > - `MemTable::try_new(SchemaRef, Vec<Vec<RecordBatch>>)` at `datafusion::catalog::MemTable` (older path `datafusion::datasource::MemTable`).
 > - `CREATE VIEW … UNION ALL …` then `register_table`/query by name — if `CREATE VIEW` over registered tables is unsupported at the pin, build the union via `ctx.table(cold).union(ctx.table(hot))?.into_view()` and `register_table(view_name, view)` instead. The **behavior** (UNION ALL, no dedup, frontier split prevents double-count) is what the test pins.
@@ -1352,10 +1363,12 @@ git commit -m "feat(metrics): CrabkaMetricStore — cold+hot UNION MetricStore w
 ### Task 5: Prometheus JSON serialization — `QueryResult` → exact wire shapes (the byte-equality analog)
 
 **Files:**
+
 - Create: `crates/metrics/src/querier/http/mod.rs` (module decls + `AppState` + tenant extractor + `format_sample_value`-adjacent helpers live in `json.rs`)
 - Create: `crates/metrics/src/querier/http/json.rs`
 
 **Interfaces:**
+
 - Consumes: `krabka-promql::{QueryResult, InstantSample, RangeSeries, SampleValue, Labels}`.
 - Produces:
   - `fn format_sample_value(v: f64) -> String` — Prometheus `MarshalFloat` semantics (`'f'` default, `'e'` for `abs<1e-6`/`abs>=1e21`); `+Inf`/`-Inf`/`NaN` literals.
@@ -1699,6 +1712,7 @@ pub fn query_result_to_json(r: &QueryResult) -> Value {
 ```
 
 > **Verify-notes:**
+>
 > - **`ts_to_json` byte-exactness:** `ts_to_json` ports Prometheus's `util/jsonutil.MarshalTimestamp` directly — a bare integer of whole seconds, plus a 3-digit zero-padded fraction only when the millisecond remainder is non-zero — and builds a `serde_json::Number` from that decimal **string** so no f64 reformatting reintroduces a trailing `.0`. A whole-second ts (`1435781430000`) must serialize as the JSON integer `1435781430`, NOT `1435781430.0`. The `matrix_integral_second_ts_is_bare_integer` test is the canary (an integer `Number` is `!=` an f64 `Number` under `serde_json`, which is what makes the bare-integer requirement testable).
 > - **Native-histogram JSON is a PLACEHOLDER** (`histogram_to_json`). The real Prometheus bucket shape (boundary-inclusion rule integer + `["<lower>","<upper>","<count>"]` triples expanded from spans) is non-trivial; implement it with a dedicated `native_histogram_json_is_exact` test seeded from a known `NativeHistogram`, cross-checked against a real Prometheus `/query` response for the same histogram. Flagged, not faked — float vector/matrix/scalar/error are the in-scope byte-equality assertions for this task.
 > - **`QueryResult::Scalar` shape:** the shared contract gives the struct variant `Scalar { ts_ms: i64, value: f64 }` (and `Str { ts_ms, value }`); if promql's `Scalar` carries no timestamp, drop `ts_ms` and source the eval ts from the request (instant `time`) in the handler — keep the JSON `[<ts>, "<val>"]`.
@@ -1790,10 +1804,12 @@ git commit -m "feat(metrics): Prometheus query-API JSON shapes (vector/matrix/sc
 ### Task 6: HTTP handlers + router wiring + in-process response-shape tests
 
 **Files:**
+
 - Create: `crates/metrics/src/querier/http/query.rs`
 - Create: `crates/metrics/src/querier/http/meta.rs`
 
 **Interfaces:**
+
 - Consumes: `AppState`, `tenant_of`, `json::*`, `krabka-promql::PromqlEngine`.
 - Produces axum handlers:
   - `query.rs`: `query` (instant), `query_range`.
@@ -2171,10 +2187,12 @@ git commit -m "feat(metrics): Prometheus HTTP query API handlers + dual-mount ro
 ### Task 7: Role binary `krabka-metrics --target querier` + end-to-end `#[ignore]` integration
 
 **Files:**
+
 - Create: `crates/metrics/src/bin/krabka-metrics.rs`
 - Create: `crates/metrics/tests/querier_e2e.rs`
 
 **Interfaces:**
+
 - Consumes: `QuerierConfig`, `SharedHead`, `HeadTailer`, `CrabkaMetricStore`, `PromqlEngine`, `http::router`, `krabka-grpc-gateway`/broker `serve` pattern (plaintext axum serve).
 - Produces: a binary that, for `--target querier`, builds the head + tailer + store + engine + router and serves the Prometheus API on `config.listen_addr`.
 
@@ -2294,7 +2312,7 @@ async fn produce_then_query_round_trips_through_head() {
 }
 ```
 
-> The e2e is a **skeleton with an explicit fill-list**, not fabricated passing code — it pins the *integration contract* (produce → tail → query) and is `#[ignore]`d so CI is green without Docker/broker. When Slice 4's produce path is in hand, flesh out steps 1–6; the assertion reuses Task 6's exact-vector `want`.
+> The e2e is a **skeleton with an explicit fill-list**, not fabricated passing code — it pins the _integration contract_ (produce → tail → query) and is `#[ignore]`d so CI is green without Docker/broker. When Slice 4's produce path is in hand, flesh out steps 1–6; the assertion reuses Task 6's exact-vector `want`.
 
 - [ ] **Step 3: Build the binary + run non-ignored tests**
 
@@ -2317,9 +2335,11 @@ git commit -m "feat(metrics): krabka-metrics --target querier binary + e2e skele
 ### Task 8: Whole-crate gate + matrix/range over hot+cold (integration property-ish test)
 
 **Files:**
+
 - Create: `crates/metrics/tests/querier_range.rs`
 
 **Interfaces:**
+
 - Consumes the public querier API: `CrabkaMetricStore`, `SharedHead`, `PromqlEngine`, `http::router`.
 
 - [ ] **Step 1: Write a `query_range` integration test (no broker)**
@@ -2393,7 +2413,7 @@ async fn range_query_returns_matrix_shape() {
 }
 ```
 
-> Sample-count expectations depend on the engine's instant-selection + lookback semantics (Slice 2/3); if the engine carries forward the last sample across empty steps, the count is the step grid size (5), which is what this asserts. If the staleness/lookback rules produce a different count for this seed, adjust the **count** to the engine's real behavior (this test pins the *shape* + that the range path works hot-only, not a specific lookback rule).
+> Sample-count expectations depend on the engine's instant-selection + lookback semantics (Slice 2/3); if the engine carries forward the last sample across empty steps, the count is the step grid size (5), which is what this asserts. If the staleness/lookback rules produce a different count for this seed, adjust the **count** to the engine's real behavior (this test pins the _shape_ + that the range path works hot-only, not a specific lookback rule).
 
 - [ ] **Step 2: Run it**
 
@@ -2417,6 +2437,7 @@ git commit -m "test(metrics): range query over head returns exact matrix shape"
 ## Self-review
 
 **Spec coverage (against §6.3 hot/cold, §8 HTTP API, §11 Slice 5):**
+
 - **Querier `MetricStore` impl** (`CrabkaMetricStore`) merging cold `BlockStore::scan_context` + hot WAL-tail head, UNION-ed, split at the compaction frontier to avoid double-count → Tasks 2 (head), 4 (store). The no-double-count property is the headline test (`c == 2`, not 3).
 - **WAL-tail head** rebuildable from offsets, retention-bounded, projected as DataFusion `MemTable`s → Tasks 2 (`WalHead`), 3 (`HeadTailer` consumer loop + rebuild-from-`Earliest`).
 - **`label_names`/`label_values`/`series`** from blockstore `Index` ∪ head → Task 4.
@@ -2427,12 +2448,14 @@ git commit -m "test(metrics): range query over head returns exact matrix shape"
 - **Real-broker WAL-tail head** via in-process broker, `#[ignore]`d → Task 7 e2e.
 
 **Placeholder scan / flagged deviations (honest):**
+
 - **Native-histogram JSON** (`histogram_to_json`) is a flagged PLACEHOLDER — float vector/matrix/scalar/error are the byte-exact assertions in scope; the native-histogram bucket shape needs a dedicated test cross-checked against real Prometheus and is called out, not faked.
 - **`/metadata` + `/query_exemplars`** return empty success bodies — correct per the task (exemplar sidecar read + metadata index are later wiring); shape is valid for Grafana.
 - **Binary `build_blockstore_from_env` / `make_frontier`** are `todo!()` wiring fns gated on Slice 4's object-store config + compactor frontier commit — flagged as wiring, not logic; all logic is unit-tested broker-free.
 - **The e2e test** is an `#[ignore]`d skeleton with an explicit fill-list (produce → tail → query), not fabricated passing assertions.
 
 **Churn-prone surfaces — structured + behavior-pinned, not fabricated (per CLAUDE.md):**
+
 - **DataFusion UNION of hot+cold** (Task 4 `register_union`/`register_memtable`/`table_provider`) — pinned by the `c == 2` no-double-count test; `CREATE VIEW … UNION ALL` vs `DataFrame::union(...).into_view()` fallback both flagged with a verify-checklist.
 - **Consumer client API** (Task 3) — built from the real `Consumer::builder()…subscribe(vec).auto_offset_reset(Earliest).build()` + `poll(Duration) -> Result<Vec<ConsumerRecord>>` shape read from the crate; the `WalRecord` decode is isolated in `apply_wal_record` with a pure unit test and verify-notes.
 - **`krabka-promql` contract** (`MetricStore`/`ScanResult`/`PromqlEngine`/`QueryResult`/`SampleValue`) — consumed verbatim from the shared contract; every spot where a field name might differ (`ts_ms`, `Scalar` ts, `PromqlError` variants, `EngineOpts::default`) carries an explicit "adapt the Rust, keep the JSON" verify-note. (Slice 2's `PromqlEngine` has no `store()` accessor — its `store` field is private — so `AppState` carries an `Arc<CrabkaMetricStore>` directly for the metadata handlers.)

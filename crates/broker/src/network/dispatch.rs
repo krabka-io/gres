@@ -16,12 +16,12 @@
 use std::net::SocketAddr;
 
 use bytes::{BufMut, Bytes, BytesMut};
+use futures_util::{SinkExt, StreamExt};
 use krabka_protocol::{Decode as _, api_key::ApiKey};
 use krabka_units::{
     Time,
     convert::{ByteSizeExt as _, TimeExt},
 };
-use futures_util::{SinkExt, StreamExt};
 use tokio::{
     io::{AsyncRead, AsyncWrite},
     net::TcpStream,

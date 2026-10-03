@@ -9,12 +9,12 @@
 
 use std::collections::BTreeMap;
 
-use krabka_security::ca::{self, CaMaterial};
 use k8s_openapi::{
     ByteString,
     api::core::v1::Secret,
     apimachinery::pkg::apis::meta::v1::{ObjectMeta, OwnerReference},
 };
+use krabka_security::ca::{self, CaMaterial};
 use kube::{
     Resource, ResourceExt as _,
     api::{Api, Patch, PatchParams},

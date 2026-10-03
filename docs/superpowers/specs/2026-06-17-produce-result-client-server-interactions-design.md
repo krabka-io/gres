@@ -28,6 +28,7 @@ duplicate or advancing sequence state early.
 ## Scope
 
 **In:**
+
 - One producer, one topic-partition, one prepared batch, and three brokers.
 - Cached leader metadata, metadata refresh, and wrong-leader responses.
 - Unknown produce outcome after timeout where the batch may or may not have
@@ -38,6 +39,7 @@ duplicate or advancing sequence state early.
 - Existing clean-election/HWM prefix constraints.
 
 **Out:**
+
 - Multiple in-flight batches and batching reorder.
 - Transaction coordinator or producer fencing by a second producer.
 - Full wall-clock backoff timing. The model keeps bounded abstract retry

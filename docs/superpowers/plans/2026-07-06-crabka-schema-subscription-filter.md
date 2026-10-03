@@ -19,7 +19,7 @@
 3. **One engine.** SQL → DataFusion `PhysicalExpr`; no second filter runtime.
 4. **Enums by name.** Enum fields evaluate as `Dictionary<Utf8>` symbol names; unknown numbers → `UNKNOWN_<n>`, never dropped.
 5. **Greenfield proto.** `FieldPredicate` is removed and replaced by a `filter` SQL string — no back-compat.
-6. **Not RLS.** This gates the *filter* within the existing topic/group Read ACL; row-level *authorization* is Chapter E — do not conflate.
+6. **Not RLS.** This gates the _filter_ within the existing topic/group Read ACL; row-level _authorization_ is Chapter E — do not conflate.
 7. **Every task ends green** before its commit.
 
 ## Scope boundary
@@ -42,6 +42,7 @@
 ## Task 1: Proto — `filter` SQL field replaces `FieldPredicate`
 
 **Files:**
+
 - Modify: `crates/grpc-gateway/proto/crabka/gateway/v1/gateway.proto`
 
 - [ ] **Step 1: Edit the proto**
@@ -70,6 +71,7 @@ git commit -m "feat(gateway): replace Subscribe FieldPredicate with a SQL filter
 ## Task 2: The SQL → DataFusion `PhysicalExpr` compiler
 
 **Files:**
+
 - Create: `crates/grpc-gateway/src/filter.rs`
 
 - [ ] **Step 1: Write the failing tests**
@@ -185,7 +187,7 @@ impl CompiledFilter {
 }
 ```
 
-(The exact DataFusion import paths track the workspace's git-pinned datafusion rev — confirm `parse_sql_expr`/`create_physical_expr`/`ExecutionProps` against it; the *shape* — parse WHERE → `Expr` → `PhysicalExpr` → `evaluate` → `BooleanArray` — is stable.)
+(The exact DataFusion import paths track the workspace's git-pinned datafusion rev — confirm `parse_sql_expr`/`create_physical_expr`/`ExecutionProps` against it; the _shape_ — parse WHERE → `Expr` → `PhysicalExpr` → `evaluate` → `BooleanArray` — is stable.)
 
 - [ ] **Step 4: Run to verify it passes; commit**
 
@@ -201,6 +203,7 @@ git commit -m "feat(gateway): SQL->DataFusion compiled subscription filter"
 ## Task 3: Enum → `Dictionary<Utf8>` symbol-name decode
 
 **Files:**
+
 - Modify: `crates/client-streams/src/columnar/serde/arrow.rs` (+ the protobuf/avro decode path)
 
 - [ ] **Step 1: Write the failing test**
@@ -232,6 +235,7 @@ git commit -m "feat(client-streams): decode protobuf/avro enums to Dictionary<Ut
 ## Task 4: Wire the filter into the `Subscribe` path
 
 **Files:**
+
 - Modify: `crates/grpc-gateway/src/streaming.rs`, `crates/grpc-gateway/src/consume.rs`
 
 - [ ] **Step 1: Write the failing integration test**
@@ -241,11 +245,12 @@ Produce protobuf records (with a nested/repeated field + an enum) to a topic; op
 - [ ] **Step 2: Run to verify it fails; implement**
 
 In `crates/grpc-gateway/src/streaming.rs`, **remove** `compile_subscribe_predicates`/`structured_json_matches`/`predicate_matches` (`:42-114`) and replace the per-record advisory JSONPath check with:
+
 - On `SubscribeStart`, hold the `filter` string; lazily compile a `CompiledFilter` (Task 2) the first time a given `schema_id` is seen, decoding the schema to an Arrow schema via `RowBridge`; cache per `(subscription, schema_id)`; a compile error terminates the stream with a clear status.
 - Per fetched batch: decode `(key, value)` → an Arrow `RecordBatch` via `RowCodec`/`RowBridge` (`crates/client-streams/src/columnar/`, Task 3's enum decode included), **keeping the original bytes** alongside (extend `consume.rs`'s decoded record to carry the raw record); evaluate `CompiledFilter::evaluate(&batch)` → the `BooleanArray` mask; deliver only masked-true records as their **original verbatim bytes** down the `SubscribeFrame` stream.
 - A record whose `schema_id` differs recompiles (or reuses the cached predicate for that id). An undecodable record: drop-with-metric (defined policy), never fail the batch.
 
-Preserve the existing pre-stream Read-ACL gate on the group + topics (unchanged) — the filter narrows *within* it.
+Preserve the existing pre-stream Read-ACL gate on the group + topics (unchanged) — the filter narrows _within_ it.
 
 - [ ] **Step 3: Run to verify it passes; commit**
 
@@ -277,4 +282,4 @@ git commit -m "feat(gateway): server-enforced complex subscription filtering ove
 
 **4. Invariant check:** server-side gating (Task 4 delivers only masked-true); byte-exact original bytes (Task 4 keeps raw record); one engine (DataFusion, Task 2); enums by name + `UNKNOWN_<n>` (Task 3); greenfield proto (Task 1 removes `FieldPredicate`); not-RLS (Task 4 preserves the Read-ACL gate, RLS deferred). Each task green.
 
-**5. Prerequisites:** none unlanded — this reuses landed code (registry, schema-serde, RowBridge, DataFusion, the Subscribe stream); it is the first *buildable-today* sub-service of the vision.
+**5. Prerequisites:** none unlanded — this reuses landed code (registry, schema-serde, RowBridge, DataFusion, the Subscribe stream); it is the first _buildable-today_ sub-service of the vision.

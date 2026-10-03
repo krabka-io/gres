@@ -582,7 +582,7 @@ The sub-plan ships when **all** of these hold:
    `crc32c`. Four mirror-features (`gzip`/`snappy`/`lz4`/`zstd`)
    forward to `krabka-compression`.
 3. `RecordBatchHeader` is a `zerocopy`-derived `#[repr(C)] FromBytes +
-   KnownLayout + Immutable + Unaligned` struct of size 61 bytes.
+KnownLayout + Immutable + Unaligned` struct of size 61 bytes.
 4. CRC-32C validation on decode (rejects mismatched batches), CRC
    computed correctly on encode (JVM byte-equal).
 5. v2 magic enforced; v0/v1 rejected with `UnsupportedMagic`.
@@ -603,7 +603,7 @@ The sub-plan ships when **all** of these hold:
 12. CodSpeed bench file added; per-codec decode + encode numbers
     recorded.
 13. `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D
-    warnings`, `cargo test --workspace -- --include-ignored` all green.
+warnings`, `cargo test --workspace -- --include-ignored` all green.
 14. CI matrix green on Linux/macOS/Windows.
 15. Rustdoc on every public type in `records::`; crate-level doc updated
     to mention typed RecordBatch.

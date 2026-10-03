@@ -234,7 +234,7 @@ encoding_rs = "0.8"
 
 # First-party dependencies are pinned to the coordinated release inputs.
 [patch.crates-io]
-connectrpc-axum = { git = "https://github.com/krabka-io/connectrpc-axum", rev = "848a3de54d7d75b5e66370990c47745f9bf585ef" }
-connectrpc-axum-build = { git = "https://github.com/krabka-io/connectrpc-axum", rev = "848a3de54d7d75b5e66370990c47745f9bf585ef" }
-connectrpc-axum-client = { git = "https://github.com/krabka-io/connectrpc-axum", rev = "848a3de54d7d75b5e66370990c47745f9bf585ef" }
-connectrpc-axum-core = { git = "https://github.com/krabka-io/connectrpc-axum", rev = "848a3de54d7d75b5e66370990c47745f9bf585ef" }
+connectrpc-axum = { git = "https://github.com/krabka-io/connectrpc-axum", rev = "f2134f4124c4cde58b404923934220d8b2e8122b" }
+connectrpc-axum-build = { git = "https://github.com/krabka-io/connectrpc-axum", rev = "f2134f4124c4cde58b404923934220d8b2e8122b" }
+connectrpc-axum-client = { git = "https://github.com/krabka-io/connectrpc-axum", rev = "f2134f4124c4cde58b404923934220d8b2e8122b" }
+connectrpc-axum-core = { git = "https://github.com/krabka-io/connectrpc-axum", rev = "f2134f4124c4cde58b404923934220d8b2e8122b" }

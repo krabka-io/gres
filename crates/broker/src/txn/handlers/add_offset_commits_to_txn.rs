@@ -9,6 +9,7 @@
 //! Response fields: `throttle_time_ms`, `error_code`.
 
 use bytes::{Bytes, BytesMut};
+use futures_util::future::BoxFuture;
 use krabka_ids::PartitionIndex;
 use krabka_protocol::{
     Decode, Encode,
@@ -17,7 +18,6 @@ use krabka_protocol::{
         add_offsets_to_txn_response::AddOffsetsToTxnResponse,
     },
 };
-use futures_util::future::BoxFuture;
 
 use crate::{
     broker::Broker,

@@ -25,6 +25,7 @@
 use std::sync::Arc;
 
 use assert2::{assert, check};
+use http::{Method, Response};
 use krabka_operator::{
     controller::{common::ReconcileError, kafka::reconcile},
     crd::{
@@ -33,7 +34,6 @@ use krabka_operator::{
         NetworkPolicySpec, PodMonitorSpec, ServiceMonitorSpec,
     },
 };
-use http::{Method, Response};
 use serde_json::json;
 
 #[path = "shared/mod.rs"]

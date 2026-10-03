@@ -42,7 +42,7 @@ The rejected alternative â€” widening the on-disk timestamp to 96 or 128 bits â€
 
 ### Mode is explicit tenant configuration, not inferred
 
-`MultiRangeTenantConfig` gains an explicit timestamp-mode field (`LogicalTso` default, `Hlc` opt-in) set at provision time. Today's four-way inference (in-process vs. registry-forwarded vs. unavailable) remains, but it selects *how the chosen mode is wired for this node's hosting topology*, not *which mode the tenant runs*. Inferring mode from topology was rejected: a distributed topology running `LogicalTso` is a legitimate configuration (single-zone HA), and promotion must be an administrative act, not an emergent one.
+`MultiRangeTenantConfig` gains an explicit timestamp-mode field (`LogicalTso` default, `Hlc` opt-in) set at provision time. Today's four-way inference (in-process vs. registry-forwarded vs. unavailable) remains, but it selects _how the chosen mode is wired for this node's hosting topology_, not _which mode the tenant runs_. Inferring mode from topology was rejected: a distributed topology running `LogicalTso` is a legitimate configuration (single-zone HA), and promotion must be an administrative act, not an emergent one.
 
 ### The durable-horizon floor stays mechanism-agnostic
 

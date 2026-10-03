@@ -79,12 +79,12 @@ Do not split further unless a file grows past focused responsibility during impl
 
 ## Batch Plan
 
-| Batch | Tasks | Parallel? | Rationale |
-|---|---|---|---|
-| A - Crate Foundation | 1, then 2/3 | Partial | Task 1 creates crate; config/session and DTO/errors are independent after that. |
-| B - Auth/Admin Core | 4 and 5 | Yes | SCRAM login/security and permission derivation/admin mapping touch disjoint files. |
-| C - Server Functions + UI Shell | 6, then 7/8 | Partial | Server state/functions precede views; layout and first read views can then proceed together. |
-| D - Mutations + E2E | 9 and 10, then 11 | Partial | Mutation views and server tests can proceed together; Playwright depends on runnable UI. |
+| Batch                           | Tasks             | Parallel? | Rationale                                                                                    |
+| ------------------------------- | ----------------- | --------- | -------------------------------------------------------------------------------------------- |
+| A - Crate Foundation            | 1, then 2/3       | Partial   | Task 1 creates crate; config/session and DTO/errors are independent after that.              |
+| B - Auth/Admin Core             | 4 and 5           | Yes       | SCRAM login/security and permission derivation/admin mapping touch disjoint files.           |
+| C - Server Functions + UI Shell | 6, then 7/8       | Partial   | Server state/functions precede views; layout and first read views can then proceed together. |
+| D - Mutations + E2E             | 9 and 10, then 11 | Partial   | Mutation views and server tests can proceed together; Playwright depends on runnable UI.     |
 
 Dispatch every parallel group in one message with separate subagents. Review after each batch before moving on.
 
@@ -95,6 +95,7 @@ Dispatch every parallel group in one message with separate subagents. Review aft
 ### Task 1: Create `krabka-admin-ui` crate skeleton
 
 **Files:**
+
 - Create: `crates/admin-ui/Cargo.toml`
 - Create: `crates/admin-ui/src/lib.rs`
 - Create: `crates/admin-ui/src/main.rs`
@@ -102,6 +103,7 @@ Dispatch every parallel group in one message with separate subagents. Review aft
 - Test: `crates/admin-ui/tests/smoke.rs`
 
 **Interfaces:**
+
 - Produces `krabka_admin_ui::app() -> dioxus::prelude::Element`.
 - Produces `krabka_admin_ui::server::health_router() -> axum::Router`.
 
@@ -281,12 +283,14 @@ git commit -m "feat: add admin UI crate skeleton"
 ### Task 2: Add validated single-cluster config
 
 **Files:**
+
 - Create: `crates/admin-ui/src/config.rs`
 - Modify: `crates/admin-ui/src/lib.rs`
 - Modify: `crates/admin-ui/src/main.rs`
 - Test: `crates/admin-ui/tests/config.rs`
 
 **Interfaces:**
+
 - Produces `AdminUiConfig::from_env() -> Result<AdminUiConfig, ConfigError>`.
 - Produces `AdminUiConfig::validate(self) -> Result<Self, ConfigError>`.
 - Produces `BrokerSecurityConfig` limited to `SaslPlaintext` and `SaslSsl` with SCRAM-SHA-512 at login time.
@@ -534,6 +538,7 @@ git commit -m "feat: add admin UI runtime config"
 ### Task 3: Add session store and UI DTO/error foundation
 
 **Files:**
+
 - Create: `crates/admin-ui/src/session.rs`
 - Create: `crates/admin-ui/src/dto.rs`
 - Create: `crates/admin-ui/src/error.rs`
@@ -542,6 +547,7 @@ git commit -m "feat: add admin UI runtime config"
 - Test: `crates/admin-ui/tests/admin_mapping.rs`
 
 **Interfaces:**
+
 - Produces `SessionStore`, `SessionId`, `SessionRecord`.
 - Produces `UiError`, `KafkaErrorDto`, `ResourceOutcome`.
 - Produces DTOs reused by admin adapter and views.
@@ -869,11 +875,13 @@ git commit -m "feat: add admin UI session and DTO foundation"
 ### Task 4: Implement SCRAM-SHA-512 broker-backed login service
 
 **Files:**
+
 - Create: `crates/admin-ui/src/auth.rs`
 - Modify: `crates/admin-ui/src/lib.rs`
 - Test: `crates/admin-ui/tests/auth.rs`
 
 **Interfaces:**
+
 - Produces `LoginRequest`, `LoginSuccess`, `AuthService`.
 - Produces `build_scram_sha512_security(&AdminUiConfig, &str, &str) -> ClientSecurity`.
 - Uses `AdminClient::connect_secured` with `SaslCredentials::Scram { mechanism: SaslMechanism::ScramSha512, ... }`.
@@ -1025,6 +1033,7 @@ git commit -m "feat: add SCRAM broker login service"
 ### Task 5: Implement permission derivation and admin adapter mappings
 
 **Files:**
+
 - Create: `crates/admin-ui/src/permissions.rs`
 - Create: `crates/admin-ui/src/admin.rs`
 - Modify: `crates/admin-ui/src/dto.rs`
@@ -1033,6 +1042,7 @@ git commit -m "feat: add SCRAM broker login service"
 - Test: `crates/admin-ui/tests/admin_mapping.rs`
 
 **Interfaces:**
+
 - Produces `Capabilities` with booleans used by UI route guards and action buttons.
 - Produces `AdminFacade` wrapping `krabka-client-admin::AdminClient`.
 - Produces pure mapping helpers for topic rows, group rows, log-dir rows, and outcomes.
@@ -1278,12 +1288,14 @@ git commit -m "feat: derive admin UI capabilities"
 ### Task 6: Add app state and server-function seam
 
 **Files:**
+
 - Modify: `crates/admin-ui/src/server.rs`
 - Create: `crates/admin-ui/src/server_fns.rs`
 - Modify: `crates/admin-ui/src/lib.rs`
 - Test: `crates/admin-ui/tests/server_fns.rs`
 
 **Interfaces:**
+
 - Produces `AppState { cfg: Arc<AdminUiConfig>, sessions: Arc<SessionStore> }`.
 - Produces server-function seam functions for login/logout/current session/topics/groups/acls/users/quotas/log dirs.
 - Keeps raw passwords only in `LoginRequest` handling and never serializes them back.
@@ -1424,6 +1436,7 @@ git commit -m "feat: add admin UI server state"
 ### Task 7: Add operations-sidebar layout and route guard
 
 **Files:**
+
 - Create: `crates/admin-ui/src/views/mod.rs`
 - Create: `crates/admin-ui/src/views/layout.rs`
 - Create: `crates/admin-ui/src/views/login.rs`
@@ -1431,6 +1444,7 @@ git commit -m "feat: add admin UI server state"
 - Modify: `crates/admin-ui/src/lib.rs`
 
 **Interfaces:**
+
 - Produces `Route` enum.
 - Produces operations-sidebar links for Overview, Topics, Groups, ACLs, Users, Quotas, Log Dirs.
 
@@ -1583,6 +1597,7 @@ git commit -m "feat: add admin UI operations shell"
 ### Task 8: Add first read-only admin views
 
 **Files:**
+
 - Create: `crates/admin-ui/src/views/topics.rs`
 - Create: `crates/admin-ui/src/views/groups.rs`
 - Create: `crates/admin-ui/src/views/acls.rs`
@@ -1593,6 +1608,7 @@ git commit -m "feat: add admin UI operations shell"
 - Modify: `crates/admin-ui/src/lib.rs`
 
 **Interfaces:**
+
 - Produces read-oriented Dioxus components for all first-slice sections.
 - Produces read-oriented Dioxus components for all first-slice sections with explicit empty states that render before live broker data is loaded.
 
@@ -1710,11 +1726,13 @@ git commit -m "feat: add admin UI section views"
 ### Task 9: Add admin mutation DTOs and server-function shells
 
 **Files:**
+
 - Modify: `crates/admin-ui/src/dto.rs`
 - Modify: `crates/admin-ui/src/server_fns.rs`
 - Test: `crates/admin-ui/tests/admin_mapping.rs`
 
 **Interfaces:**
+
 - Produces request DTOs for create/delete topics, partitions, configs, ACLs, SCRAM users, quotas, and log-dir moves.
 - Server functions return `Vec<ResourceOutcome>` for batch-like Kafka operations.
 
@@ -1854,10 +1872,12 @@ git commit -m "feat: add admin UI mutation DTOs"
 ### Task 10: Add high-value Playwright E2E scaffold
 
 **Files:**
+
 - Test: `crates/admin-ui/tests/e2e.rs`
 - Modify: `crates/admin-ui/Cargo.toml`
 
 **Interfaces:**
+
 - Produces ignored E2E tests that run against `KRABKA_ADMIN_UI_E2E_URL`.
 - Does not require launching browsers during normal `cargo test -p krabka-admin-ui`.
 
@@ -1910,12 +1930,14 @@ git commit -m "test: add admin UI playwright scaffold"
 ### Task 11: Wire runnable Dioxus server and final targeted verification
 
 **Files:**
+
 - Modify: `crates/admin-ui/src/server.rs`
 - Modify: `crates/admin-ui/src/main.rs`
 - Modify: `crates/admin-ui/src/lib.rs`
 - Test: `crates/admin-ui/tests/smoke.rs`
 
 **Interfaces:**
+
 - Produces a runnable `krabka-admin-ui` binary serving `/healthz` and the Dioxus app.
 - Keeps admin server independent from broker and gateway HTTP servers.
 

@@ -106,10 +106,10 @@ file (cluster_lock serializes them) hit ports still in TIME_WAIT.
 
 The existing `start_n_node_with_retry` pattern uses
 `bind_and_drop_addrs` to capture stable loopback ports — that's fine
-for *one* run but doesn't help when the same fixed port range is
+for _one_ run but doesn't help when the same fixed port range is
 re-used across tests.
 
-Fix: have `bind_and_drop_addrs` return a fresh port range for *each*
+Fix: have `bind_and_drop_addrs` return a fresh port range for _each_
 test, not hardcoded constants like `12_092..=12_293`. The Rust broker
 configs propagate the bound port into both `listen_addr` and the
 voter map.
@@ -170,7 +170,7 @@ Acceptance:
   message if all attempts collide.
 - **No raft leader within 2 min during a test:** the existing
   `Broker::start` timeout fires with `Startup("no leader elected
-  within 2 min")`. With short timings + retry, this should be rare,
+within 2 min")`. With short timings + retry, this should be rare,
   but the message is sufficient to diagnose.
 
 ## Out of Scope

@@ -6,9 +6,10 @@
 
 ## Context — where this sits, and the two decisions
 
-PG-4 turns PG-3's reconstruction *plans* into **pages**: a redo engine applies per-page WAL records over a base image; `get_page@LSN` serves the result; image-layer creation and GC (re-homed here from PG-3, because both require redo) keep read amplification and storage bounded; and a page service exposes it all to future compute (PG-5).
+PG-4 turns PG-3's reconstruction _plans_ into **pages**: a redo engine applies per-page WAL records over a base image; `get_page@LSN` serves the result; image-layer creation and GC (re-homed here from PG-3, because both require redo) keep read amplification and storage bounded; and a page service exposes it all to future compute (PG-5).
 
-**Decision 1 — redo is full native Rust.** No sandboxed Postgres walredo sidecar, no hybrid: the rmgr redo logic is reimplemented in Rust. This buys a pure-Rust runtime (no C process, no patched-Postgres dependency for the *pageserver*) at the price of owning the most correctness-critical surface in the chapter — a redo bug is silent page corruption. The design therefore treats two mitigations as **load-bearing, not optional**:
+**Decision 1 — redo is full native Rust.** No sandboxed Postgres walredo sidecar, no hybrid: the rmgr redo logic is reimplemented in Rust. This buys a pure-Rust runtime (no C process, no patched-Postgres dependency for the _pageserver_) at the price of owning the most correctness-critical surface in the chapter — a redo bug is silent page corruption. The design therefore treats two mitigations as **load-bearing, not optional**:
+
 - **Bounded rmgr scope with loud faults.** v1 implements exactly the set a pgbench-class workload needs — `XLOG` (FPI, `FPI_FOR_HINT`), `HEAP`, `HEAP2`, `BTREE`, `SEQ` — and returns `RedoError::UnsupportedRmgr { rmid, lsn }` for anything else (GIN/GiST/SP-GiST/BRIN/hash → a PG-4b slice; a relation using them is unservable and says so). The correctness surface grows one differentially-proven rmgr at a time.
 - **The standby differential oracle.** Redo output is compared byte-for-byte against a **WAL-replayed stock-Postgres standby** — whose pages are themselves pure redo output, so both sides diverge from the primary identically (hint bits, unlogged mutations). Redo-vs-redo makes byte-exactness achievable; masked primary comparison (tuple hint bits, checksum field) is the fallback where a standby capture is impractical.
 
@@ -57,7 +58,7 @@ oracle: stock PG 17 primary (fixture WAL) ──► pg_basebackup standby replay
 
 ### Per-`(rmid, info)` dispatch with loud refusal
 
-The redo entry point dispatches on the decoded envelope's `(rmid, info)`; every unimplemented arm is `RedoError::UnsupportedRmgr` — never a silent skip (a skipped record is a corrupt page). This is also the growth seam: PG-4b adds arms, each landing only with its own differential coverage. FPI application is the degenerate arm (the base *is* the image) and `will_init` records apply against a zeroed page — both semantics fixed by PG-3's `ReconstructData` contract.
+The redo entry point dispatches on the decoded envelope's `(rmid, info)`; every unimplemented arm is `RedoError::UnsupportedRmgr` — never a silent skip (a skipped record is a corrupt page). This is also the growth seam: PG-4b adds arms, each landing only with its own differential coverage. FPI application is the degenerate arm (the base _is_ the image) and `will_init` records apply against a zeroed page — both semantics fixed by PG-3's `ReconstructData` contract.
 
 ### The standby oracle (redo-vs-redo)
 

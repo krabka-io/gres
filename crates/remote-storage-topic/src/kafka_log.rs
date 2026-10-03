@@ -35,6 +35,7 @@ use std::{
 
 use async_trait::async_trait;
 use bytes::Bytes;
+use futures_util::stream::{StreamExt, unfold};
 use krabka_client_admin::{AdminClient, CreateTopicSpec};
 use krabka_client_core::{
     Client, ClientFrameMax, ConnectionDispatchQueueCapacity, ConnectionOptions,
@@ -47,7 +48,6 @@ use krabka_protocol::{
 use krabka_units::prelude::{
     ByteSize, ByteSizeExt as _, Time, TimeExt as _, mebibytes, millis, secs,
 };
-use futures_util::stream::{StreamExt, unfold};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, instrument, warn};

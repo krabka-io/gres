@@ -13,11 +13,11 @@
 use std::sync::Arc;
 
 use assert2::assert;
+use http::Method;
 use krabka_operator::{
     controller::kafka::reconcile,
     crd::{Authorization, Kafka, KafkaSpec, OpaAuthorization, SimpleAuthorization},
 };
-use http::Method;
 
 #[path = "shared/mod.rs"]
 mod shared;

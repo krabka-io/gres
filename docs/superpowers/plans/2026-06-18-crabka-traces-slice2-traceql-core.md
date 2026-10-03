@@ -20,8 +20,8 @@
 - **Async tests:** `#[tokio::test]`. Crate dev-dep `tokio` features = `["macros", "rt-multi-thread"]`.
 - **Dependency pin (locked):** `datafusion = { git = "https://github.com/apache/datafusion", rev = "0838a4ddb902535b0e95a1c5a254be7e9c7fe9bf" }`. This `main` revision tracks arrow 59 / parquet 59 / object_store 0.13.2, which unify with the workspace pins (same major → cargo unifies to one crate instance, so arrow types cross the DataFusion boundary cleanly). Do **not** substitute a released `datafusion` (54.x is on arrow 58 and pulls a second, incompatible arrow major).
 - **Arrow version identity:** import `arrow` directly (`use arrow::...`) as blockstore does; all of arrow/parquet/object_store unify to one instance. If a type-mismatch error appears at the DataFusion boundary, switch that import to DataFusion's re-export (`datafusion::arrow`) to force identity.
-- **No fabricated TraceQL grammar.** TraceQL has no published Rust parser and no upstream `.test`-style conformance corpus. The grammar is *referenced* from `icegatetech/icegate`'s ANTLR `TraceQLLexer.g4` / `TraceQLParser.g4` (Apache-2.0) — used as the **spec-of-record**, hand-ported to a recursive-descent parser (no ANTLR-runtime dep, full control over the colon-vs-dot scope quirks). Verified token facts to honor exactly: single `=` (there is **no `==`**), `=~` is **fully anchored** `^...$`, attribute scopes are bare `.`/`span.`/`resource.`/`parent.`/`event.`/`link.`/`instrumentation.`, intrinsic scopes use a **colon** `span:`/`trace:`/`event:`/`link:`/`instrumentation:` (there is **no `resource:`**), structural tokens are `>> << > < ~` + negated `!>> !<< !> !<` + union `&>> &<< &> &< &~`.
-- **Churn-prone DataFusion-internal traits.** `UserDefinedLogicalNodeCore`, `ExecutionPlan`, `RecordBatchStream`, the `LogicalPlanBuilder` join/filter/aggregate builders, and the plan-execution entry point change shape between DataFusion revisions. **Do not fabricate exact trait method signatures.** Where this plan shows operator / plan-builder scaffolding it gives the *struct shape, field set, and a behavior-pinning test*, plus an explicit **"verify against datafusion rev `0838a4d`"** note. The test pins behavior; if a trait method's signature differs at the pinned rev, adapt the impl to satisfy the test — never change the asserted behavior.
+- **No fabricated TraceQL grammar.** TraceQL has no published Rust parser and no upstream `.test`-style conformance corpus. The grammar is _referenced_ from `icegatetech/icegate`'s ANTLR `TraceQLLexer.g4` / `TraceQLParser.g4` (Apache-2.0) — used as the **spec-of-record**, hand-ported to a recursive-descent parser (no ANTLR-runtime dep, full control over the colon-vs-dot scope quirks). Verified token facts to honor exactly: single `=` (there is **no `==`**), `=~` is **fully anchored** `^...$`, attribute scopes are bare `.`/`span.`/`resource.`/`parent.`/`event.`/`link.`/`instrumentation.`, intrinsic scopes use a **colon** `span:`/`trace:`/`event:`/`link:`/`instrumentation:` (there is **no `resource:`**), structural tokens are `>> << > < ~` + negated `!>> !<< !> !<` + union `&>> &<< &> &< &~`.
+- **Churn-prone DataFusion-internal traits.** `UserDefinedLogicalNodeCore`, `ExecutionPlan`, `RecordBatchStream`, the `LogicalPlanBuilder` join/filter/aggregate builders, and the plan-execution entry point change shape between DataFusion revisions. **Do not fabricate exact trait method signatures.** Where this plan shows operator / plan-builder scaffolding it gives the _struct shape, field set, and a behavior-pinning test_, plus an explicit **"verify against datafusion rev `0838a4d`"** note. The test pins behavior; if a trait method's signature differs at the pinned rev, adapt the impl to satisfy the test — never change the asserted behavior.
 - **The single-span rule is the #1 semantic trap (spec §6.2).** Conditions inside **one** `{}` must all hold on a **single span** (an `AND` over one span's columns). `{A} && {B}` matches a trace when **different** spans satisfy each side (a trace-level existential, lowered to a join keyed by `trace_id`). Every planner task that touches spanset combination carries a test that distinguishes "both conditions on one span" from "each condition on a different span."
 - **Sibling carries a distinct-span predicate (spec §5/§6.3).** `B ~ A` ⟹ `B.parent_id == A.parent_id && B.span_id != A.span_id`. The `span_id != span_id` clause is **mandatory**: a naive equi-join on `parent_id` alone matches a span against itself (reporting a span as its own sibling) and wrongly matches a span satisfying both sides. `parent_id` here is the nested-set parent column (`== parent.nested_set_left`), not the raw `parent_span_id` bytes; two roots share `parent_id = 0` (the sentinel) and are siblings of each other — matching Tempo.
 
@@ -30,12 +30,13 @@
 ## Dependency & slice roadmap
 
 **Depends on:**
-- `krabka-blockstore` (generalized in traces Slice 1): the `BlockIndex` trait, `TraceIndex` (FNV-sharded `trace_id` bloom + per-block tag sets/blooms), and the **flattened span block schema** including the nested-set columns (`nested_set_left`/`nested_set_right`/`parent_id`, Int32) + the DFS pre-order computed at block-build. **This slice consumes only the *column-name contract and the nested-set semantics*** — the `BlockStore`-backed `SpanStore` impl lands in Slice 5; here we ship `InMemorySpanStore`, which computes the same nested-set columns from a hand-built span tree so the structural-join tests are trustworthy. Types `Labels`/`LabelMatcher`/`MatchOp` stay available from blockstore.
+
+- `krabka-blockstore` (generalized in traces Slice 1): the `BlockIndex` trait, `TraceIndex` (FNV-sharded `trace_id` bloom + per-block tag sets/blooms), and the **flattened span block schema** including the nested-set columns (`nested_set_left`/`nested_set_right`/`parent_id`, Int32) + the DFS pre-order computed at block-build. **This slice consumes only the _column-name contract and the nested-set semantics_** — the `BlockStore`-backed `SpanStore` impl lands in Slice 5; here we ship `InMemorySpanStore`, which computes the same nested-set columns from a hand-built span tree so the structural-join tests are trustworthy. Types `Labels`/`LabelMatcher`/`MatchOp` stay available from blockstore.
 
 **The 8 traces slices** (this plan = Slice 2; each later slice gets its own plan):
 
-1. **Blockstore generalization + span block schema + `TraceIndex`** — `BlockIndex` trait; span block (nested-set columns + DFS pre-order at block-build); `TraceIndex`. *(planned/built separately)*
-2. **`krabka-traceql` core** *(this plan)* — lexer + parser + planner + selectors (scopes/intrinsics/array semantics, single-span rule) + non-structural pushdown + the `&&` AND fast path + the **`SpanStructuralJoin`** lowering for the **core** structural operators (descendant/child/sibling/ancestor/parent) + pipeline aggregations + `search()`/`trace_by_id()`. Defines the `SpanStore` trait + the pinned result types.
+1. **Blockstore generalization + span block schema + `TraceIndex`** — `BlockIndex` trait; span block (nested-set columns + DFS pre-order at block-build); `TraceIndex`. _(planned/built separately)_
+2. **`krabka-traceql` core** _(this plan)_ — lexer + parser + planner + selectors (scopes/intrinsics/array semantics, single-span rule) + non-structural pushdown + the `&&` AND fast path + the **`SpanStructuralJoin`** lowering for the **core** structural operators (descendant/child/sibling/ancestor/parent) + pipeline aggregations + `search()`/`trace_by_id()`. Defines the `SpanStore` trait + the pinned result types.
 3. **TraceQL completeness** — full structural ops (the **negated** `!>>`/`!<<`/`!>`/`!<` and **union** `&>>`/`&<<`/`&>`/`&<`/`&~` forms), the remaining pipeline aggregations, **TraceQL metrics** (time-bucketed → Prometheus-shaped series + exemplars), and **tag discovery** (scoped tag names/values). **Reuses this slice's `SpanStore` trait, `SpanStructuralJoin` lowering, parser, and result model — those public names are frozen here.**
 4. **Ingest service** — `distributor` (OTLP/Jaeger/Zipkin/`/api/push`) → `trace_id`-partitioned WAL; `block-builder` consumer group → span blocks + `TraceIndex`; `live-store` consumer group (hot tier `MemTable`).
 5. **Querier + Tempo HTTP API** — implement `SpanStore` as the hot/cold UNION (live-store + blocks); serve `/api/echo`, `/api/v2/traces/{id}`, `/api/search`, `/api/v2/search/tags` + `tag/{tag}/values`, `/api/metrics/query_range` + `query`. **Replaces `InMemorySpanStore` with a `BlockStore`-backed `SpanStore` — the trait is frozen here.**
@@ -118,25 +119,25 @@ pub enum TraceqlError { Parse(String), Plan(String), Exec(String), Store(String)
 
 The `span_table` registered by `SpanStore::scan` has **one row per span**, sorted/grouped by `trace_id`, with these columns (names are the contract the planner pushes predicates against):
 
-| Column | Arrow type | Meaning |
-|---|---|---|
-| `trace_id` | `FixedSizeBinary(16)` | join/partition key |
-| `span_id` | `FixedSizeBinary(8)` | span identity |
-| `parent_span_id` | `FixedSizeBinary(8)` | raw semantic parent (nullable) |
-| `nested_set_left` | `Int32` | DFS pre-order left bound |
-| `nested_set_right` | `Int32` | DFS pre-order right bound |
-| `parent_id` | `Int32` | parent's `nested_set_left` (`0` sentinel for roots) |
-| `root_service_name` | `Utf8` | trace-denormalized |
-| `root_span_name` | `Utf8` | trace-denormalized |
-| `trace_start_unix_nano` | `Int64` | trace-denormalized |
-| `trace_duration_nanos` | `Int64` | trace-denormalized |
-| `name` | `Utf8` | intrinsic `span:name` |
-| `kind` | `Int32` | intrinsic `span:kind` (enum) |
-| `start_unix_nano` | `Int64` | intrinsic `span:` start |
-| `duration_nanos` | `Int64` | intrinsic `span:duration` |
-| `status_code` | `Int32` | intrinsic `span:status` (enum `unset|ok|error`) |
-| `status_message` | `Utf8` | intrinsic `span:statusMessage` |
-| `attr_<key>` | dict-encoded `Utf8`/`Int64`/`Float64`/`Boolean` | promoted span/resource attribute columns (the pushdown fast path) |
+| Column                  | Arrow type                                      | Meaning                                                           |
+| ----------------------- | ----------------------------------------------- | ----------------------------------------------------------------- |
+| `trace_id`              | `FixedSizeBinary(16)`                           | join/partition key                                                |
+| `span_id`               | `FixedSizeBinary(8)`                            | span identity                                                     |
+| `parent_span_id`        | `FixedSizeBinary(8)`                            | raw semantic parent (nullable)                                    |
+| `nested_set_left`       | `Int32`                                         | DFS pre-order left bound                                          |
+| `nested_set_right`      | `Int32`                                         | DFS pre-order right bound                                         |
+| `parent_id`             | `Int32`                                         | parent's `nested_set_left` (`0` sentinel for roots)               |
+| `root_service_name`     | `Utf8`                                          | trace-denormalized                                                |
+| `root_span_name`        | `Utf8`                                          | trace-denormalized                                                |
+| `trace_start_unix_nano` | `Int64`                                         | trace-denormalized                                                |
+| `trace_duration_nanos`  | `Int64`                                         | trace-denormalized                                                |
+| `name`                  | `Utf8`                                          | intrinsic `span:name`                                             |
+| `kind`                  | `Int32`                                         | intrinsic `span:kind` (enum)                                      |
+| `start_unix_nano`       | `Int64`                                         | intrinsic `span:` start                                           |
+| `duration_nanos`        | `Int64`                                         | intrinsic `span:duration`                                         |
+| `status_code`           | `Int32`                                         | intrinsic `span:status` (enum `unset                              | ok  | error`) |
+| `status_message`        | `Utf8`                                          | intrinsic `span:statusMessage`                                    |
+| `attr_<key>`            | dict-encoded `Utf8`/`Int64`/`Float64`/`Boolean` | promoted span/resource attribute columns (the pushdown fast path) |
 
 > The nested-set invariant the structural join relies on: an ancestor's `[left, right]` interval **strictly contains** every descendant's, and `parent_id(child) == parent.nested_set_left`. Slice 1 computes this at block-build; `InMemorySpanStore` (Task A5) computes the identical assignment from the in-memory span tree so the join tests use known integer values.
 
@@ -144,24 +145,24 @@ The `span_table` registered by `SpanStore::scan` has **one row per span**, sorte
 
 ## File structure (`crates/traceql/`)
 
-| File | Responsibility |
-|---|---|
-| `Cargo.toml` | crate manifest; workspace deps |
-| `src/lib.rs` | module decls + public re-exports + crate docs |
-| `src/error.rs` | `TraceqlError` enum + `From` conversions |
-| `src/result.rs` | `SearchResponse`/`TraceResult`/`SpanSet`/`SpanRef`/`TraceSpans`/`AttrValue` + tag-discovery types |
-| `src/store.rs` | `SpanStore` trait, `ScanResult`, `SpanMatcher` |
-| `src/span_columns.rs` | the span-table column-name constants + Arrow schema builder + nested-set DFS |
-| `src/in_memory.rs` | `InMemorySpanStore` test impl (span DF table incl. nested-set columns) |
-| `src/lexer.rs` | the TraceQL lexer (`Token`, `lex`) |
-| `src/ast.rs` | the TraceQL AST node types |
-| `src/parser.rs` | the recursive-descent parser (`parse`) |
-| `src/planner/mod.rs` | `TraceqlPlanner` entry + AST→plan recursion + `PlannedQuery` |
-| `src/planner/selector.rs` | spanset-selector lowering (scopes/intrinsics/array semantics, single-span AND) |
-| `src/planner/combinator.rs` | spanset `&&` (intersect) / `||` (union) trace-level joins |
-| `src/planner/structural.rs` | **the `SpanStructuralJoin` nested-set self-join lowering** |
-| `src/planner/pipeline.rs` | pipeline aggregations (`count`/`avg`/`max`/`min`/`by`) |
-| `src/engine.rs` | `TraceqlEngine`, `EngineOpts`, `search`/`trace_by_id`, spanSet assembly |
+| File                        | Responsibility                                                                                    |
+| --------------------------- | ------------------------------------------------------------------------------------------------- |
+| `Cargo.toml`                | crate manifest; workspace deps                                                                    |
+| `src/lib.rs`                | module decls + public re-exports + crate docs                                                     |
+| `src/error.rs`              | `TraceqlError` enum + `From` conversions                                                          |
+| `src/result.rs`             | `SearchResponse`/`TraceResult`/`SpanSet`/`SpanRef`/`TraceSpans`/`AttrValue` + tag-discovery types |
+| `src/store.rs`              | `SpanStore` trait, `ScanResult`, `SpanMatcher`                                                    |
+| `src/span_columns.rs`       | the span-table column-name constants + Arrow schema builder + nested-set DFS                      |
+| `src/in_memory.rs`          | `InMemorySpanStore` test impl (span DF table incl. nested-set columns)                            |
+| `src/lexer.rs`              | the TraceQL lexer (`Token`, `lex`)                                                                |
+| `src/ast.rs`                | the TraceQL AST node types                                                                        |
+| `src/parser.rs`             | the recursive-descent parser (`parse`)                                                            |
+| `src/planner/mod.rs`        | `TraceqlPlanner` entry + AST→plan recursion + `PlannedQuery`                                      |
+| `src/planner/selector.rs`   | spanset-selector lowering (scopes/intrinsics/array semantics, single-span AND)                    |
+| `src/planner/combinator.rs` | spanset `&&` (intersect) / `                                                                      |     | ` (union) trace-level joins |
+| `src/planner/structural.rs` | **the `SpanStructuralJoin` nested-set self-join lowering**                                        |
+| `src/planner/pipeline.rs`   | pipeline aggregations (`count`/`avg`/`max`/`min`/`by`)                                            |
+| `src/engine.rs`             | `TraceqlEngine`, `EngineOpts`, `search`/`trace_by_id`, spanSet assembly                           |
 
 `src/planner/structural.rs` isolates the centerpiece churn-prone DataFusion join surface from the rest of the planner.
 
@@ -174,11 +175,13 @@ The `span_table` registered by `SpanStore::scan` has **one row per span**, sorte
 ### Task A1: Crate scaffold + workspace wiring
 
 **Files:**
+
 - Create: `crates/traceql/Cargo.toml`
 - Create: `crates/traceql/src/lib.rs`
 - Modify: root `Cargo.toml` (add `krabka-traceql` to workspace members if member globbing is not used; `datafusion`/`arrow`/`regex` already in `[workspace.dependencies]`)
 
 **Interfaces:**
+
 - Produces: a compiling `krabka-traceql` crate with `pub fn crate_smoke() -> bool` (placeholder, removed in A2).
 
 - [x] **Step 1: Create `crates/traceql/Cargo.toml`**
@@ -268,10 +271,12 @@ git commit -m "feat(traceql): scaffold krabka-traceql crate"
 ### Task A2: `TraceqlError`
 
 **Files:**
+
 - Create: `crates/traceql/src/error.rs`
 - Modify: `crates/traceql/src/lib.rs` (declare module, re-export, remove placeholder)
 
 **Interfaces:**
+
 - Produces:
   - `pub enum TraceqlError { Parse(String), Plan(String), Exec(String), Store(String), Unsupported(String) }` (`Debug`, `Clone`, `thiserror::Error`)
   - `impl From<datafusion::error::DataFusionError> for TraceqlError` → `Exec`
@@ -375,10 +380,12 @@ git commit -m "feat(traceql): TraceqlError type + DataFusion conversion"
 ### Task A3: Result model — `SearchResponse`/`TraceResult`/`SpanSet`/`SpanRef`/`TraceSpans` + tag-discovery types
 
 **Files:**
+
 - Create: `crates/traceql/src/result.rs`
 - Modify: `crates/traceql/src/lib.rs`
 
 **Interfaces:**
+
 - Produces (all `Clone`, `Debug`, `PartialEq` unless noted):
   - `pub enum AttrValue { Str(String), Int(i64), Float(f64), Bool(bool) }`
   - `pub struct SpanRef { pub span_id: [u8; 8], pub start_time_unix_nano: u64, pub duration_nanos: u64, pub attributes: Vec<(String, AttrValue)> }`
@@ -547,6 +554,7 @@ pub struct TraceMetricsResponse {
 - [x] **Step 4: Wire into `lib.rs`**
 
 Add `mod result;` and:
+
 ```rust
 pub use result::{
     AttrValue, ScopedTag, SearchResponse, SpanRef, SpanSet, TagScope, TraceMetricSeries,
@@ -573,10 +581,12 @@ git commit -m "feat(traceql): Tempo-shaped result model + tag-discovery types"
 ### Task A4: `SpanStore` trait + `ScanResult` + `SpanMatcher`
 
 **Files:**
+
 - Create: `crates/traceql/src/store.rs`
 - Modify: `crates/traceql/src/lib.rs`
 
 **Interfaces:**
+
 - Consumes: `datafusion::prelude::SessionContext`, `TraceqlError`, the result types (`TraceSpans`/`ScopedTag`/`TypedValue`/`TagScope`).
 - Produces:
   - `pub struct ScanResult { pub ctx: SessionContext, pub span_table: String }`
@@ -796,10 +806,12 @@ git commit -m "feat(traceql): SpanStore trait + ScanResult + SpanMatcher"
 > (Numbered A6 because it is in the A2/A3/A4 parallel batch; A5 depends on it.)
 
 **Files:**
+
 - Create: `crates/traceql/src/span_columns.rs`
 - Modify: `crates/traceql/src/lib.rs`
 
 **Interfaces:**
+
 - Produces:
   - column-name constants matching the **Span table column contract** above (`COL_TRACE_ID`, `COL_SPAN_ID`, `COL_PARENT_SPAN_ID`, `COL_NS_LEFT`, `COL_NS_RIGHT`, `COL_PARENT_ID`, `COL_ROOT_SERVICE_NAME`, `COL_ROOT_SPAN_NAME`, `COL_TRACE_START`, `COL_TRACE_DURATION`, `COL_NAME`, `COL_KIND`, `COL_START`, `COL_DURATION`, `COL_STATUS_CODE`, `COL_STATUS_MESSAGE`; plus `ATTR_PREFIX = "attr_"`).
   - `pub fn span_schema(attr_columns: &[(String, arrow::datatypes::DataType)]) -> arrow::datatypes::SchemaRef` — the base intrinsic columns + the promoted `attr_<key>` columns.
@@ -1022,10 +1034,12 @@ git commit -m "feat(traceql): span-table column contract + nested-set DFS pre-or
 ### Task A5: `InMemorySpanStore`
 
 **Files:**
+
 - Create: `crates/traceql/src/in_memory.rs`
 - Modify: `crates/traceql/src/lib.rs`
 
 **Interfaces:**
+
 - Consumes: `SpanStore`/`ScanResult`/`SpanMatcher`, `span_columns::{InputSpan, assign_nested_set, span_schema, COL_*}`, the result types, DataFusion `MemTable`.
 - Produces:
   - `pub struct InMemorySpanStore` (`Default`) with `new()` and `pub fn push_trace(&mut self, tenant: &str, root_service_name: &str, root_span_name: &str, spans: Vec<InputSpan>)` — assigns nested-set columns per trace and stores the rows.
@@ -1431,10 +1445,12 @@ git commit -m "feat(traceql): InMemorySpanStore building span DataFusion tables 
 ### Task B1: The TraceQL lexer
 
 **Files:**
+
 - Create: `crates/traceql/src/lexer.rs`
 - Modify: `crates/traceql/src/lib.rs`
 
 **Interfaces:**
+
 - Produces:
   - `pub enum Token` covering: `LBrace`/`RBrace`/`LParen`/`RParen`, `Pipe`, `And`(`&&`)/`Or`(`||`)/`Not`(`!`), comparison `Eq`(single `=`)/`Neq`/`Lt`/`Lte`/`Gt`/`Gte`/`Re`(`=~`)/`Nre`(`!~`), arithmetic `Plus`/`Minus`/`Star`/`Slash`/`Mod`/`Caret`, structural `Desc`(`>>`)/`Anc`(`<<`)/`Child`(`>`)/`Parent`(`<`)/`Sibling`(`~`) + negated `NegDesc`(`!>>`)/`NegAnc`(`!<<`)/`NegChild`(`!>`)/`NegParent`(`!<`) + union `UnionDesc`(`&>>`)/`UnionAnc`(`&<<`)/`UnionChild`(`&>`)/`UnionParent`(`&<`)/`UnionSibling`(`&~`), `Dot`, `Colon`, `Comma`, `Ident(String)`, `Str(String)`, `Int(i64)`, `Float(f64)`, `Bool(bool)`, `Nil`, `Eof`.
   - `pub fn lex(input: &str) -> Result<Vec<Token>, TraceqlError>` — maps lex errors to `TraceqlError::Parse`.
@@ -1510,7 +1526,7 @@ Expected: FAIL — `cannot find type Token`.
 
 - [x] **Step 3: Implement `lexer.rs`** — a single-pass scanner over `char` indices. At each non-whitespace position, try the multi-char operators **longest-first** (`!>>`/`&>>`/`!<<`/`&<<` → `>>`/`<<`/`!>`/`!<`/`&>`/`&<`/`&~`/`&&`/`||`/`>=`/`<=`/`=~`/`!~` → single `=`/`<`/`>`/`~`/`!`/`&`-error/`+`/`-`/`*`/`/`/`%`/`^`/`.`/`:`/`,`/`(`/`)`/`{`/`}`/`|`), then string literals (`"..."` with `\"` escapes), then numbers (int/float), then identifiers/keywords (`nil`/`true`/`false` recognized as their own tokens; everything else an `Ident`, including duration literals like `100ms` and dotted attribute keys like `http.status` — actually emit `Dot`-separated `Ident`s and let the parser join, EXCEPT a leading bare-`.` scope which is its own `Dot`). Provide the full real scanner code (plain Rust — no churn surface). Map any unexpected char to `TraceqlError::Parse`.
 
-> **Identifier vs dotted-key decision (pin in a comment):** the lexer emits `Dot` + `Ident` separately (`.http.status` → `Dot Ident("http") Dot Ident("status")`); the **parser** (B3) joins the post-scope dotted segments into a single attribute key (`http.status`). Exception captured in the test above: an attribute key with no internal structure (`http.status`) — the test `single_equals_no_double` expects the lexer to coalesce a dotted key **after** a leading scope `Dot` into one `Ident("http.status")`. Choose ONE convention and make both the lexer and B3's parser agree; the snapshot tests in B1/B3 pin whichever you pick. (Recommended: lexer coalesces a dotted identifier run into one `Ident`, and a *leading* `.`/`span.`/`resource.` scope is a separate `Dot`/scope token — that is what the tests above assume.)
+> **Identifier vs dotted-key decision (pin in a comment):** the lexer emits `Dot` + `Ident` separately (`.http.status` → `Dot Ident("http") Dot Ident("status")`); the **parser** (B3) joins the post-scope dotted segments into a single attribute key (`http.status`). Exception captured in the test above: an attribute key with no internal structure (`http.status`) — the test `single_equals_no_double` expects the lexer to coalesce a dotted key **after** a leading scope `Dot` into one `Ident("http.status")`. Choose ONE convention and make both the lexer and B3's parser agree; the snapshot tests in B1/B3 pin whichever you pick. (Recommended: lexer coalesces a dotted identifier run into one `Ident`, and a _leading_ `.`/`span.`/`resource.` scope is a separate `Dot`/scope token — that is what the tests above assume.)
 
 - [x] **Step 4: Run + wire + commit**
 
@@ -1527,10 +1543,12 @@ git commit -m "feat(traceql): TraceQL lexer (maximal-munch operators, single-=, 
 ### Task B2: The TraceQL AST
 
 **Files:**
+
 - Create: `crates/traceql/src/ast.rs`
 - Modify: `crates/traceql/src/lib.rs`
 
 **Interfaces:**
+
 - Produces (all `Clone`, `Debug`, `PartialEq`):
   - `pub struct Query { pub root: SpansetExpr, pub pipeline: Vec<Pipeline> }`
   - `pub enum SpansetExpr { Selector(Box<FieldExpr>), And(Box<SpansetExpr>, Box<SpansetExpr>), Or(Box<SpansetExpr>, Box<SpansetExpr>), Structural { op: StructuralOp, lhs: Box<SpansetExpr>, rhs: Box<SpansetExpr> } }`
@@ -1585,10 +1603,12 @@ git commit -m "feat(traceql): TraceQL AST node types"
 ### Task B3: The recursive-descent parser
 
 **Files:**
+
 - Create: `crates/traceql/src/parser.rs`
 - Modify: `crates/traceql/src/lib.rs`
 
 **Interfaces:**
+
 - Consumes: `lexer::{Token, lex}`, `ast::*`.
 - Produces:
   - `pub fn parse(query: &str) -> Result<Query, TraceqlError>` — lex then recursive-descent.
@@ -1681,10 +1701,12 @@ git commit -m "feat(traceql): recursive-descent parser (single-span rule, scopes
 ### Task C1: Planner scaffold + `PlannedQuery` + context
 
 **Files:**
+
 - Create: `crates/traceql/src/planner/mod.rs`
 - Modify: `crates/traceql/src/lib.rs`
 
 **Interfaces:**
+
 - Consumes: `ast::Query`, `SpanStore`, `ScanResult`.
 - Produces:
   - `pub(crate) struct PlannerContext { pub tenant: String, pub start_ns: i64, pub end_ns: i64 }`
@@ -1704,10 +1726,12 @@ git commit -m "feat(traceql): recursive-descent parser (single-span rule, scopes
 ### Task C2: Selector lowering — scopes/intrinsics/comparisons/array semantics + the AND fast path
 
 **Files:**
+
 - Create: `crates/traceql/src/planner/selector.rs`
 - Modify: `crates/traceql/src/planner/mod.rs`
 
 **Interfaces:**
+
 - Consumes: `ScanResult`, `ast::{FieldExpr, Field, Scope, Intrinsic, ComparisonOp, Value}`, the `COL_*` constants + `ATTR_PREFIX`.
 - Produces:
   - `pub(crate) async fn plan_selector<S: SpanStore>(store: &S, ctx: &PlannerContext, fe: &FieldExpr) -> Result<PlannedSpanset, TraceqlError>` — `store.scan(...)`, then build a `LogicalPlan` = `TableScan(span_table) -> Filter(field_expr_predicate)` where the predicate is the **single-span AND** of the brace's conditions (intra-brace `&&` → DataFusion `AND`, `||` → `OR`, `!` → `NOT`).
@@ -1719,7 +1743,7 @@ git commit -m "feat(traceql): recursive-descent parser (single-span rule, scopes
 - [x] **Step 1: Write the failing tests** — over an `InMemorySpanStore`:
   - `{ .http.method = "GET" }` matches only the spans with that attr value.
   - `{ span:duration > 100 }` matches by the intrinsic duration column.
-  - `{ .a = 1 && .b = 2 }` matches only a span where **both** hold (build a trace where one span has `a=1` and a *different* span has `b=2`, and a third span has both — assert only the third matches: the single-span rule).
+  - `{ .a = 1 && .b = 2 }` matches only a span where **both** hold (build a trace where one span has `a=1` and a _different_ span has `b=2`, and a third span has both — assert only the third matches: the single-span rule).
   - `{ .name =~ "ab.*" }` anchors fully (so `"xabc"` does **not** match).
 
 - [x] **Step 2: Run to verify it fails** — `cannot find function plan_selector`.
@@ -1733,9 +1757,11 @@ git commit -m "feat(traceql): recursive-descent parser (single-span rule, scopes
 ### Task C3: Matcher resolution for the store prefilter
 
 **Files:**
+
 - Modify: `crates/traceql/src/planner/selector.rs` (add the matcher extractor), `crates/traceql/src/planner/mod.rs`
 
 **Interfaces:**
+
 - Produces:
   - `pub(crate) fn field_expr_to_matchers(fe: &FieldExpr) -> Vec<SpanMatcher>` — extract the **conjunctive** comparison conditions of a brace into `SpanMatcher`s for the store's block/bloom prefilter (an over-approximation: only top-level `&&`-joined `Comparison`s become matchers; `||`/`!` subtrees are dropped from the prefilter and re-applied exactly by the `Filter`). Maps `Scope`→`MatchScope`, `ComparisonOp`→`MatchCmp`, `Value`→`MatchValue`.
 
@@ -1762,16 +1788,18 @@ git commit -m "feat(traceql): conjunctive matcher extraction for store prefilter
 ### Task D1: Spanset combinators — `&&` (intersect) and `||` (union) at the trace level
 
 **Files:**
+
 - Create: `crates/traceql/src/planner/combinator.rs`
 - Modify: `crates/traceql/src/planner/mod.rs`
 
 **Interfaces:**
+
 - Consumes: two `PlannedSpanset`s (the lowered LHS/RHS), the `COL_TRACE_ID` constant.
 - Produces:
-  - `pub(crate) fn plan_and(lhs: PlannedSpanset, rhs: PlannedSpanset) -> Result<PlannedSpanset, TraceqlError>` — **`{A} && {B}`**: a trace-level existential intersect. Both sides must match within the **same trace** but **different spans** are allowed. Lower to: the set of spans from `A` whose `trace_id` also appears in `B`, UNION the spans from `B` whose `trace_id` appears in `A` (the result spanset is the union of both sides' matched spans for traces present in both). Realize as a semi-join on `trace_id` in each direction then a union — or, equivalently, filter each side to `trace_id IN (SELECT trace_id FROM other)` and union. The **fast path** when both sides are simple selectors over the *same* span (no `&&` across braces) is the intra-brace AND (Phase C) — that is a different construct; this `plan_and` is strictly the inter-brace `{A} && {B}` case.
+  - `pub(crate) fn plan_and(lhs: PlannedSpanset, rhs: PlannedSpanset) -> Result<PlannedSpanset, TraceqlError>` — **`{A} && {B}`**: a trace-level existential intersect. Both sides must match within the **same trace** but **different spans** are allowed. Lower to: the set of spans from `A` whose `trace_id` also appears in `B`, UNION the spans from `B` whose `trace_id` appears in `A` (the result spanset is the union of both sides' matched spans for traces present in both). Realize as a semi-join on `trace_id` in each direction then a union — or, equivalently, filter each side to `trace_id IN (SELECT trace_id FROM other)` and union. The **fast path** when both sides are simple selectors over the _same_ span (no `&&` across braces) is the intra-brace AND (Phase C) — that is a different construct; this `plan_and` is strictly the inter-brace `{A} && {B}` case.
   - `pub(crate) fn plan_or(lhs: PlannedSpanset, rhs: PlannedSpanset) -> Result<PlannedSpanset, TraceqlError>` — **`{A} || {B}`**: union the matched spans of both sides (a trace matches if either side does).
 
-> **The single-span vs inter-brace distinction is the asserted behavior.** `plan_and` must NOT require the same span to satisfy both — that is the intra-brace case. Build the join on `trace_id` only. Keep the DataFusion join/semi-join/`IN`-subquery builder calls behind a "verify against rev `0838a4d`" note; the *behavior* (different-span match within one trace) is pinned by D3.
+> **The single-span vs inter-brace distinction is the asserted behavior.** `plan_and` must NOT require the same span to satisfy both — that is the intra-brace case. Build the join on `trace_id` only. Keep the DataFusion join/semi-join/`IN`-subquery builder calls behind a "verify against rev `0838a4d`" note; the _behavior_ (different-span match within one trace) is pinned by D3.
 
 - [x] **Step 1: Write the failing test** — `{ .a = 1 } && { .b = 2 }` over a trace whose span-1 has `a=1` and span-2 has `b=2` (different spans): the trace matches, and the result spanset contains both spans. A second trace with only `a=1` does NOT match. (Drive via the engine in Phase E, or a planner-level `execute` helper here.)
 
@@ -1786,10 +1814,12 @@ git commit -m "feat(traceql): conjunctive matcher extraction for store prefilter
 ### Task D2: `SpanStructuralJoin` — the nested-set self-join lowering (THE CENTERPIECE)
 
 **Files:**
+
 - Create: `crates/traceql/src/planner/structural.rs`
 - Modify: `crates/traceql/src/planner/mod.rs`
 
 **Interfaces:**
+
 - Consumes: two `PlannedSpanset`s (LHS = the `A` side, RHS = the `B` side), `ast::StructuralOp`, the `COL_TRACE_ID`/`COL_NS_LEFT`/`COL_NS_RIGHT`/`COL_PARENT_ID`/`COL_SPAN_ID` constants.
 - Produces:
   - `pub(crate) fn plan_structural(op: StructuralOp, lhs: PlannedSpanset, rhs: PlannedSpanset) -> Result<PlannedSpanset, TraceqlError>` — lowers a **core** structural operator to a self-join keyed by `trace_id`, returning the **RIGHT-hand (`B`) spans** (per spec §6.3 "structural operators return the RIGHT-hand spans"). The join condition is the nested-set predicate for the operator:
@@ -1801,7 +1831,7 @@ git commit -m "feat(traceql): conjunctive matcher extraction for store prefilter
     - Negated (`!>>`/`!<<`/`!>`/`!<`) and union (`&>>`/`&<<`/`&>`/`&<`/`&~`) forms → `TraceqlError::Unsupported` (Slice 3).
   - `pub(crate) fn nested_set_predicate(op: StructuralOp, a_alias: &str, b_alias: &str) -> Result<datafusion::prelude::Expr, TraceqlError>` — builds the join `Expr` for the core operators (the integer range/equality on the aliased nested-set columns + the always-present `trace_id` equality).
 
-> **Why this is a join, not a tree-walk (spec Decision 5, §6.3).** A per-trace tree traversal is O(spans) per evaluation and fights DataFusion's columnar model. The nested-set encoding turns "is B a descendant of A" into the integer-range predicate `A.left < B.left && B.right < A.right` — a plain join condition over `Int32` columns, which DataFusion evaluates columnar with no custom operator. The join is keyed by `trace_id` so it only ever compares spans of the *same* trace (the partition). **A thin custom `UserDefinedLogicalNodeCore` physical operator is added ONLY if** a standard `LogicalPlanBuilder::join` with the nested-set predicate does not partition by `trace_id` efficiently (spec §13 open question) — prototype the standard join first; it is the simpler path that hits the columnar fast path. If profiling later forces a custom operator, its behavior is the same nested-set predicate, pinned by the D3 tests.
+> **Why this is a join, not a tree-walk (spec Decision 5, §6.3).** A per-trace tree traversal is O(spans) per evaluation and fights DataFusion's columnar model. The nested-set encoding turns "is B a descendant of A" into the integer-range predicate `A.left < B.left && B.right < A.right` — a plain join condition over `Int32` columns, which DataFusion evaluates columnar with no custom operator. The join is keyed by `trace_id` so it only ever compares spans of the _same_ trace (the partition). **A thin custom `UserDefinedLogicalNodeCore` physical operator is added ONLY if** a standard `LogicalPlanBuilder::join` with the nested-set predicate does not partition by `trace_id` efficiently (spec §13 open question) — prototype the standard join first; it is the simpler path that hits the columnar fast path. If profiling later forces a custom operator, its behavior is the same nested-set predicate, pinned by the D3 tests.
 
 - [x] **Step 1: Write the failing structural-correctness tests (known nested-set values, hand-built traces)**
 
@@ -1904,7 +1934,7 @@ mod tests {
 
 - [x] **Step 3: Implement `structural.rs`** — `nested_set_predicate` building the `Expr` for each core op over aliased columns (`col("a.nested_set_left")` etc. — alias the two sides so the self-join columns don't collide; **verify the column-aliasing / `LogicalPlanBuilder::join_on` signature against datafusion rev `0838a4d`**), and `plan_structural` constructing the join (`LogicalPlanBuilder::from(b_plan).join_on(a_plan, JoinType::Inner|LeftSemi, [predicate])` returning the `B` columns; the `trace_id` equality is part of the predicate so the join is partitioned by trace). Implement the `structural_b_ids` test helper (execute the planned join against the ctx, collect the `span_id` FixedSizeBinary column into `Vec<[u8;8]>`). Provide the full real predicate + join code; keep the `JoinType`/`join_on`/aliasing API behind the verify note. Wire `plan_structural` into the `Structural` arm of `plan_query`. Return `Unsupported` for the negated/union ops.
 
-> **Verify against datafusion rev `0838a4d`:** the self-join column aliasing (qualifying the two sides so `nested_set_left` is unambiguous), the `LogicalPlanBuilder::join_on(right, JoinType, exprs)` (vs `join(right, JoinType, (left_cols, right_cols), filter)`) signature, and `JoinType::LeftSemi` for "return B spans that have a matching A" are the churn points. Implement to satisfy the known-value tests; if a builder signature differs, adapt it — never change the asserted matched-span sets. The nested-set *predicate algebra* (the `>`/`<`/`==`/`!=` integer comparisons) is NOT a churn point — it is the spec's correctness contract and must be exactly as written.
+> **Verify against datafusion rev `0838a4d`:** the self-join column aliasing (qualifying the two sides so `nested_set_left` is unambiguous), the `LogicalPlanBuilder::join_on(right, JoinType, exprs)` (vs `join(right, JoinType, (left_cols, right_cols), filter)`) signature, and `JoinType::LeftSemi` for "return B spans that have a matching A" are the churn points. Implement to satisfy the known-value tests; if a builder signature differs, adapt it — never change the asserted matched-span sets. The nested-set _predicate algebra_ (the `>`/`<`/`==`/`!=` integer comparisons) is NOT a churn point — it is the spec's correctness contract and must be exactly as written.
 
 - [x] **Step 4: Run + commit** (`feat(traceql): SpanStructuralJoin — nested-set self-join lowering for descendant/ancestor/child/parent/sibling`).
 
@@ -1913,15 +1943,17 @@ mod tests {
 ### Task D3: Structural-operator behavioral suite (ancestor + parent + cross-trace isolation)
 
 **Files:**
+
 - Modify: `crates/traceql/src/planner/structural.rs` (add tests + the ancestor/parent paths if not already complete)
 
 **Interfaces:**
+
 - Produces: additional behavioral tests pinning the remaining core operators + the partition invariant.
 
 - [x] **Step 1: Write the failing tests**
   - **Ancestor** `B << A` where `A = {svc="c"}` (grandY), `B = {svc="a"}` (root): root is the ancestor → returns root.
   - **Parent** `B < A` where `A = {svc="c"}` (grandY, parent_id=2), `B = {svc="b"}` (childX, left=2): childX is grandY's parent → returns childX only (not childZ).
-  - **Cross-trace isolation:** push a *second* trace with the same svc values; assert a descendant query never matches an A in trace-1 against a B in trace-2 (the `trace_id` equality in the join predicate). Build the second trace so a naive no-`trace_id` join would wrongly match, proving the partition predicate is load-bearing.
+  - **Cross-trace isolation:** push a _second_ trace with the same svc values; assert a descendant query never matches an A in trace-1 against a B in trace-2 (the `trace_id` equality in the join predicate). Build the second trace so a naive no-`trace_id` join would wrongly match, proving the partition predicate is load-bearing.
 
 - [x] **Step 2: Run to verify it fails** (the cross-trace test fails if the `trace_id` equality is missing).
 
@@ -1944,10 +1976,12 @@ git commit -m "test(traceql): structural-operator behavioral suite (ancestor/par
 ### Task E1: Pipeline aggregations — `count()`/`avg`/`max`/`min`/`by()` + scalar filter
 
 **Files:**
+
 - Create: `crates/traceql/src/planner/pipeline.rs`
 - Modify: `crates/traceql/src/planner/mod.rs`
 
 **Interfaces:**
+
 - Consumes: a `PlannedSpanset` (the matched spans), `ast::{Pipeline, Aggregate, ComparisonOp, Field}`.
 - Produces:
   - `pub(crate) fn plan_pipeline(planned: PlannedSpanset, pipeline: &[Pipeline]) -> Result<PlannedSpanset, TraceqlError>` — apply each stage: `Aggregate(Count)` → `GROUP BY by_labels` (or whole-result) `COUNT(*)`; `Aggregate(Avg|Max|Min(field))` → the matching aggregate over the field's column; `Filter { op, value }` → keep groups whose aggregate satisfies the scalar comparison (e.g. `count() > 2`); `By(fields)` → set the grouping key for the following/preceding aggregate; `Select(fields)` → project additional columns. `Sum` is wired but Tempo's TraceQL spans pipeline uses `sum` over a numeric field — include it. Aggregations operate **per trace** by default (the spanset is grouped by `trace_id` for `count()` unless `by()` overrides) — match Tempo's "count of matching spans" semantics.
@@ -1967,10 +2001,12 @@ git commit -m "test(traceql): structural-operator behavioral suite (ancestor/par
 ### Task E2: `TraceqlEngine` — `search`/`trace_by_id` + spanSet assembly
 
 **Files:**
+
 - Create: `crates/traceql/src/engine.rs`
 - Modify: `crates/traceql/src/lib.rs`
 
 **Interfaces:**
+
 - Consumes: `parser::parse`, `planner::{plan_query, PlannerContext}`, `SpanStore`, the result model.
 - Produces:
   - `pub struct EngineOpts { pub default_limit: usize, pub default_spss: usize, pub max_traces: usize }`; `impl Default for EngineOpts` (`default_limit: 20`, `default_spss: 3`, `max_traces: 1000`).
@@ -2083,9 +2119,11 @@ git commit -m "feat(traceql): TraceqlEngine — search/trace_by_id + spanSet ass
 ### Task F1: Curated golden-query suite over a fixed multi-trace fixture
 
 **Files:**
+
 - Create: `crates/traceql/tests/golden_queries.rs`
 
 **Interfaces:**
+
 - Consumes: `krabka_traceql::{TraceqlEngine, EngineOpts, InMemorySpanStore}` + the public result model.
 - Produces: an integration test asserting a curated set of TraceQL queries against a fixed fixture with hand-computed expected results.
 
@@ -2112,6 +2150,7 @@ git commit -m "test(traceql): curated golden-query suite (selectors/structural/s
 ## Self-review
 
 **Spec coverage (against §6 TraceQL engine + §11 Slice 2):**
+
 - Hand-written lexer + recursive-descent parser, grammar referenced from icegate's `.g4` (single `=`-not-`==`, fully-anchored `=~`, dot scopes `.`/`span.`/`resource.`/`parent.`/`event.`/`link.`/`instrumentation.` vs colon intrinsics `span:`/`trace:`/`event:`/`link:`/`instrumentation:`, structural tokens `>> << > < ~` + negated/union, maximal-munch) → Tasks B1, B2, B3.
 - The `SpanStore` trait + `ScanResult` + `SpanMatcher` (the pinned contract) → Task A4; `InMemorySpanStore` building span DataFusion tables incl. the nested-set columns → Tasks A6, A5.
 - The pinned result model (`SearchResponse`/`TraceResult`/`SpanSet`/`SpanRef`/`TraceSpans`/`AttrValue` + tag-discovery + metrics types) → Task A3.
@@ -2131,8 +2170,9 @@ git commit -m "test(traceql): curated golden-query suite (selectors/structural/s
 **Type consistency:** `SpanStore`'s four method signatures are identical across A4 (definition), A5 (impl), C1/C2 (consumers), and E2 (engine). `ScanResult` fields (`ctx`/`span_table`) stable A4↔A5↔C. `SpanMatcher`/`MatchScope`/`MatchCmp`/`MatchValue` defined once (A4) and consumed in C3. `TraceqlError` variants (`Parse`/`Plan`/`Exec`/`Store`/`Unsupported`) are the single error type across all tasks. The span-table column constants (`COL_*`/`ATTR_PREFIX`) defined once (A6) and referenced unchanged in A5/C2/D2/E2. The nested-set semantics (`assign_nested_set` output) computed once (A6) and relied on by the structural join (D2/D3). `SearchResponse`/`TraceResult`/`SpanSet`/`SpanRef`/`TraceSpans`/`AttrValue` defined once (A3) and assembled in E2. The frozen public names match the prompt's pinned contract exactly.
 
 **Known risks (flagged, not hidden):**
-1. **DataFusion self-join surface for `SpanStructuralJoin`** (the single largest risk + the slice's centerpiece) — the column aliasing for a self-join, the `join_on`/`JoinType` signature, and whether the standard join partitions by `trace_id` efficiently or needs a thin custom physical operator (spec §13 open question). Contained to `planner/structural.rs`, behind the verify-against-rev note + the known-nested-set behavioral tests (D2/D3). The nested-set *predicate algebra* is pinned as spec contract, so drift surfaces as a compile error against green correctness tests, never as silent wrong descendant/sibling sets. Prototype the standard join first (the simpler columnar-fast-path); escalate to a custom operator only if profiling forces it.
+
+1. **DataFusion self-join surface for `SpanStructuralJoin`** (the single largest risk + the slice's centerpiece) — the column aliasing for a self-join, the `join_on`/`JoinType` signature, and whether the standard join partitions by `trace_id` efficiently or needs a thin custom physical operator (spec §13 open question). Contained to `planner/structural.rs`, behind the verify-against-rev note + the known-nested-set behavioral tests (D2/D3). The nested-set _predicate algebra_ is pinned as spec contract, so drift surfaces as a compile error against green correctness tests, never as silent wrong descendant/sibling sets. Prototype the standard join first (the simpler columnar-fast-path); escalate to a custom operator only if profiling forces it.
 2. **The single-span vs inter-brace `&&` semantic** — the #1 TraceQL trap (spec §6.2). Triple-guarded: the parser produces distinct AST shapes (`FieldExpr::And` intra-brace vs `SpansetExpr::And` inter-brace, tested in B3), the combinator joins only on `trace_id` for inter-brace (D1), and the engine + golden suite assert different-span matching (E2, F1).
 3. **Sibling self-exclusion** — the distinct-span (`span_id != span_id`) predicate is mandatory (spec §5/§6.3); omitting it reports a span as its own sibling. Pinned by the D2 `sibling_excludes_self_and_requires_same_parent` test and the golden suite.
-4. **Nested-set fidelity** — the `InMemorySpanStore` must compute the *identical* DFS assignment the block-builder (Slice 1) does, or the structural tests are vacuous. `assign_nested_set` is shared (A6) and pinned by a known-tree interval-nesting test; the block-builder is contracted to call the same algorithm.
+4. **Nested-set fidelity** — the `InMemorySpanStore` must compute the _identical_ DFS assignment the block-builder (Slice 1) does, or the structural tests are vacuous. `assign_nested_set` is shared (A6) and pinned by a known-tree interval-nesting test; the block-builder is contracted to call the same algorithm.
 5. **Slice executability** — this is the largest slice; the phase batching (A→B→C→D→E→F, with the noted intra-phase parallel batches on disjoint file sets per `CLAUDE.md`) keeps each sub-batch's file sets disjoint and ends every phase at a green whole-crate gate so a sub-batch is reviewed/merged before the next starts.

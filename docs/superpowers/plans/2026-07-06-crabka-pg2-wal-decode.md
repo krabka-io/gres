@@ -52,6 +52,7 @@ Tasks 3–5 all touch the decoder core and run **sequentially**; Task 6 (`shard.
 ## Task 1: Fixture corpus + generation script
 
 **Files:**
+
 - Create: `tools/gen-pg-wal-fixtures.sh`, `crates/postgres-wal/tests/fixtures/{*.wal,oracle.waldump,manifest.toml}`
 
 - [ ] **Step 1: Write the generator**
@@ -103,6 +104,7 @@ git commit -m "test(postgres-wal): committed PG-17 WAL fixture corpus + generato
 ## Task 2: Crate scaffold + `Lsn`
 
 **Files:**
+
 - Create: `crates/postgres-wal/Cargo.toml`, `src/lib.rs`, `src/lsn.rs`
 - Modify: `release-plz.toml` (private entry, alphabetical slot)
 
@@ -141,9 +143,10 @@ git commit -m "feat(postgres-wal): scaffold sans-IO crate + Lsn"
 ## Task 3: Page framing (headers + magic)
 
 **Files:**
+
 - Create: `src/framing.rs`, `src/consts_v17.rs`
 
-- [ ] **Step 1: Write the failing tests** — read fixture segment 0 in the test (`include_bytes!` of the *fixture*, which is test data, not source text):
+- [ ] **Step 1: Write the failing tests** — read fixture segment 0 in the test (`include_bytes!` of the _fixture_, which is test data, not source text):
 
 ```rust
     #[test]
@@ -183,6 +186,7 @@ git commit -m "feat(postgres-wal): WAL page framing with versioned magic validat
 ## Task 4: Record assembly — `WalStreamDecoder` (contrecords + CRC)
 
 **Files:**
+
 - Modify: `src/framing.rs` (the decoder), `src/record.rs` (header + CRC)
 
 - [ ] **Step 1: Write the failing tests**
@@ -228,6 +232,7 @@ git commit -m "feat(postgres-wal): record assembly with contrecord reassembly + 
 ## Task 5: Body grammar — block refs, FPIs, data
 
 **Files:**
+
 - Modify: `src/record.rs`
 
 - [ ] **Step 1: Write the failing tests** — pick, from the oracle text, one known multi-block record (a btree split) and one known FPI record (post-checkpoint):
@@ -272,6 +277,7 @@ git commit -m "feat(postgres-wal): full record-body grammar with FPI hole recons
 ## Task 6: The page-shard router
 
 **Files:**
+
 - Create: `src/shard.rs`
 
 - [ ] **Step 1: Write the failing tests**
@@ -312,6 +318,7 @@ git commit -m "feat(postgres-wal): page-shard router over decoded records"
 ## Task 7: The differential gate
 
 **Files:**
+
 - Create: `crates/postgres-wal/tests/differential.rs`
 
 - [ ] **Step 1: Write the gate test**

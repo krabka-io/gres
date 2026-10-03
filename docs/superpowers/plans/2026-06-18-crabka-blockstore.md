@@ -4,7 +4,7 @@
 
 **Goal:** Build `krabka-blockstore` — the signal-agnostic columnar block store (Parquet blocks on object storage + a label/series/block index + a DataFusion query facade) that every observability signal in the LGTM+P replacement will reuse, proven end-to-end on logs.
 
-**Architecture:** A block is a tenant-scoped, time-bounded Parquet file written to `object_store`, carrying two mandatory columns (`series_fingerprint: UInt64`, `timestamp: Int64` nanos) plus arbitrary signal payload columns, sorted by `(series_fingerprint, timestamp)`. An in-memory `Index` maps label matchers → series fingerprints → candidate block keys (pruning *before* any scan), and is snapshotted to object storage. A `BlockStore` facade resolves a query through the index, registers the surviving blocks as a DataFusion Parquet table, and hands back a `SessionContext` the caller (later: `krabka-logql`) runs its plan against. Block-level pruning is ours; intra-block row-group pruning + projection/predicate pushdown is delegated to DataFusion's native Parquet reader.
+**Architecture:** A block is a tenant-scoped, time-bounded Parquet file written to `object_store`, carrying two mandatory columns (`series_fingerprint: UInt64`, `timestamp: Int64` nanos) plus arbitrary signal payload columns, sorted by `(series_fingerprint, timestamp)`. An in-memory `Index` maps label matchers → series fingerprints → candidate block keys (pruning _before_ any scan), and is snapshotted to object storage. A `BlockStore` facade resolves a query through the index, registers the surviving blocks as a DataFusion Parquet table, and hands back a `SessionContext` the caller (later: `krabka-logql`) runs its plan against. Block-level pruning is ours; intra-block row-group pruning + projection/predicate pushdown is delegated to DataFusion's native Parquet reader.
 
 **Tech Stack:** Rust 2024 · `datafusion` (git `main`, pinned) · `arrow` 59 · `parquet` 59 · `object_store` 0.13 · `tokio` · `thiserror` · `serde_json` (index snapshot) · `regex` (matcher resolution). Tests: `assert2`, `proptest`, `tempfile`, `object_store::memory::InMemory`.
 
@@ -26,7 +26,7 @@
 
 This plan is Phase 1 of the logs wedge. Each later phase gets its own plan when we reach it; the crate seams were chosen so they compose:
 
-1. **`krabka-blockstore`** *(this plan)* — columnar block format + index + DataFusion query facade. Independently testable.
+1. **`krabka-blockstore`** _(this plan)_ — columnar block format + index + DataFusion query facade. Independently testable.
 2. **`krabka-logql`** — LogQL parser + planner that lowers a LogQL query onto SQL/DataFusion over a `BlockStore::scan_context` table + a `WAL-tail` table. Depends on Phase 1.
 3. **`krabka-observability` (ingest + compactor)** — distributor endpoints (Loki push / OTLP logs / Kafka produce) → WAL topic; compactor consumer-group → `BlockWriter` blocks + `Index` snapshots. Depends on Phase 1.
 4. **`krabka-observability` (querier)** — Loki HTTP API surface, hot/cold merge, `tail` websocket; differential-vs-Loki + Grafana integration tests. Depends on Phases 1–3.
@@ -35,18 +35,18 @@ This plan is Phase 1 of the logs wedge. Each later phase gets its own plan when 
 
 ## File structure (`crates/blockstore/`)
 
-| File | Responsibility |
-|---|---|
-| `Cargo.toml` | crate manifest; workspace deps |
-| `src/lib.rs` | module decls + public re-exports + crate docs |
-| `src/error.rs` | `BlockStoreError` enum + `Result` mapping helpers |
-| `src/labels.rs` | `Labels`, `SeriesFingerprint`, fingerprint hashing |
-| `src/matcher.rs` | `MatchOp`, `LabelMatcher` |
-| `src/block.rs` | column-name constants, `BlockMeta`, schema validation |
-| `src/writer.rs` | `BlockWriter` — RecordBatches → Parquet → object_store |
-| `src/reader.rs` | `read_block` — object_store Parquet → RecordBatches |
-| `src/index.rs` | `Index` (series dict + postings + block index) + snapshot serde |
-| `src/store.rs` | `BlockStore` facade — resolve → prune → DataFusion `SessionContext` |
+| File             | Responsibility                                                      |
+| ---------------- | ------------------------------------------------------------------- |
+| `Cargo.toml`     | crate manifest; workspace deps                                      |
+| `src/lib.rs`     | module decls + public re-exports + crate docs                       |
+| `src/error.rs`   | `BlockStoreError` enum + `Result` mapping helpers                   |
+| `src/labels.rs`  | `Labels`, `SeriesFingerprint`, fingerprint hashing                  |
+| `src/matcher.rs` | `MatchOp`, `LabelMatcher`                                           |
+| `src/block.rs`   | column-name constants, `BlockMeta`, schema validation               |
+| `src/writer.rs`  | `BlockWriter` — RecordBatches → Parquet → object_store              |
+| `src/reader.rs`  | `read_block` — object_store Parquet → RecordBatches                 |
+| `src/index.rs`   | `Index` (series dict + postings + block index) + snapshot serde     |
+| `src/store.rs`   | `BlockStore` facade — resolve → prune → DataFusion `SessionContext` |
 
 Each file has one responsibility; `store.rs` is the only file that depends on DataFusion's query layer, isolating the churn-prone surface.
 
@@ -55,11 +55,13 @@ Each file has one responsibility; `store.rs` is the only file that depends on Da
 ### Task 1: Crate scaffold + workspace dependency wiring
 
 **Files:**
+
 - Create: `crates/blockstore/Cargo.toml`
 - Create: `crates/blockstore/src/lib.rs`
 - Modify: `Cargo.toml` (root — add `datafusion`, `parquet`, `url` to `[workspace.dependencies]`)
 
 **Interfaces:**
+
 - Produces: a compiling `krabka-blockstore` crate with `pub fn crate_smoke() -> bool` (placeholder, removed in Task 2) so there is a test to run.
 
 - [ ] **Step 1: Add the three new workspace dependencies**
@@ -168,6 +170,7 @@ git commit -m "feat(blockstore): scaffold krabka-blockstore crate + DataFusion d
 ### Task 2: Core types — labels, fingerprint, matchers, block meta, error
 
 **Files:**
+
 - Create: `crates/blockstore/src/error.rs`
 - Create: `crates/blockstore/src/labels.rs`
 - Create: `crates/blockstore/src/matcher.rs`
@@ -175,6 +178,7 @@ git commit -m "feat(blockstore): scaffold krabka-blockstore crate + DataFusion d
 - Modify: `crates/blockstore/src/lib.rs` (declare modules, re-export, remove placeholder)
 
 **Interfaces:**
+
 - Produces:
   - `BlockStoreError` (enum) + `pub type Result<T> = std::result::Result<T, BlockStoreError>`
   - `type SeriesFingerprint = u64`
@@ -543,10 +547,12 @@ git commit -m "feat(blockstore): core types — labels, fingerprint, matchers, b
 ### Task 3: `BlockWriter` — RecordBatches → Parquet → object_store
 
 **Files:**
+
 - Create: `crates/blockstore/src/writer.rs`
 - Modify: `crates/blockstore/src/lib.rs` (declare + re-export)
 
 **Interfaces:**
+
 - Consumes: `validate_block_schema`, `BlockMeta`, `COL_FINGERPRINT`, `COL_TIMESTAMP`, `SeriesFingerprint`, `Result`.
 - Produces:
   - `struct BlockWriter { /* store */ }` with `pub fn new(store: Arc<dyn object_store::ObjectStore>) -> Self`
@@ -776,10 +782,12 @@ git commit -m "feat(blockstore): BlockWriter — RecordBatches to Parquet on obj
 ### Task 4: `read_block` — object_store Parquet → RecordBatches (round-trip)
 
 **Files:**
+
 - Create: `crates/blockstore/src/reader.rs`
 - Modify: `crates/blockstore/src/lib.rs`
 
 **Interfaces:**
+
 - Consumes: `Result`.
 - Produces: `pub async fn read_block(store: Arc<dyn object_store::ObjectStore>, object_key: &str) -> Result<Vec<arrow::record_batch::RecordBatch>>`.
 
@@ -897,10 +905,12 @@ git commit -m "feat(blockstore): read_block round-trip reader"
 ### Task 5: `Index` — series dictionary, postings, matcher resolution, label APIs
 
 **Files:**
+
 - Create: `crates/blockstore/src/index.rs`
 - Modify: `crates/blockstore/src/lib.rs`
 
 **Interfaces:**
+
 - Consumes: `Labels`, `SeriesFingerprint`, `LabelMatcher`, `MatchOp`, `BlockMeta`, `Result`.
 - Produces:
   - `struct Index` (`Default`, `Serialize`, `Deserialize`)
@@ -1287,9 +1297,11 @@ git commit -m "feat(blockstore): Index — matcher resolution + block pruning + 
 ### Task 6: Index snapshot — serialize/deserialize via object_store
 
 **Files:**
+
 - Modify: `crates/blockstore/src/index.rs` (add `save`/`load`)
 
 **Interfaces:**
+
 - Produces (on `Index`):
   - `pub async fn save(&self, store: &Arc<dyn object_store::ObjectStore>, object_key: &str) -> Result<()>`
   - `pub async fn load(store: &Arc<dyn object_store::ObjectStore>, object_key: &str) -> Result<Index>`
@@ -1375,10 +1387,12 @@ git commit -m "feat(blockstore): Index object-storage snapshot save/load"
 ### Task 7: `BlockStore` facade — resolve → prune → DataFusion `SessionContext`
 
 **Files:**
+
 - Create: `crates/blockstore/src/store.rs`
 - Modify: `crates/blockstore/src/lib.rs`
 
 **Interfaces:**
+
 - Consumes: `Index`, `BlockWriter`, `LabelMatcher`, `Result`, `BlockStoreError`.
 - Produces:
   - `struct BlockStore { /* store, base url, index */ }`
@@ -1592,6 +1606,7 @@ impl BlockStore {
 ```
 
 > **Churn-point checklist (verify against the pinned datafusion rev if compile fails):**
+>
 > - `SessionContext::register_object_store(&self, &Url, Arc<dyn ObjectStore>)` — present in DF 54/main.
 > - `SessionContext::read_parquet(impl IntoIterator<Item = String>, ParquetReadOptions) -> Result<DataFrame>` — accepts multiple explicit file paths.
 > - `DataFrame::into_view(self) -> Arc<dyn TableProvider>`.
@@ -1625,9 +1640,11 @@ git commit -m "feat(blockstore): BlockStore facade — index-pruned DataFusion s
 ### Task 8: Property test — block round-trip preserves all rows (whole-crate integration)
 
 **Files:**
+
 - Create: `crates/blockstore/tests/roundtrip_proptest.rs`
 
 **Interfaces:**
+
 - Consumes the public API: `BlockStore`, `BlockWriter`, `Labels`, `LabelMatcher`, `MatchOp`, `COL_FINGERPRINT`, `COL_TIMESTAMP`.
 
 - [ ] **Step 1: Write the property test**
@@ -1780,13 +1797,14 @@ git commit -m "test(blockstore): property test — equality matcher returns only
 ## Self-review
 
 **Spec coverage (against the §3.3 / §4 / §7 substrate responsibilities):**
+
 - Columnar Parquet block format with mandatory `series_fingerprint` + `timestamp` columns → Tasks 2, 3.
 - Object-storage block IO (write + read) → Tasks 3, 4.
 - Two-level index (label/series postings + block index) + matcher resolution + block pruning → Task 5.
 - Index persistence to object storage → Task 6.
 - DataFusion query facade with index pruning + delegated Parquet pushdown ("`LogBlockTableProvider`" realized as a DataFusion Parquet view over pruned blocks) → Task 7.
 - Label/series APIs (`labels`/`label values`) the Loki `/labels` endpoints need → Task 5.
-- *Deferred (correctly, to later phases):* WAL-tail (hot) table, LogQL, ingest endpoints, compactor, Loki HTTP API, multi-tenancy enforcement via Crabka quotas/ACLs, bloom filters. These are Phases 2–4.
+- _Deferred (correctly, to later phases):_ WAL-tail (hot) table, LogQL, ingest endpoints, compactor, Loki HTTP API, multi-tenancy enforcement via Crabka quotas/ACLs, bloom filters. These are Phases 2–4.
 
 **Placeholder scan:** no "TBD"/"add error handling"/"similar to Task N". Every step has runnable code or an exact command. The single hand-wave (DataFusion scan wiring in Task 7) is explicitly bounded with a verify-against-rev checklist and a behavior-pinning test, not left vague.
 

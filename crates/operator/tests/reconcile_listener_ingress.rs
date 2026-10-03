@@ -9,6 +9,7 @@
 use std::sync::Arc;
 
 use assert2::{assert, check};
+use http::Method;
 use krabka_operator::{
     controller::kafka::reconcile,
     crd::{
@@ -16,7 +17,6 @@ use krabka_operator::{
         ListenerType,
     },
 };
-use http::Method;
 
 #[path = "shared/mod.rs"]
 mod shared;

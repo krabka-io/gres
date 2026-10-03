@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
-**Goal:** Build the **querier role** — a concrete `krabka-traceql::SpanStore` impl (`CrabkaSpanStore`) that merges *cold* span blocks (via `krabka-blockstore` + the `TraceIndex`) with the *hot* live-store (Slice 4's in-memory recent-traces `MemTable`), UNION-ed in `scan()`, plus the **index-less by-id path** (`trace_by_id` via the `TraceIndex` bloom → block(s) → assembled `TraceSpans`) and tag discovery (`tag_names`/`tag_values` from the `TraceIndex`). On top of that, the **Tempo HTTP API** (axum, tenant via `X-Scope-OrgID`) that drives `TraceqlEngine` and serializes results into byte-exact Tempo JSON for Grafana's built-in Tempo datasource. Plus the `krabka-traces --target querier` role binary.
+**Goal:** Build the **querier role** — a concrete `krabka-traceql::SpanStore` impl (`CrabkaSpanStore`) that merges _cold_ span blocks (via `krabka-blockstore` + the `TraceIndex`) with the _hot_ live-store (Slice 4's in-memory recent-traces `MemTable`), UNION-ed in `scan()`, plus the **index-less by-id path** (`trace_by_id` via the `TraceIndex` bloom → block(s) → assembled `TraceSpans`) and tag discovery (`tag_names`/`tag_values` from the `TraceIndex`). On top of that, the **Tempo HTTP API** (axum, tenant via `X-Scope-OrgID`) that drives `TraceqlEngine` and serializes results into byte-exact Tempo JSON for Grafana's built-in Tempo datasource. Plus the `krabka-traces --target querier` role binary.
 
 **Architecture:** Three layers, bottom-up.
 
-1. **`CrabkaSpanStore`** (`store.rs`): implements the `SpanStore` trait. `scan()` registers the cold span blocks (`BlockStore::scan_context`, restricted by the `TraceIndex` tag-set/bloom prune + the time/block prefilter) **and** the hot live-store batches into one `SessionContext`, then builds a **UNION view** split at the **block-builder frontier** (the committed block-builder offset surfaced as a per-tenant `min_ns` cut) so a span sealed into a block is not also counted from the live-store. `trace_by_id` is the *index-less bloom path*: time/block prefilter → per-block `TraceIndex` bloom test → Parquet row-group min/max binary search over the `trace_id` column → reassemble a trace's spans from **all** matching blocks **plus** the live-store, into the nested OTLP `TraceSpans`. `tag_names`/`tag_values` union the per-block `TraceIndex` tag sets with the live-store's live tags.
+1. **`CrabkaSpanStore`** (`store.rs`): implements the `SpanStore` trait. `scan()` registers the cold span blocks (`BlockStore::scan_context`, restricted by the `TraceIndex` tag-set/bloom prune + the time/block prefilter) **and** the hot live-store batches into one `SessionContext`, then builds a **UNION view** split at the **block-builder frontier** (the committed block-builder offset surfaced as a per-tenant `min_ns` cut) so a span sealed into a block is not also counted from the live-store. `trace_by_id` is the _index-less bloom path_: time/block prefilter → per-block `TraceIndex` bloom test → Parquet row-group min/max binary search over the `trace_id` column → reassemble a trace's spans from **all** matching blocks **plus** the live-store, into the nested OTLP `TraceSpans`. `tag_names`/`tag_values` union the per-block `TraceIndex` tag sets with the live-store's live tags.
 2. **HTTP API** (`http/`): an axum `Router`, tenant via `X-Scope-OrgID`. `/api/v2/traces/{traceID}` projects `TraceSpans` → the `{ trace: { resourceSpans: [...] }, status, message }` OTLP-JSON shape (with `COMPLETE`/`PARTIAL`); `/api/search` (`q=` TraceQL via `TraceqlEngine::search`, or legacy `tags=`) → the `traces[]/spanSets[]` JSON with a `metrics` object; `/api/v2/search/tags` + `/api/v2/search/tag/{tag}/values` project `ScopedTag`/`TypedValue`; `/api/metrics/query_range` + `/api/metrics/query` drive `TraceqlEngine::query_range`; `/api/echo`, `/ready`, `/status` are operational probes. **Response-shape fidelity is the byte-equality analog** and is tested with exact-JSON assertions for traces-by-id, search, and error.
 3. **Role binary** (`bin/krabka-traces.rs`): `--target querier` wires the live-store handle (Slice 4) + blockstore + frontier into `CrabkaSpanStore`, builds the `TraceqlEngine`, and serves the Tempo API on the configured listen address.
 
@@ -34,7 +34,8 @@
 ## Dependency & slice roadmap
 
 **Depends on:**
-- **`krabka-traceql` (Slices 2–3)** — provides the `SpanStore` trait, `ScanResult`, `TraceqlEngine<S>`, `EngineOpts`, `SearchResponse`/`TraceResult`/`SpanSet`/`SpanRef`, `TraceSpans`, `TagScope`/`ScopedTag`/`TypedValue`/`AttrValue`, `SpanMatcher`, `TraceMetricsResponse`, `TraceqlError`. This slice *consumes* that contract verbatim (see "Shared contract" below) and implements `SpanStore` against it.
+
+- **`krabka-traceql` (Slices 2–3)** — provides the `SpanStore` trait, `ScanResult`, `TraceqlEngine<S>`, `EngineOpts`, `SearchResponse`/`TraceResult`/`SpanSet`/`SpanRef`, `TraceSpans`, `TagScope`/`ScopedTag`/`TypedValue`/`AttrValue`, `SpanMatcher`, `TraceMetricsResponse`, `TraceqlError`. This slice _consumes_ that contract verbatim (see "Shared contract" below) and implements `SpanStore` against it.
 - **`krabka-blockstore`** — the generalized `BlockStore` parameterized over `BlockIndex`; `TraceIndex` (impl `BlockIndex`) with the FNV-sharded `trace_id` bloom + per-block tag-name/value sets/blooms; `BlockStore::scan_context`; `Labels`/`LabelMatcher`/`MatchOp`; the flattened span block schema + the nested-set columns (Slice 1).
 - **`krabka-traces` Slice 4 (ingest)** — `SpanRecord` (the WAL record) + `TRACES_WAL_TOPIC = "__krabka_traces_wal"` + the **live-store handle** (the hot tier: assembled-by-`trace_id` recent traces exposed as DataFusion `MemTable`s, rebuildable from offsets) + the per-tenant **block-builder frontier** the block-builder commits (consumer-group committed offset / sealed-block `max_ns`). Slice 1 — the span block schema accessor + the `TraceIndex` query surface.
 
@@ -44,7 +45,7 @@
 2. `krabka-traceql` core — parser + planner + selectors + non-structural pushdown + `SpanStructuralJoin` core operators; defines the `SpanStore` trait + result types.
 3. TraceQL completeness — negated/union structural forms + pipeline aggregations + TraceQL metrics + tag discovery.
 4. Ingest service — distributor → `trace_id`-partitioned WAL; block-builder → span blocks + `TraceIndex`; live-store hot tier.
-5. **Querier + Tempo HTTP API + hot/cold merge** *(this plan)*.
+5. **Querier + Tempo HTTP API + hot/cold merge** _(this plan)_.
 6. Query-frontend — search sharding (live-store vs backend blocks + block + row-group jobs) + queueing.
 7. Metrics-generator — span-metrics (RED) + service-graphs → remote_write into the metrics backend.
 8. Hardening — per-tenant limits + multi-tenancy isolation + differential-vs-Tempo + Grafana integration.
@@ -99,7 +100,7 @@ pub struct TraceMetricsResponse { /* Prometheus-shaped series + exemplars */ }
 pub enum TraceqlError { Parse(String), Plan(String), Exec(String), Store(String), Unsupported(String) }
 ```
 
-> **Verify-before-use (do not fabricate):** the exact field names / enum discriminants of the result types and the `SpanStore`/`TraceqlEngine` method shapes are owned by Slices 2–3. Before Tasks 4–6, run `cargo doc -p krabka-traceql --no-deps` (or read `crates/traceql/src/lib.rs` re-exports) and reconcile. If a name differs (e.g. `start_time_unix_nano` vs `start_ns`, `TraceSpans`'s real internals, `SpanMatcher`'s constructor), adapt the **mapping code and tests together** — keep the asserted *Tempo JSON* exact (that is the contract this slice owns); the Rust field names bend to traceql.
+> **Verify-before-use (do not fabricate):** the exact field names / enum discriminants of the result types and the `SpanStore`/`TraceqlEngine` method shapes are owned by Slices 2–3. Before Tasks 4–6, run `cargo doc -p krabka-traceql --no-deps` (or read `crates/traceql/src/lib.rs` re-exports) and reconcile. If a name differs (e.g. `start_time_unix_nano` vs `start_ns`, `TraceSpans`'s real internals, `SpanMatcher`'s constructor), adapt the **mapping code and tests together** — keep the asserted _Tempo JSON_ exact (that is the contract this slice owns); the Rust field names bend to traceql.
 
 **From Slice 4 (the live-store handle + frontier — verify against Slice 4 before Task 2/3):**
 
@@ -121,24 +122,24 @@ impl LiveStoreHandle {
 }
 ```
 
-> The live-store handle's exact method names are owned by Slice 4. Treat the block above as the *expected* surface; reconcile against `crates/traces/src/live_store.rs` (or equivalent) before Task 2. If Slice 4 exposes only a raw `MemTable`/`Arc<RwLock<…>>` rather than these accessors, add a thin query-side handle in **this** slice's `live.rs` wrapping it — flag it. The querier must NOT mutate the live-store (it is fed by Slice 4's consumer loop); it only reads.
+> The live-store handle's exact method names are owned by Slice 4. Treat the block above as the _expected_ surface; reconcile against `crates/traces/src/live_store.rs` (or equivalent) before Task 2. If Slice 4 exposes only a raw `MemTable`/`Arc<RwLock<…>>` rather than these accessors, add a thin query-side handle in **this** slice's `live.rs` wrapping it — flag it. The querier must NOT mutate the live-store (it is fed by Slice 4's consumer loop); it only reads.
 
 ---
 
 ## File structure (`crates/traces/` — extends the Slice 4 crate)
 
-| File | Responsibility |
-|---|---|
-| `src/lib.rs` | add `pub mod querier;` + re-exports (existing Slice-4 modules unchanged) |
-| `src/querier/mod.rs` | querier module decls + `QuerierConfig` |
-| `src/querier/live.rs` | `LiveTier` — thin read-side wrapper over Slice 4's live-store handle (span batches, by-id spans, tags, frontier) |
-| `src/querier/store.rs` | `CrabkaSpanStore` — the `SpanStore` impl (cold+hot UNION + frontier split; index-less `trace_by_id`; tag union) |
-| `src/querier/http/mod.rs` | `router()` + `AppState` + `X-Scope-OrgID` extractor + `parse_time_secs` |
-| `src/querier/http/json.rs` | Tempo JSON projections: `TraceSpans`→by-id shape, `SearchResponse`→search shape, tag/values shapes, `attrs_to_otlp_kv`, `hex_lower` |
-| `src/querier/http/traces.rs` | `/api/echo`, `/api/v2/traces/{id}`, `/ready`, `/status` handlers |
-| `src/querier/http/search.rs` | `/api/search`, `/api/v2/search/tags`, `/api/v2/search/tag/{tag}/values` handlers |
-| `src/querier/http/metrics.rs` | `/api/metrics/query_range`, `/api/metrics/query` handlers |
-| `src/bin/krabka-traces.rs` | role binary `--target querier` (extends the Slice-4 binary's `match target`) |
+| File                          | Responsibility                                                                                                                      |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `src/lib.rs`                  | add `pub mod querier;` + re-exports (existing Slice-4 modules unchanged)                                                            |
+| `src/querier/mod.rs`          | querier module decls + `QuerierConfig`                                                                                              |
+| `src/querier/live.rs`         | `LiveTier` — thin read-side wrapper over Slice 4's live-store handle (span batches, by-id spans, tags, frontier)                    |
+| `src/querier/store.rs`        | `CrabkaSpanStore` — the `SpanStore` impl (cold+hot UNION + frontier split; index-less `trace_by_id`; tag union)                     |
+| `src/querier/http/mod.rs`     | `router()` + `AppState` + `X-Scope-OrgID` extractor + `parse_time_secs`                                                             |
+| `src/querier/http/json.rs`    | Tempo JSON projections: `TraceSpans`→by-id shape, `SearchResponse`→search shape, tag/values shapes, `attrs_to_otlp_kv`, `hex_lower` |
+| `src/querier/http/traces.rs`  | `/api/echo`, `/api/v2/traces/{id}`, `/ready`, `/status` handlers                                                                    |
+| `src/querier/http/search.rs`  | `/api/search`, `/api/v2/search/tags`, `/api/v2/search/tag/{tag}/values` handlers                                                    |
+| `src/querier/http/metrics.rs` | `/api/metrics/query_range`, `/api/metrics/query` handlers                                                                           |
+| `src/bin/krabka-traces.rs`    | role binary `--target querier` (extends the Slice-4 binary's `match target`)                                                        |
 
 `store.rs` + `live.rs` are the only files touching DataFusion's query layer; `http/json.rs` is the only file owning Tempo wire-shape serialization. This keeps the two churn-prone surfaces (DataFusion UNION + index-less by-id, Tempo JSON) each in one place.
 
@@ -147,11 +148,13 @@ impl LiveStoreHandle {
 ### Task 1: Crate deps + querier module scaffold
 
 **Files:**
+
 - Modify: `crates/traces/Cargo.toml`
 - Modify: `crates/traces/src/lib.rs`
 - Create: `crates/traces/src/querier/mod.rs`
 
 **Interfaces:**
+
 - Produces: a compiling `krabka-traces` with a `querier` module + `QuerierConfig` and a smoke test.
 
 - [x] **Step 1: Add the Slice-5 dependencies to `crates/traces/Cargo.toml`**
@@ -261,9 +264,11 @@ git commit -m "feat(traces): querier module scaffold + QuerierConfig + deps"
 ### Task 2: `LiveTier` — read-side wrapper over the Slice-4 live-store handle (structure + behavior-pin)
 
 **Files:**
+
 - Create: `crates/traces/src/querier/live.rs`
 
 **Interfaces:**
+
 - Consumes: Slice 4's `LiveStoreHandle` (`span_batches`/`trace_spans`/`tag_names`/`tag_values`/`block_builder_frontier_ns`), `SpanRecord`; blockstore span block schema accessor; `krabka-blockstore` Arrow types.
 - Produces:
   - `struct LiveTier { handle: LiveStoreHandle }` with:
@@ -400,7 +405,8 @@ impl LiveTier {
 ```
 
 > **Verify-notes (do before this compiles):**
-> - `LiveStoreHandle`'s module path + method names — confirm against Slice 4 (`crate::live_store::LiveStoreHandle` is the *expected* path). If the handle is `Arc<RwLock<LiveStore>>` with no query methods, add the four read methods to Slice 4's live-store in this task (additive, greenfield) OR introduce a `LiveSource` trait here that the real handle and the test fake both impl, and store `Box<dyn LiveSource>`.
+>
+> - `LiveStoreHandle`'s module path + method names — confirm against Slice 4 (`crate::live_store::LiveStoreHandle` is the _expected_ path). If the handle is `Arc<RwLock<LiveStore>>` with no query methods, add the four read methods to Slice 4's live-store in this task (additive, greenfield) OR introduce a `LiveSource` trait here that the real handle and the test fake both impl, and store `Box<dyn LiveSource>`.
 > - `span_batches` MUST emit the exact span block schema (Slice 1's accessor, e.g. `krabka_traces::span_block_schema()` or `krabka_blockstore::TraceIndex`-paired schema). If Slice 4's live-store stores `SpanRecord`s rather than Arrow, encode them here via the same Slice-1 encoder the block-builder uses — reuse, do not re-implement the schema.
 > - `LiveStoreHandle::*` error type — map to `LiveError::Source` via `to_string()`.
 
@@ -423,9 +429,11 @@ git commit -m "feat(traces): LiveTier — read-side wrapper over the live-store 
 ### Task 3: `CrabkaSpanStore::scan` — cold + hot UNION (frontier split, no double-count)
 
 **Files:**
+
 - Create: `crates/traces/src/querier/store.rs`
 
 **Interfaces:**
+
 - Consumes: `krabka-traceql::{SpanStore, ScanResult, SpanMatcher, TraceqlError}`, `krabka-blockstore::{BlockStore, TraceIndex, LabelMatcher}`, `LiveTier`, Slice 1 span block schema.
 - Produces:
   - `struct CrabkaSpanStore { blockstore: Arc<BlockStore>, live: Arc<LiveTier>, span_schema: SchemaRef }`
@@ -433,7 +441,7 @@ git commit -m "feat(traces): LiveTier — read-side wrapper over the live-store 
   - the beginning of `#[async_trait] impl SpanStore for CrabkaSpanStore` — `scan()` only (the other three methods land in Tasks 4–5).
   - free fns `span_matchers_to_label_matchers(&[SpanMatcher]) -> Vec<LabelMatcher>`, `register_live_memtable`, `register_union`.
 
-The **UNION wiring is the churn-prone DataFusion surface.** Structure it as: (a) translate `SpanMatcher`s to the blockstore's `LabelMatcher`s (the `TraceIndex` tag-set/bloom prune happens inside `scan_context`); (b) get the cold `(SessionContext, cold_table)` from `BlockStore::scan_context`, restricting cold to `ts < frontier`; (c) register the live batches (`hot_spans` MemTable) into the *same* `SessionContext`, restricting hot to `ts >= frontier`; (d) register a `UNION ALL` view (`span_union`) over cold+hot and return its name in `ScanResult.span_table`. Behavior-pin the no-double-count property with a test.
+The **UNION wiring is the churn-prone DataFusion surface.** Structure it as: (a) translate `SpanMatcher`s to the blockstore's `LabelMatcher`s (the `TraceIndex` tag-set/bloom prune happens inside `scan_context`); (b) get the cold `(SessionContext, cold_table)` from `BlockStore::scan_context`, restricting cold to `ts < frontier`; (c) register the live batches (`hot_spans` MemTable) into the _same_ `SessionContext`, restricting hot to `ts >= frontier`; (d) register a `UNION ALL` view (`span_union`) over cold+hot and return its name in `ScanResult.span_table`. Behavior-pin the no-double-count property with a test.
 
 - [x] **Step 1: Write the failing test (no broker — live tier seeded directly)**
 
@@ -653,6 +661,7 @@ pub(crate) async fn register_union(
 ```
 
 > **Churn-point checklist (verify against the pinned datafusion rev + blockstore/traceql APIs if compile fails):**
+>
 > - `BlockStore::scan_context(&self, tenant, &[LabelMatcher], start_ns, end_ns) -> Result<(SessionContext, String)>` — the generalized signature (Slice 1 relaxed the mandatory `series_fingerprint`+`timestamp`; for traces the time column is `start_unix_nano`). Confirm the arg order + whether a schema arg is still required after generalization.
 > - `MemTable::try_new(SchemaRef, Vec<Vec<RecordBatch>>)` at `datafusion::catalog::MemTable` (older path `datafusion::datasource::MemTable`).
 > - `CREATE VIEW … UNION ALL …` then query by name — if `CREATE VIEW` over registered tables is unsupported at the pin, build the union via `ctx.table(cold).await?.union(ctx.table(hot).await?)?.into_view()` + `register_table(view_name, view)`. The **behavior** (UNION ALL, no dedup, frontier split prevents double-count) is what the test pins.
@@ -679,16 +688,18 @@ git commit -m "feat(traces): CrabkaSpanStore::scan — cold+hot UNION with front
 ### Task 4: `CrabkaSpanStore::trace_by_id` — the index-less bloom path + cross-block reassembly
 
 **Files:**
+
 - Modify: `crates/traces/src/querier/store.rs`
 
 **Interfaces:**
+
 - Consumes: `krabka-blockstore::{BlockStore, TraceIndex}` by-id surface (per-block bloom test + row-group min/max binary search over the `trace_id` column), `LiveTier::trace_spans`, `krabka-traceql::TraceSpans`, Slice 4 `SpanRecord`.
 - Produces:
   - the real `trace_by_id` body on `CrabkaSpanStore`.
   - `fn assemble_trace_spans(spans: Vec<AssembledSpan>) -> TraceSpans` — group flat spans by `resource → scope → spans` into the OTLP tree (the by-id read path of §6.7).
   - `struct AssembledSpan { /* the flat span fields needed to rebuild the OTLP tree */ }` (internal).
 
-The by-id path is: **time/block prefilter → per-block `TraceIndex` bloom test → row-group min/max binary search over `trace_id` → read matching rows from each surviving block → union with `LiveTier::trace_spans` → group into OTLP `resource→scope→spans`**. A trace can span multiple blocks (late spans, §5.3) so reassembly unions *all* surviving cold blocks + the hot fraction, dedup by `span_id`.
+The by-id path is: **time/block prefilter → per-block `TraceIndex` bloom test → row-group min/max binary search over `trace_id` → read matching rows from each surviving block → union with `LiveTier::trace_spans` → group into OTLP `resource→scope→spans`**. A trace can span multiple blocks (late spans, §5.3) so reassembly unions _all_ surviving cold blocks + the hot fraction, dedup by `span_id`.
 
 - [x] **Step 1: Write the failing test (late-span cross-block reassembly)**
 
@@ -840,6 +851,7 @@ fn assembled_from_record(rec: &crate::SpanRecord) -> AssembledSpan {
 ```
 
 > **Verify-notes:**
+>
 > - `BlockStore::rows_for_trace(tenant, &[u8;16]) -> Result<Vec<RecordBatch>>` is the **expected** Slice-1 by-id entry point (bloom test + row-group binary search live in the blockstore). Confirm the name; if Slice 1 exposes the bloom/row-group steps separately (`TraceIndex::candidate_blocks` + a row-group reader), compose them here. **If no by-id entry point exists in Slice 1, add `rows_for_trace` to `krabka-blockstore` as part of this task** (it is the index-less path the spec §4.2a/§6.7 requires) — flag it as a small blockstore addition.
 > - `TraceSpans::from_assembled` / the real `TraceSpans` constructor is owned by Slice 2. If `TraceSpans` is `opentelemetry_proto::tonic::trace::v1::TracesData` (or a thin wrapper), build that tree directly and keep the resourceSpans grouping. The Task-6 by-id JSON test is the byte-exact pin.
 > - `SpanRecord` accessors — confirm against Slice 4 (`trace_id()`/`span_id()`/`name()`/resource+span attrs/events/links).
@@ -864,9 +876,11 @@ git commit -m "feat(traces): index-less trace_by_id + cross-block/live reassembl
 ### Task 5: `CrabkaSpanStore::tag_names` + `tag_values` — TraceIndex ∪ live tags
 
 **Files:**
+
 - Modify: `crates/traces/src/querier/store.rs`
 
 **Interfaces:**
+
 - Consumes: `krabka-blockstore::TraceIndex` per-block tag-name/value sets, `LiveTier::tag_names`/`tag_values`, `krabka-traceql::{TagScope, ScopedTag, TypedValue}`.
 - Produces: real `tag_names`/`tag_values` bodies on `CrabkaSpanStore` + `fn tag_scope_str(TagScope) -> &'static str`.
 
@@ -1017,6 +1031,7 @@ fn static_scope(s: &str) -> &'static str {
 ```
 
 > **Verify-notes:**
+>
 > - `BlockStore::index() -> &TraceIndex` + `TraceIndex::tag_names(tenant) -> Vec<(String /*scope*/, Vec<String>)>` and `TraceIndex::tag_values(tenant, tag) -> Vec<(String /*type*/, String /*value*/)>` are the **expected** Slice-1 tag-discovery surface (spec §4.2b). Confirm the method names; if the `TraceIndex` stores tag sets without a scope split, derive the scope from the column namespace (resource.* / span.* / event.* …). **If absent, add these accessors to `TraceIndex` in this task** — flag it.
 > - The TraceQL static `type` strings (`"string"`/`"int"`/`"float"`/`"bool"`/`"duration"`/`"status"`/`"kind"`) are owned by Slice 3's tag-discovery; reuse its type-naming so `/tag/{tag}/values` matches Tempo. Pin the exact strings in the Task-7 search-tags JSON test.
 
@@ -1039,11 +1054,13 @@ git commit -m "feat(traces): CrabkaSpanStore tag_names/tag_values — TraceIndex
 ### Task 6: Tempo JSON projections + by-id handler (the byte-equality analog)
 
 **Files:**
+
 - Create: `crates/traces/src/querier/http/mod.rs`
 - Create: `crates/traces/src/querier/http/json.rs`
 - Create: `crates/traces/src/querier/http/traces.rs`
 
 **Interfaces:**
+
 - Consumes: `krabka-traceql::{SearchResponse, TraceResult, SpanSet, SpanRef, AttrValue, TraceSpans, TraceqlEngine}`, `opentelemetry-proto` 0.32 (OTLP-JSON serialization).
 - Produces:
   - `json.rs`: `fn trace_by_id_json(t: &TraceSpans, complete: bool) -> Value`, `fn search_response_json(r: &SearchResponse, metrics: &SearchMetrics) -> Value`, `fn attrs_to_otlp_kv(attrs: &[(String, AttrValue)]) -> Value`, `fn hex_lower(bytes: &[u8]) -> String`, `struct SearchMetrics { total_blocks, inspected_traces, inspected_bytes }`.
@@ -1228,6 +1245,7 @@ fn resource_spans_json(t: &TraceSpans) -> Value {
 ```
 
 > **Verify-notes:**
+>
 > - **`resource_spans_json` is a PLACEHOLDER.** The real OTLP-JSON projection of `TraceSpans` is the load-bearing by-id contract. If `TraceSpans` holds `opentelemetry_proto` prost types, serialize through the OTLP-JSON mapping (NOT prost's default JSON — OTLP uses base64 for `traceId`/`spanId` and string for `int64`). Confirm `opentelemetry-proto` 0.32's JSON support; if it lacks a JSON serializer, hand-build the `resourceSpans` tree here (camelCase keys) and pin it with `resource_spans_otlp_json_is_exact` cross-checked against a real `cp-tempo` response. **Flagged, not faked** — `hex_lower`/`attrs_to_otlp_kv`/the envelope `status` are the in-scope byte-exact assertions for this task.
 > - **int64 as string** in OTLP-JSON (`intValue`, nanos) — the `to_string()` is deliberate; a numeric `intValue` is wrong per the OTLP-JSON spec.
 
@@ -1377,10 +1395,12 @@ git commit -m "feat(traces): Tempo by-id JSON projection + echo/by-id/probe hand
 ### Task 7: Search + tag-discovery + metrics handlers + in-process response-shape tests
 
 **Files:**
+
 - Create: `crates/traces/src/querier/http/search.rs`
 - Create: `crates/traces/src/querier/http/metrics.rs`
 
 **Interfaces:**
+
 - Consumes: `AppState`, `tenant_of`, `parse_time_secs`, `json::*`, `krabka-traceql::TraceqlEngine`.
 - Produces axum handlers:
   - `search.rs`: `search` (`q=`/`tags=`), `search_tags`, `tag_values`.
@@ -1719,6 +1739,7 @@ fn trace_metrics_json(resp: &krabka_traceql::TraceMetricsResponse) -> serde_json
 ```
 
 > **Verify-notes:**
+>
 > - `classify` is defined in `search.rs`; expose a `pub(crate) fn classify_pub(&TraceqlError) -> (StatusCode, String)` re-export (or move `classify` to `http/mod.rs`) so `metrics.rs` reuses it. Keep ONE error-classification function.
 > - `TraceqlEngine::store() -> &S` accessor — the tag/search handlers need the underlying `SpanStore` for `tag_names`/`tag_values`. If Slice 2's `TraceqlEngine` does not expose `store()`, add `pub fn store(&self) -> &S` (additive) — flag as a traceql follow-up — OR hold `Arc<CrabkaSpanStore>` in `AppState` alongside the engine and call it directly (prefer this to avoid cross-crate edits).
 > - **`trace_metrics_json` is a PLACEHOLDER** — the Prometheus-shaped series + exemplars projection is gated on Slice 3's `TraceMetricsResponse` internals; the search + by-id + tags shapes are the in-scope byte-exact assertions. Flagged, not faked.
@@ -1743,10 +1764,12 @@ git commit -m "feat(traces): Tempo search/tags/metrics handlers + exact search-b
 ### Task 8: Role binary `krabka-traces --target querier` + end-to-end `#[ignore]` integration + whole-crate gate
 
 **Files:**
+
 - Modify: `crates/traces/src/bin/krabka-traces.rs`
 - Create: `crates/traces/tests/querier_e2e.rs`
 
 **Interfaces:**
+
 - Consumes: `QuerierConfig`, `LiveTier`, `CrabkaSpanStore`, `TraceqlEngine`, `http::router`, the Slice-4 binary's `--target` dispatch + live-store builder, `krabka-grpc-gateway`/broker `serve` pattern (plaintext axum serve).
 - Produces: the `querier` arm of the role binary that builds the live tier + blockstore + store + engine + router and serves the Tempo API on `config.listen_addr`.
 
@@ -1846,7 +1869,7 @@ async fn produce_then_search_and_by_id_round_trip() {
 }
 ```
 
-> The e2e is a **skeleton with an explicit fill-list**, not fabricated passing code — it pins the *integration contract* (produce → live-store → search/by-id) and is `#[ignore]`d so CI is green without a broker. When Slice 4's produce + live-store paths are in hand, flesh out steps 1–6; the assertions reuse Tasks 6/7's want-bodies.
+> The e2e is a **skeleton with an explicit fill-list**, not fabricated passing code — it pins the _integration contract_ (produce → live-store → search/by-id) and is `#[ignore]`d so CI is green without a broker. When Slice 4's produce + live-store paths are in hand, flesh out steps 1–6; the assertions reuse Tasks 6/7's want-bodies.
 
 - [x] **Step 3: Build the binary + run non-ignored tests + whole-crate gate**
 
@@ -1868,6 +1891,7 @@ git commit -m "feat(traces): krabka-traces --target querier binary + e2e skeleto
 ## Self-review
 
 **Spec coverage (against §4.2 TraceIndex, §6.7/6.8 two query paths + SpanStore, §8 HTTP API, §11 Slice 5):**
+
 - **Querier `SpanStore` impl** (`CrabkaSpanStore`) merging cold `BlockStore::scan_context` + hot `LiveTier`, UNION-ed, split at the block-builder frontier to avoid double-count → Tasks 2 (live), 3 (scan). The no-double-count property is the headline test (`c == 2`, not 3).
 - **Index-less `trace_by_id`** (bloom test → row-group binary search → cross-block + live reassembly into OTLP `TraceSpans`, dedup by `span_id` for late-span correctness) → Task 4. Reassembly = 3 spans across two blocks + live; bloom-miss = `None`.
 - **`tag_names`/`tag_values`** from `TraceIndex` ∪ live tags, scoped/typed → Task 5.
@@ -1881,6 +1905,7 @@ git commit -m "feat(traces): krabka-traces --target querier binary + e2e skeleto
 - **Real-broker produce → live-store → search/by-id** via in-process broker, `#[ignore]`d → Task 8 e2e.
 
 **Placeholder scan / flagged deviations (honest):**
+
 - **`resource_spans_json` (by-id OTLP-JSON projection)** is a flagged PLACEHOLDER — `hex_lower`/`attrs_to_otlp_kv`/the `status` envelope are the byte-exact assertions in scope; the full OTLP-JSON `resourceSpans` tree (camelCase, base64 ids, string int64) needs a dedicated test cross-checked against a real Tempo response and is called out, not faked.
 - **`trace_metrics_json`** is a flagged PLACEHOLDER — the Prometheus-shaped series + exemplars projection is gated on Slice 3's `TraceMetricsResponse` internals; search/by-id/tags shapes are the in-scope byte-exact assertions.
 - **`span_matchers_to_label_matchers`** starts permissive (no block pruning) — the `TraceIndex` tag-set/bloom prune tightens once `SpanMatcher`'s accessors are pinned; the `c == 2` test does not depend on pruning.
@@ -1889,6 +1914,7 @@ git commit -m "feat(traces): krabka-traces --target querier binary + e2e skeleto
 - **The e2e test** is an `#[ignore]`d skeleton with an explicit fill-list (produce → live-store → search/by-id), not fabricated passing assertions.
 
 **Churn-prone surfaces — structured + behavior-pinned, not fabricated (per CLAUDE.md):**
+
 - **DataFusion UNION of hot+cold** (Task 3 `register_union`/`register_live_memtable`) — pinned by the `c == 2` no-double-count test; `CREATE VIEW … UNION ALL` vs `DataFrame::union(...).into_view()` fallback both flagged with a verify-checklist; hot MemTable schema must equal the cold table schema.
 - **Index-less by-id path** (Task 4 `rows_for_trace`/`TraceIndex` bloom + row-group binary search) — pinned by the cross-block reassembly test + the bloom-miss `None` test; the blockstore by-id entry point is flagged as a possible small Slice-1 addition.
 - **OTLP-JSON projection** (Task 6 `resource_spans_json`) — isolated in `json.rs`, flagged PLACEHOLDER with a cross-check-against-real-Tempo verify-note; `attrs_to_otlp_kv` (the typed-value wrapper, int64-as-string) is byte-pinned.

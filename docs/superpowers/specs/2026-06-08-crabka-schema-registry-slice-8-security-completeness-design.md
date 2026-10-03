@@ -235,6 +235,7 @@ SCHEMA_REGISTRY_KAFKA_SASL_PASSWORD = secretKeyRef(sasl.secretRef, "password")
 ```
 
 Environment variable injection (not file mounts) is used for SASL credentials because:
+
 - The SR binary already reads `SCHEMA_REGISTRY_KAFKA_SASL_USERNAME` / `SCHEMA_REGISTRY_KAFKA_SASL_PASSWORD`.
 - No new file-path flags needed.
 - Kubernetes log scrubbers can redact env values; file-based passwords require manual scrubbing.
@@ -320,6 +321,7 @@ let api = Api::<DynamicObject>::namespaced_with(ctx.client.clone(), ns, &cert_ap
 ```
 
 DNS SANs include:
+
 - `*.{name}-sr-headless.{ns}.svc.cluster.local` (per-pod headless addresses)
 - `{name}-sr.{ns}.svc.cluster.local` (ClusterIP service)
 
@@ -349,15 +351,15 @@ The operator's `ClusterRole` YAML in `deploy/` (generated or hand-maintained —
 
 ## Testing strategy
 
-| Layer | What | Where |
-|---|---|---|
-| CLI unit | `build_bearer("jwks", ...)` builds correct `SecurityConfig`; missing endpoint → error | `cli.rs` `mod tests` |
-| CLI unit | SASL + TLS `SecurityCliInput` → correct `ClientSecurity` (already tested; gate only) | `cli.rs` existing |
-| SR integration | JWKS: in-process `axum` server serving a hardcoded RS256 JWKS (using `krabka_security::ca` test key material); assert 200/401 for signed/unsigned/wrong-issuer tokens | `tests/security.rs` new case |
-| Operator unit | `kafka_client_sasl_ssl` renders correct args + env + mounts | `tests/reconcile_schema_registry.rs` |
-| Operator unit | `issuer_ref` path: pending-cert gate + ready-cert renders Deployment | `tests/reconcile_schema_registry.rs` |
-| CI | Existing `kind-schema-registry` e2e passes (smoke test: no regression) | `operator-e2e.yml` |
-| CI | New `kind-schema-registry-jwks` e2e: SR with JWKS bearer + self-signed JWKS server in cluster | `operator-e2e.yml` (optional; can defer to follow-up) |
+| Layer          | What                                                                                                                                                                  | Where                                                 |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| CLI unit       | `build_bearer("jwks", ...)` builds correct `SecurityConfig`; missing endpoint → error                                                                                 | `cli.rs` `mod tests`                                  |
+| CLI unit       | SASL + TLS `SecurityCliInput` → correct `ClientSecurity` (already tested; gate only)                                                                                  | `cli.rs` existing                                     |
+| SR integration | JWKS: in-process `axum` server serving a hardcoded RS256 JWKS (using `krabka_security::ca` test key material); assert 200/401 for signed/unsigned/wrong-issuer tokens | `tests/security.rs` new case                          |
+| Operator unit  | `kafka_client_sasl_ssl` renders correct args + env + mounts                                                                                                           | `tests/reconcile_schema_registry.rs`                  |
+| Operator unit  | `issuer_ref` path: pending-cert gate + ready-cert renders Deployment                                                                                                  | `tests/reconcile_schema_registry.rs`                  |
+| CI             | Existing `kind-schema-registry` e2e passes (smoke test: no regression)                                                                                                | `operator-e2e.yml`                                    |
+| CI             | New `kind-schema-registry-jwks` e2e: SR with JWKS bearer + self-signed JWKS server in cluster                                                                         | `operator-e2e.yml` (optional; can defer to follow-up) |
 
 The cert-manager e2e is **optional** in this slice (cert-manager isn't installed in the base kind cluster). The unit/mock tests fully gate the reconciler path. A future slice can add a cert-manager kind job.
 
@@ -365,16 +367,16 @@ The cert-manager e2e is **optional** in this slice (cert-manager isn't installed
 
 ## File map
 
-| File | Action | Notes |
-|---|---|---|
-| `crates/schema-registry/src/cli.rs` | Modify | JWKS fields + `build_bearer` jwks case + `SecurityOutput` type |
-| `crates/schema-registry/src/bin/schema-registry.rs` | Modify | New jwks flags; refresh task spawn |
-| `crates/schema-registry/tests/security.rs` | Modify | JWKS integration test case |
-| `crates/operator/src/crd/schema_registry.rs` | Modify | `BearerMode::Jwks`, `BearerAuthn` fields, `SchemaRegistryKafkaClient*`, `CertManagerIssuerRef`, `issuer_ref` on `SchemaRegistryTls` |
-| `crates/operator/src/controller/schema_registry.rs` | Modify | Render JWKS/kafka-client args+mounts; cert-manager `apply_certificate_cr` |
-| `crates/operator/tests/reconcile_schema_registry.rs` | Modify | 5 new reconciler tests |
-| `deploy/crds/crabka.io_schemaregistries.yaml` | Generated | `cargo run -p krabka-operator -- gen-crds deploy/crds` |
-| `charts/krabka-operator/templates/clusterrole.yaml` | Modify | Add `certificates.cert-manager.io` rule |
+| File                                                 | Action    | Notes                                                                                                                               |
+| ---------------------------------------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `crates/schema-registry/src/cli.rs`                  | Modify    | JWKS fields + `build_bearer` jwks case + `SecurityOutput` type                                                                      |
+| `crates/schema-registry/src/bin/schema-registry.rs`  | Modify    | New jwks flags; refresh task spawn                                                                                                  |
+| `crates/schema-registry/tests/security.rs`           | Modify    | JWKS integration test case                                                                                                          |
+| `crates/operator/src/crd/schema_registry.rs`         | Modify    | `BearerMode::Jwks`, `BearerAuthn` fields, `SchemaRegistryKafkaClient*`, `CertManagerIssuerRef`, `issuer_ref` on `SchemaRegistryTls` |
+| `crates/operator/src/controller/schema_registry.rs`  | Modify    | Render JWKS/kafka-client args+mounts; cert-manager `apply_certificate_cr`                                                           |
+| `crates/operator/tests/reconcile_schema_registry.rs` | Modify    | 5 new reconciler tests                                                                                                              |
+| `deploy/crds/crabka.io_schemaregistries.yaml`        | Generated | `cargo run -p krabka-operator -- gen-crds deploy/crds`                                                                              |
+| `charts/krabka-operator/templates/clusterrole.yaml`  | Modify    | Add `certificates.cert-manager.io` rule                                                                                             |
 
 ---
 

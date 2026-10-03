@@ -8,8 +8,9 @@ A new `Kafka.spec.authorization.type: opa` activates a broker-side
 endpoint, with super-user bypass, configurable allow-on-error,
 decision caching, and Strimzi-byte-compatible JSON request format.
 Single bundled slice: broker plugin + operator CRD + reconciler wiring
-+ kind e2e + delete the slice-51b-flagged "no super-users + no ACLs →
-allow" compat shim.
+
+- kind e2e + delete the slice-51b-flagged "no super-users + no ACLs →
+  allow" compat shim.
 
 **Out of scope:**
 
@@ -339,6 +340,7 @@ HTTP responder.
 ### 4.6 Kind e2e (1)
 
 `kind-opa-authorization`:
+
 - Apply the `mirror.gcr.io/openpolicyagent/opa:0.65.0` container as a Deployment with
   a hardcoded Rego policy allowing only `User:alice` to write to topic
   `permitted-topic`.
@@ -352,31 +354,37 @@ HTTP responder.
 ## 5. Decomposition (~10 tasks, 6 batches)
 
 **Batch 1 — broker refactor + AllowAll** (sequential: B1)
+
 - **B1**: Extract `Authorizer` trait + `AllowAllAuthorizer` + port
   existing `authorize()` into `SimpleAclAuthorizer`. Drop the compat
   shim. Update `BrokerConfig` field (`authorizer: Arc<dyn Authorizer>`).
   Sweep all call-sites. Delete `describe_delegation_token.rs::acl_authorization_is_active`.
 
 **Batch 2 — OpaAuthorizer** (parallel: B2, B3)
+
 - **B2**: `crates/broker/src/authorizer/opa.rs` — OpaAuthorizer impl +
   6 unit tests (wiremock or equivalent).
 - **B3**: `[authorization]` TOML section in `crates/broker/src/file_config.rs`
   → builds the right `Arc<dyn Authorizer>` + tests.
 
 **Batch 3 — Broker integration tests** (sequential: B4)
+
 - **B4**: `crates/broker/tests/opa_authorizer.rs` — 2 e2e tests with
   mock OPA.
 
 **Batch 4 — Operator** (parallel: O1, O2)
+
 - **O1**: CRD — `Kafka.spec.authorization` enum + `SimpleAuthorization` +
   `OpaAuthorization` + manual JSON schema. Cascade sweep.
 - **O2**: Reconciler — render `[authorization]` block in
   `render_broker_toml`. Integrate with slice-51b's super_users render.
 
 **Batch 5 — Operator integration** (sequential: O3)
+
 - **O3**: 2 integration tests.
 
 **Batch 6 — e2e + STATUS** (parallel: E1, S1)
+
 - **E1**: `kind-opa-authorization` job with real OPA pod + Rego policy.
 - **S1**: STATUS entry + final fmt/clippy/test gate.
 

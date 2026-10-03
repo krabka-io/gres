@@ -36,9 +36,11 @@ separate process-wide queue/frame pairs.
 ### Task 1: Add the Activator Process Surface
 
 **Files:**
+
 - Modify: `crates/gres-activator/src/main.rs`
 
 **Interfaces:**
+
 - Consumes:
   `ConnectionDispatchQueueCapacity`, `ClientFrameMax`, `FetchMinBytes`
 - Produces: `RegistryOptions::policy() -> Result<RegistryPolicy, String>` with
@@ -133,10 +135,12 @@ git commit -m "feat(gres-activator): expose client policy"
 ### Task 2: Add Gres Registry, Activator, and Compute CRD Fields
 
 **Files:**
+
 - Modify: `crates/operator/src/crd/kafka.rs`
 - Modify: `crates/operator/src/crd/gres.rs`
 
 **Interfaces:**
+
 - Produces:
   - `GresRegistrySpec.reader_fetch_min: Option<ByteSize>`
   - `GresActivatorSpec.client_dispatch_queue_capacity: Option<usize>`
@@ -228,10 +232,12 @@ git commit -m "feat(operator): add Gres client policy fields"
 ### Task 3: Render Gres Policy Exactly Once
 
 **Files:**
+
 - Modify: `crates/operator/src/controller/gres.rs`
 - Modify: `crates/operator/src/controller/gres_tenant.rs`
 
 **Interfaces:**
+
 - Consumes: typed optional fields from Task 2
 - Produces:
   - activator flags for activator queue/frame and shared reader fetch minimum
@@ -289,10 +295,12 @@ git commit -m "feat(operator): render Gres client policy"
 ### Task 4: Wire KafkaNodePool Broker Policy
 
 **Files:**
+
 - Modify: `crates/operator/src/crd/kafka_node_pool.rs`
 - Modify: `crates/operator/src/controller/kafka_node_pool.rs`
 
 **Interfaces:**
+
 - Produces optional `clientDispatchQueueCapacity` and `clientFrameMax` fields
   rendered as broker CLI flags
 
@@ -337,10 +345,12 @@ git commit -m "feat(operator): render broker client policy"
 ### Task 5: Wire Gateway Policy
 
 **Files:**
+
 - Modify: `crates/operator/src/crd/grpc_gateway.rs`
 - Modify: `crates/operator/src/controller/grpc_gateway.rs`
 
 **Interfaces:**
+
 - Adds optional queue/frame fields to `GatewayTuning`
 - Renders existing gateway CLI flags from `gateway_args`
 
@@ -377,10 +387,12 @@ git commit -m "feat(operator): render gateway client policy"
 ### Task 6: Wire Schema Registry Policy
 
 **Files:**
+
 - Modify: `crates/operator/src/crd/schema_registry.rs`
 - Modify: `crates/operator/src/controller/schema_registry.rs`
 
 **Interfaces:**
+
 - Adds optional queue/frame fields to `SchemaRegistryRuntime`
 - Renders existing Schema Registry CLI flags through `build_args_and_mounts`
 
@@ -418,11 +430,13 @@ git commit -m "feat(operator): render registry client policy"
 ### Task 7: Regenerate Schemas, Audit, and Verify
 
 **Files:**
+
 - Modify: generated files under `deploy/crds/`
 - Modify: `docs/configuration-audit.md`
 - Modify: this plan's checkboxes
 
 **Interfaces:**
+
 - Proves checked-in OpenAPI schemas and all runtime render paths match the
   approved design
 

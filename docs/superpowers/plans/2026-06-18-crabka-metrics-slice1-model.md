@@ -22,11 +22,11 @@
 
 ## Dependency & slice roadmap
 
-**Depends on:** `krabka-blockstore` (the logs-wedge Phase 1 plan). This slice's *schemas* are plain Arrow `SchemaRef`s and its *codec* produces/consumes `RecordBatch`es, so it is **independently testable without blockstore implemented** — the blockstore dependency only materializes when the compactor (Slice 4) writes these batches as blocks. Note the dependency in the crate but gate nothing on it here.
+**Depends on:** `krabka-blockstore` (the logs-wedge Phase 1 plan). This slice's _schemas_ are plain Arrow `SchemaRef`s and its _codec_ produces/consumes `RecordBatch`es, so it is **independently testable without blockstore implemented** — the blockstore dependency only materializes when the compactor (Slice 4) writes these batches as blocks. Note the dependency in the crate but gate nothing on it here.
 
 **The 8 metrics slices** (this plan = Slice 1; each later slice gets its own plan):
 
-1. **Data layer** *(this plan)* — block schemas + native-histogram codec + symbol table.
+1. **Data layer** _(this plan)_ — block schemas + native-histogram codec + symbol table.
 2. **`krabka-promql` core** — parser + DataFusion operator pattern (`SeriesDivide`/`Normalize`/`Instant`/`Range` + `RangeArray`) + selectors + rate-family + aggregations + binary ops + the `.test` harness.
 3. **Query completeness** — `histogram_quantile` (classic + native), full function catalog, subqueries, `@`/`offset`.
 4. **Ingest service** — remote_write v1/v2 (wire→`NativeHistogram` decode lives here) + OTLP + Kafka produce + distributor + HA dedup + compactor.
@@ -39,25 +39,27 @@
 
 ## File structure (`crates/metrics/`)
 
-| File | Responsibility |
-|---|---|
-| `Cargo.toml` | crate manifest |
-| `src/lib.rs` | module decls + public re-exports + crate docs |
-| `src/schema.rs` | column-name constants + the three Arrow schema builders |
+| File               | Responsibility                                             |
+| ------------------ | ---------------------------------------------------------- |
+| `Cargo.toml`       | crate manifest                                             |
+| `src/lib.rs`       | module decls + public re-exports + crate docs              |
+| `src/schema.rs`    | column-name constants + the three Arrow schema builders    |
 | `src/histogram.rs` | `NativeHistogram`, `BucketSpan`, `ResetHint` + Arrow codec |
-| `src/sample.rs` | float-sample codec |
-| `src/exemplar.rs` | `Exemplar` + exemplar-block codec |
-| `src/symbols.rs` | `SymbolTable` (remote_write v2 string interning) |
+| `src/sample.rs`    | float-sample codec                                         |
+| `src/exemplar.rs`  | `Exemplar` + exemplar-block codec                          |
+| `src/symbols.rs`   | `SymbolTable` (remote_write v2 string interning)           |
 
 ---
 
 ### Task 1: Crate scaffold
 
 **Files:**
+
 - Create: `crates/metrics/Cargo.toml`
 - Create: `crates/metrics/src/lib.rs`
 
 **Interfaces:**
+
 - Produces: a compiling `krabka-metrics` crate with a placeholder test.
 
 - [ ] **Step 1: Create `crates/metrics/Cargo.toml`**
@@ -136,10 +138,12 @@ git commit -m "feat(metrics): scaffold krabka-metrics crate"
 ### Task 2: Column constants + the three Arrow schema builders
 
 **Files:**
+
 - Create: `crates/metrics/src/schema.rs`
 - Modify: `crates/metrics/src/lib.rs`
 
 **Interfaces:**
+
 - Produces:
   - Mandatory column constants (matching blockstore): `COL_FINGERPRINT = "series_fingerprint"`, `COL_TIMESTAMP = "timestamp"`.
   - `pub fn float_sample_schema() -> arrow::datatypes::SchemaRef`
@@ -347,10 +351,12 @@ git commit -m "feat(metrics): Arrow schemas for float/native-histogram/exemplar 
 ### Task 3: `NativeHistogram` model
 
 **Files:**
+
 - Create: `crates/metrics/src/histogram.rs`
 - Modify: `crates/metrics/src/lib.rs`
 
 **Interfaces:**
+
 - Produces:
   - `struct BucketSpan { pub offset: i32, pub length: u32 }` (`Clone`,`Debug`,`PartialEq`,`Eq`)
   - `enum ResetHint { Unknown, Yes, No, Gauge }` (`Copy`; `as_i8()`/`from_i8(i8) -> ResetHint`)
@@ -506,9 +512,11 @@ git commit -m "feat(metrics): NativeHistogram model + ResetHint + BucketSpan"
 ### Task 4: Native-histogram Arrow codec (the centerpiece)
 
 **Files:**
+
 - Modify: `crates/metrics/src/histogram.rs` (add `encode`/`decode`)
 
 **Interfaces:**
+
 - Consumes: `native_histogram_schema`, the `COL_NH_*` constants, `NativeHistogram`, `BucketSpan`, `ResetHint`.
 - Produces:
   - `pub fn encode_native_histograms(rows: &[(u64, i64, NativeHistogram)]) -> Result<arrow::record_batch::RecordBatch, HistogramCodecError>` — `(fingerprint, timestamp, hist)` rows → a `RecordBatch` matching `native_histogram_schema()`.
@@ -799,7 +807,7 @@ pub fn decode_native_histograms(
 }
 ```
 
-> **Arrow-builder verification (do this if compile/test fails):** `StructBuilder::field_builder::<T>(i)`, `ListBuilder::values()`, and the `append(true)` (non-null) / `append(false)` (null list) conventions are arrow-59 API. If a builder method name or the inner list field name (`"item"`) differs, align to the arrow 59 docs and the Task-2 schema — keep the *behavior* (round-trip equality) the test asserts. The `as_*` downcasts in the reader must mirror the builders' output array types.
+> **Arrow-builder verification (do this if compile/test fails):** `StructBuilder::field_builder::<T>(i)`, `ListBuilder::values()`, and the `append(true)` (non-null) / `append(false)` (null list) conventions are arrow-59 API. If a builder method name or the inner list field name (`"item"`) differs, align to the arrow 59 docs and the Task-2 schema — keep the _behavior_ (round-trip equality) the test asserts. The `as_*` downcasts in the reader must mirror the builders' output array types.
 
 - [ ] **Step 4: Add re-exports to `lib.rs`**
 
@@ -885,15 +893,17 @@ git commit -m "feat(metrics): native-histogram Arrow codec with round-trip prope
 ### Task 5: Float-sample codec
 
 **Files:**
+
 - Create: `crates/metrics/src/sample.rs`
 - Modify: `crates/metrics/src/lib.rs`
 
 **Interfaces:**
+
 - Produces:
   - `pub fn encode_float_samples(rows: &[(u64, i64, f64)]) -> Result<arrow::record_batch::RecordBatch, crate::histogram::HistogramCodecError>`
   - `pub fn decode_float_samples(batch: &arrow::record_batch::RecordBatch) -> Result<Vec<(u64, i64, f64)>, crate::histogram::HistogramCodecError>`
 
-  *(Reuses `HistogramCodecError` as the crate's codec error — rename to `CodecError` is a valid cleanup if preferred; keep one error type.)*
+  _(Reuses `HistogramCodecError` as the crate's codec error — rename to `CodecError` is a valid cleanup if preferred; keep one error type.)_
 
 - [ ] **Step 1: Write the failing test**
 
@@ -998,10 +1008,12 @@ git commit -m "feat(metrics): float-sample block codec"
 ### Task 6: Symbol table (remote_write v2 interning)
 
 **Files:**
+
 - Create: `crates/metrics/src/symbols.rs`
 - Modify: `crates/metrics/src/lib.rs`
 
 **Interfaces:**
+
 - Produces:
   - `struct SymbolTable` (`Default`) with `new()`, `intern(&mut self, s: &str) -> u32`, `resolve(&self, ref_: u32) -> Option<&str>`, `symbols(&self) -> &[String]`, and `from_symbols(Vec<String>) -> Result<SymbolTable, SymbolError>` (validates `symbols[0] == ""`).
   - `fn resolve_label_refs(&self, refs: &[u32]) -> Result<Vec<(String, String)>, SymbolError>` — even-length name/value ref pairs → label pairs.
@@ -1186,13 +1198,14 @@ git commit -m "feat(metrics): remote_write v2 symbol table"
 ## Self-review
 
 **Spec coverage (against §4 data model + §11 Slice 1):**
+
 - Float-sample block schema + codec → Tasks 2, 5.
 - Native-histogram block schema + codec (absolute counts, spans/counts, int/float discriminator, NHCB, reset hint, start ts) → Tasks 2, 3, 4.
-- Exemplar block schema (trace_id/span_id promoted, labels Map) → Task 2. *(Exemplar codec deferred to the ingest slice, where exemplar wire-decode lands — flagged below.)*
+- Exemplar block schema (trace_id/span_id promoted, labels Map) → Task 2. _(Exemplar codec deferred to the ingest slice, where exemplar wire-decode lands — flagged below.)_
 - Symbol table (remote_write v2 interning, `symbols[0]==""`, even-length refs) → Task 6.
-- *Deferred (correctly, to later slices):* wire (proto) decode → `NativeHistogram` (Slice 4 ingest); the PromQL engine (Slice 2); blocks-on-object-storage (uses blockstore's `BlockWriter` — Slice 4 compactor).
+- _Deferred (correctly, to later slices):_ wire (proto) decode → `NativeHistogram` (Slice 4 ingest); the PromQL engine (Slice 2); blocks-on-object-storage (uses blockstore's `BlockWriter` — Slice 4 compactor).
 
-**Deviation flagged:** the exemplar *codec* is not in this slice — only its schema. Exemplar encoding is tightly coupled to the ingest decode (wire → exemplar) and the trace_id/span_id normalization (OTLP `bytes` vs Prometheus labels), so it belongs with Slice 4. If a reviewer wants it here, add a Task mirroring Task 5's shape against `exemplar_schema()` with a `MapBuilder` for the `labels` column.
+**Deviation flagged:** the exemplar _codec_ is not in this slice — only its schema. Exemplar encoding is tightly coupled to the ingest decode (wire → exemplar) and the trace_id/span_id normalization (OTLP `bytes` vs Prometheus labels), so it belongs with Slice 4. If a reviewer wants it here, add a Task mirroring Task 5's shape against `exemplar_schema()` with a `MapBuilder` for the `labels` column.
 
 **Placeholder scan:** no "TBD"/"add error handling"/"similar to Task N". Every step has runnable code or an exact command. The one hand-wave — arrow 59 builder method names for `List<Struct>`/`Map` — is explicitly bounded with verify-against-arrow-59 notes and pinned by round-trip tests, not left vague.
 

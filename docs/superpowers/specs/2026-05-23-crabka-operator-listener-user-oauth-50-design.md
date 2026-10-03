@@ -43,16 +43,16 @@ their broker counterparts (49c–49g) land.
 
 ## Non-deliverables (deferred to umbrella sub-slices)
 
-| Field / behavior | Lands in |
-|------------------|----------|
-| `tlsTrustedCertificates` (custom CA bundle for IdP HTTPS) | 50b (paired with 49c) |
-| `introspectionEndpointUri`, `userInfoEndpointUri`, `clientId`, `clientSecret`, `accessTokenIsJwt`, `checkAccessTokenType` | 50c (paired with 49d) |
-| `maxSecondsWithoutReauthentication` (KIP-368) | 50d (paired with 49e) |
-| `enablePlain`, `tokenEndpointUri` (PLAIN-with-OAuth-token) | 50e (paired with 49f) |
-| `groupsClaim`, `groupsClaimDelimiter`, `fallbackUserNameClaim`, `fallbackUserNamePrefix`, `validTokenType`, full-shape `customClaimCheck`, `jwksMinRefreshPauseSeconds`, `jwksExpirySeconds`, `jwksIgnoreKeyUse` | 50f (paired with 49g) |
-| Two OAuth listeners with divergent config on one broker | Future broker slice (likely 49h); slice 50 rejects this at reconcile |
-| `KafkaUser.authentication: oauth` variant | Never — the umbrella commits to `tls-external` as the OAuth user model |
-| Inter-broker OAuth (`serverBearerTokenLocation`) | Broker runtime shipped later; operator CRD/rendering is outside slice 50 |
+| Field / behavior                                                                                                                                                                                                 | Lands in                                                                 |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `tlsTrustedCertificates` (custom CA bundle for IdP HTTPS)                                                                                                                                                        | 50b (paired with 49c)                                                    |
+| `introspectionEndpointUri`, `userInfoEndpointUri`, `clientId`, `clientSecret`, `accessTokenIsJwt`, `checkAccessTokenType`                                                                                        | 50c (paired with 49d)                                                    |
+| `maxSecondsWithoutReauthentication` (KIP-368)                                                                                                                                                                    | 50d (paired with 49e)                                                    |
+| `enablePlain`, `tokenEndpointUri` (PLAIN-with-OAuth-token)                                                                                                                                                       | 50e (paired with 49f)                                                    |
+| `groupsClaim`, `groupsClaimDelimiter`, `fallbackUserNameClaim`, `fallbackUserNamePrefix`, `validTokenType`, full-shape `customClaimCheck`, `jwksMinRefreshPauseSeconds`, `jwksExpirySeconds`, `jwksIgnoreKeyUse` | 50f (paired with 49g)                                                    |
+| Two OAuth listeners with divergent config on one broker                                                                                                                                                          | Future broker slice (likely 49h); slice 50 rejects this at reconcile     |
+| `KafkaUser.authentication: oauth` variant                                                                                                                                                                        | Never — the umbrella commits to `tls-external` as the OAuth user model   |
+| Inter-broker OAuth (`serverBearerTokenLocation`)                                                                                                                                                                 | Broker runtime shipped later; operator CRD/rendering is outside slice 50 |
 
 ## CRD shape
 
@@ -63,14 +63,14 @@ authentication:
   type: oauth
   validIssuerUri: https://keycloak.example/realms/kafka
   jwksEndpointUri: https://keycloak.example/realms/kafka/protocol/openid-connect/certs
-  validAudience: kafka-cluster                  # optional
-  userNameClaim: preferred_username             # optional; default "sub"
-  customClaimCheck:                             # optional
-    scope: kafka.write                          # required when customClaimCheck present
-    scopeClaim: scope                           # optional; default "scope"
-  jwksRefreshSeconds: 300                       # optional; default 300
-  maxClockSkewSeconds: 60                       # optional; default 60
-  enableOauthBearer: true                       # optional; default true
+  validAudience: kafka-cluster # optional
+  userNameClaim: preferred_username # optional; default "sub"
+  customClaimCheck: # optional
+    scope: kafka.write # required when customClaimCheck present
+    scopeClaim: scope # optional; default "scope"
+  jwksRefreshSeconds: 300 # optional; default 300
+  maxClockSkewSeconds: 60 # optional; default 60
+  enableOauthBearer: true # optional; default true
 ```
 
 Rust:
@@ -161,13 +161,13 @@ discriminator `enum`. No new sibling properties.
 
 **Validation** (pre-render, per listener):
 
-| Check | Failure → status condition |
-|-------|----------------------------|
-| `oauth` only on `tls: true` listeners | `Ready=False reason=InvalidListenerAuth message="OAuth requires tls: true"` |
-| `validIssuerUri` is non-empty (any scheme; the broker matches it as a literal string against the JWT `iss` claim) | `Ready=False reason=InvalidListenerAuth message="validIssuerUri is required"` |
+| Check                                                                                                                                     | Failure → status condition                                                               |
+| ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `oauth` only on `tls: true` listeners                                                                                                     | `Ready=False reason=InvalidListenerAuth message="OAuth requires tls: true"`              |
+| `validIssuerUri` is non-empty (any scheme; the broker matches it as a literal string against the JWT `iss` claim)                         | `Ready=False reason=InvalidListenerAuth message="validIssuerUri is required"`            |
 | `jwksEndpointUri` parses as `http://…` or `https://…` (the broker uses plain reqwest, which accepts either; 49b is webpki-only for HTTPS) | `Ready=False reason=InvalidListenerAuth message="jwksEndpointUri must be http or https"` |
-| `jwksRefreshSeconds >= 30` if set | `Ready=False reason=InvalidListenerAuth message="jwksRefreshSeconds must be >= 30"` |
-| `customClaimCheck.scope` non-empty if `customClaimCheck` is present | `Ready=False reason=InvalidListenerAuth message="customClaimCheck.scope is required"` |
+| `jwksRefreshSeconds >= 30` if set                                                                                                         | `Ready=False reason=InvalidListenerAuth message="jwksRefreshSeconds must be >= 30"`      |
+| `customClaimCheck.scope` non-empty if `customClaimCheck` is present                                                                       | `Ready=False reason=InvalidListenerAuth message="customClaimCheck.scope is required"`    |
 
 **`http://` JWKS endpoint warning.** Like SCRAM-without-TLS, an
 `http://` `jwksEndpointUri` is accepted but emits a `WeakAuth`
@@ -181,8 +181,8 @@ does not by default — hence the slice 50 Keycloak e2e uses HTTP).
 
 **Cross-listener validation** (post per-listener validation):
 
-| Check | Failure → status condition |
-|-------|----------------------------|
+| Check                                                                                                                                                                              | Failure → status condition                                                                                                                          |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | At most one distinct `(validIssuerUri, jwksEndpointUri, validAudience, userNameClaim, customClaimCheck, jwksRefreshSeconds, maxClockSkewSeconds)` tuple across all OAuth listeners | `Ready=False reason=ConflictingOAuthConfig message="all OAuth listeners must share identical config (per-listener OAuth is a future broker slice)"` |
 
 `enableOauthBearer: false` is **not** part of the conflict tuple — toggling
@@ -227,6 +227,7 @@ broker fills the rest from its own defaults. This keeps the operator's
 defaults and the broker's defaults from drifting.
 
 **Status** (per listener):
+
 - Existing `ListenerStatus.bootstrap_servers` + `addresses` unchanged.
 - No OAuth-specific status fields on `ListenerStatus` in slice 50 — when
   50c lands and the operator manages an introspection client Secret,
@@ -235,6 +236,7 @@ defaults and the broker's defaults from drifting.
 ### `KafkaUser` reconciler (`crates/operator/src/controller/user.rs`)
 
 For `Authentication::TlsExternal`:
+
 - Skip Secret generation (the existing SCRAM/TLS code paths don't run).
 - Skip cert issuance.
 - Reconcile ACLs from `spec.authorization` against the broker, binding
@@ -245,6 +247,7 @@ For `Authentication::TlsExternal`:
   quota diff / apply code.
 
 **Status** (`KafkaUserStatus`):
+
 - `scram_sha512 = false`.
 - `tls = false`.
 - `secret = None` (no Secret created).
@@ -261,20 +264,20 @@ For `Authentication::TlsExternal`:
 
 ## File-level change map
 
-| File | Change |
-|------|--------|
-| `crates/operator/src/crd/listener.rs` | New `ListenerAuthenticationOAuth` struct, new `OAuthCustomClaimCheck` struct, new `OAuth` enum variant, extend `listener_authentication_schema` |
-| `crates/operator/src/crd/user.rs` | New `TlsExternal` enum variant, extend `authentication_schema`, add `external: bool` to `KafkaUserStatus` |
-| `crates/operator/src/controller/listeners.rs` | Per-listener OAuth validation, cross-listener conflict detection, TOML rendering for `[oauthbearer]`, append `OAUTHBEARER` to per-listener `sasl_mechanisms` |
-| `crates/operator/src/controller/user.rs` | New code path for `TlsExternal`: skip credential provisioning, run ACL + quota reconciliation, populate status with `external: true` + `tls_principal: User:<name>` |
-| `deploy/crds/crabka.io_kafkas.yaml` | Regenerated |
-| `deploy/crds/crabka.io_kafkausers.yaml` | Regenerated |
-| `crates/operator/sample/oauth-listener.yaml` | New sample manifest |
-| `crates/operator/tests/reconcile_listener_oauth.rs` | New integration test file |
-| `crates/operator/tests/reconcile_user_tls_external.rs` | New integration test file |
-| `tools/e2e-kind/oauth_keycloak.sh` | New kind e2e script |
-| `.github/workflows/ci.yml` | New `oauth-e2e` job, label-gated `e2e-oauth` + main push |
-| `STATUS.md` | New `## Slice 50` entry |
+| File                                                   | Change                                                                                                                                                              |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `crates/operator/src/crd/listener.rs`                  | New `ListenerAuthenticationOAuth` struct, new `OAuthCustomClaimCheck` struct, new `OAuth` enum variant, extend `listener_authentication_schema`                     |
+| `crates/operator/src/crd/user.rs`                      | New `TlsExternal` enum variant, extend `authentication_schema`, add `external: bool` to `KafkaUserStatus`                                                           |
+| `crates/operator/src/controller/listeners.rs`          | Per-listener OAuth validation, cross-listener conflict detection, TOML rendering for `[oauthbearer]`, append `OAUTHBEARER` to per-listener `sasl_mechanisms`        |
+| `crates/operator/src/controller/user.rs`               | New code path for `TlsExternal`: skip credential provisioning, run ACL + quota reconciliation, populate status with `external: true` + `tls_principal: User:<name>` |
+| `deploy/crds/crabka.io_kafkas.yaml`                    | Regenerated                                                                                                                                                         |
+| `deploy/crds/crabka.io_kafkausers.yaml`                | Regenerated                                                                                                                                                         |
+| `crates/operator/sample/oauth-listener.yaml`           | New sample manifest                                                                                                                                                 |
+| `crates/operator/tests/reconcile_listener_oauth.rs`    | New integration test file                                                                                                                                           |
+| `crates/operator/tests/reconcile_user_tls_external.rs` | New integration test file                                                                                                                                           |
+| `tools/e2e-kind/oauth_keycloak.sh`                     | New kind e2e script                                                                                                                                                 |
+| `.github/workflows/ci.yml`                             | New `oauth-e2e` job, label-gated `e2e-oauth` + main push                                                                                                            |
+| `STATUS.md`                                            | New `## Slice 50` entry                                                                                                                                             |
 
 The listener half (`listener.rs` + `listeners.rs`) and the `KafkaUser`
 half (`user.rs` CRD + `user.rs` controller) touch disjoint file sets and
@@ -342,6 +345,7 @@ e2e script + CI workflow form a third independent batch.
 ### CI gating
 
 Add a new job `oauth-e2e` to `.github/workflows/ci.yml`:
+
 - Runs on push to `main`.
 - Runs on PRs labeled `e2e-oauth`.
 - Skipped on every other PR (Keycloak boot + realm bootstrap adds ~3-4
@@ -352,7 +356,7 @@ Add a new job `oauth-e2e` to `.github/workflows/ci.yml`:
 1. `cargo build -p krabka-operator` and `cargo test -p krabka-operator`
    pass.
 2. `cargo fmt --check` and `cargo clippy --workspace --all-targets -- -D
-   warnings` pass.
+warnings` pass.
 3. CRD-drift gate (`cargo xtask gen-crds && git diff --exit-code`)
    passes.
 4. New unit tests above all pass.

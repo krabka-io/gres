@@ -19,6 +19,8 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use assert2::{assert, check};
+use http::Method;
+use k8s_openapi::apimachinery::pkg::apis::meta::v1::Time;
 use krabka_client_admin::{AclEntry, AclOperation, PatternType, PermissionType, ResourceType};
 use krabka_operator::{
     controller::user::reconcile,
@@ -28,8 +30,6 @@ use krabka_operator::{
         KafkaUserQuotas, KafkaUserSimpleAuthorization as SimpleAuthorization, KafkaUserSpec,
     },
 };
-use http::Method;
-use k8s_openapi::apimachinery::pkg::apis::meta::v1::Time;
 use serde_json::json;
 
 #[path = "shared/mod.rs"]

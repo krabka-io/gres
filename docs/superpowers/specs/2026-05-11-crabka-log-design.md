@@ -296,7 +296,7 @@ Recovery is single-pass; no separate fsck tool.
 1. Force-roll the active segment if its age exceeds `segment_ms` (so
    even idle logs rotate).
 2. Time-based deletion: oldest first, while `max_timestamp +
-   retention_ms < now`.
+retention_ms < now`.
 3. Size-based deletion: oldest first, while total `.log` size >
    `retention_bytes`.
 4. Never delete the active segment; never delete the only segment;
@@ -415,7 +415,7 @@ The slice ships when **all** of these hold:
 10. CodSpeed bench file added with at least four benchmarks.
 11. No regressions in any prior slice's tests.
 12. `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D
-    warnings` clean.
+warnings` clean.
 13. Rustdoc on every public type; crate-level doc explains the on-disk
     layout + recovery story.
 

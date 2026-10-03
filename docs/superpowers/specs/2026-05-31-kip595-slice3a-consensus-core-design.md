@@ -31,9 +31,10 @@ in 3c.
 A **pure, deterministic, sans-IO** implementation of the KIP-595 + KIP-996
 quorum state machine — roles, terms/leader-epochs, voting (incl. pre-vote),
 leadership, and high-watermark advancement — as a standalone module in
-`crates/raft` (`src/kraft/core/`). It owns consensus *logic and state* only.
+`crates/raft` (`src/kraft/core/`). It owns consensus _logic and state_ only.
 
 **Explicitly NOT in scope (deferred):**
+
 - Wire encode/decode (validated in Slice 2), the real log + `Fetch` byte serving
   (3b), `quorum-state` file persistence (3c), the `ControllerHandle` cutover
   (3c), record migration (3d), KIP-853 reconfig, KIP-630 snapshots.
@@ -110,7 +111,7 @@ voted_key: Option<ReplicaKey>, voters: VoterSet
   entries from a prior epoch by count alone — KIP-595's leader-completeness rule).
 - **Diverging epoch:** given a follower's `(last_fetched_epoch, fetch_offset)`,
   the leader detects divergence against its log and decides the diverging-epoch
-  hint to return (the follower-side truncation is applied by 3b; the *decision*
+  hint to return (the follower-side truncation is applied by 3b; the _decision_
   is core).
 
 ## Testing / acceptance

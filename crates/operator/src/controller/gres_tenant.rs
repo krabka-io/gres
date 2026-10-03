@@ -2,6 +2,19 @@
 
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
+use futures::StreamExt as _;
+use k8s_openapi::{
+    ByteString,
+    api::{
+        apps::v1::Deployment,
+        core::v1::{Pod, Secret, Service},
+        networking::v1::{
+            NetworkPolicy, NetworkPolicyIngressRule, NetworkPolicyPeer, NetworkPolicyPort,
+            NetworkPolicySpec,
+        },
+    },
+    apimachinery::pkg::{apis::meta::v1::LabelSelector, util::intstr::IntOrString},
+};
 use krabka_client_admin::{
     AclEntry, AclEntryFilter, AclOperation, CreateTopicSpec, PatternType, PermissionType,
     ResourceType, ScramDeletion, ScramIterations, ScramUpsertion,
@@ -18,19 +31,6 @@ use krabka_units::{
     ByteSize, Time,
     convert::{ByteSizeExt as _, TimeExt as _},
     fmt::Human as _,
-};
-use futures::StreamExt as _;
-use k8s_openapi::{
-    ByteString,
-    api::{
-        apps::v1::Deployment,
-        core::v1::{Pod, Secret, Service},
-        networking::v1::{
-            NetworkPolicy, NetworkPolicyIngressRule, NetworkPolicyPeer, NetworkPolicyPort,
-            NetworkPolicySpec,
-        },
-    },
-    apimachinery::pkg::{apis::meta::v1::LabelSelector, util::intstr::IntOrString},
 };
 use kube::{
     Resource, ResourceExt as _,

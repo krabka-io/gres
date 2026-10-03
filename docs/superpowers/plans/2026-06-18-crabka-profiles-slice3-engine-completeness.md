@@ -18,9 +18,9 @@ The load-bearing realization: **everything in this slice is "more aggregations a
 - **Formatting:** `cargo fmt -p krabka-pprof` before every commit (never `cargo +nightly fmt --all` — OS error 206 in deep worktrees on Windows; always `-p`).
 - **Assertions:** `assert2::assert!` in tests; `prop_assert*` inside `proptest!`.
 - **Async tests:** `#[tokio::test]`. The engine API (`select_series`/`diff`/`select_merge_profile`/`select_merge_stacktraces`) is async; the `InMemoryProfileStore` test double backs every test so the engine is independently testable without ingest/blockstore.
-- **DataFusion-internal API churn:** the `rev` is pinned. `SelectSeries`/`SelectHeatmap` are *ordinary* DataFusion `GROUP BY`/aggregation plans built through the `DataFrame`/`SessionContext`/SQL API on the `ProfileScan.samples_table` — **no** custom `UserDefinedLogicalNodeCore` or `ExecutionPlan` is introduced in this slice. Where a `DataFrame` aggregation method, `Expr` builder, or `ScalarValue` extraction signature is needed, give the **structure + behavior** and a behavior-pinning test, with a `// verify against rev 0838a4d` note rather than fabricating an exact upstream signature. The test (input rows → expected `Vec<Series>` / `FlameGraphDiff` / pprof) is the contract; the plumbing is whatever compiles against the pin.
-- **Pyroscope-contract fidelity (Kafka-compat does not apply here; *Pyroscope-semantic/wire* compat does):** every encoder/aggregation whose semantics are subtle (the 4-ints-per-bar `xOffsetDelta` rule, the 7-ints-per-bar diff layout, `step` in SECONDS → `step_ms`, SUM vs AVERAGE, zero-value diff alignment, `max_nodes` `"other"` total-conservation, span-scoped filtering, partial-tree merge associativity) gets its exact rule **encoded in a unit test that cites the behavior**, *before* the wider integration test. When Pyroscope's behavior is undocumented or version-dependent, the Slice-8 differential-vs-Pyroscope run is the tiebreaker — flag such cases with a `// verify against Pyroscope <tag>` note rather than guessing silently.
-- **Raw ids never cross a block boundary (the distributed invariant):** a `stacktrace_id` is only meaningful within its own block's `SymbolDb` partition. `SelectSeries` never symbolizes (it reads `PCOL_TOTAL_VALUE` floats only). Every path that *does* symbolize (`MERGE`, `Diff`, `SelectMergeProfile`, `SelectMergeSpanProfile`) resolves **per-`ProfileScan`/per-block** to a partial `Tree`/pprof, then merges the *symbolized* partials — never the raw ids. Pin this with a multi-scan merge test.
+- **DataFusion-internal API churn:** the `rev` is pinned. `SelectSeries`/`SelectHeatmap` are _ordinary_ DataFusion `GROUP BY`/aggregation plans built through the `DataFrame`/`SessionContext`/SQL API on the `ProfileScan.samples_table` — **no** custom `UserDefinedLogicalNodeCore` or `ExecutionPlan` is introduced in this slice. Where a `DataFrame` aggregation method, `Expr` builder, or `ScalarValue` extraction signature is needed, give the **structure + behavior** and a behavior-pinning test, with a `// verify against rev 0838a4d` note rather than fabricating an exact upstream signature. The test (input rows → expected `Vec<Series>` / `FlameGraphDiff` / pprof) is the contract; the plumbing is whatever compiles against the pin.
+- **Pyroscope-contract fidelity (Kafka-compat does not apply here; _Pyroscope-semantic/wire_ compat does):** every encoder/aggregation whose semantics are subtle (the 4-ints-per-bar `xOffsetDelta` rule, the 7-ints-per-bar diff layout, `step` in SECONDS → `step_ms`, SUM vs AVERAGE, zero-value diff alignment, `max_nodes` `"other"` total-conservation, span-scoped filtering, partial-tree merge associativity) gets its exact rule **encoded in a unit test that cites the behavior**, _before_ the wider integration test. When Pyroscope's behavior is undocumented or version-dependent, the Slice-8 differential-vs-Pyroscope run is the tiebreaker — flag such cases with a `// verify against Pyroscope <tag>` note rather than guessing silently.
+- **Raw ids never cross a block boundary (the distributed invariant):** a `stacktrace_id` is only meaningful within its own block's `SymbolDb` partition. `SelectSeries` never symbolizes (it reads `PCOL_TOTAL_VALUE` floats only). Every path that _does_ symbolize (`MERGE`, `Diff`, `SelectMergeProfile`, `SelectMergeSpanProfile`) resolves **per-`ProfileScan`/per-block** to a partial `Tree`/pprof, then merges the _symbolized_ partials — never the raw ids. Pin this with a multi-scan merge test.
 
 ---
 
@@ -44,14 +44,14 @@ The load-bearing realization: **everything in this slice is "more aggregations a
 
 The samples fact-table columns (defined by Slice 1, surfaced through `ProfileScan.samples_table`): `COL_FINGERPRINT`, `COL_TIMESTAMP`, `PCOL_PROFILE_TYPE`, `PCOL_STACKTRACE_ID`, `PCOL_VALUE`, `PCOL_STACKTRACE_PARTITION`, **`PCOL_TOTAL_VALUE`**, **`PCOL_SPAN_ID`**, `PCOL_TRACE_ID`.
 
-> **If a Slice-2 name differs at implementation time:** the *contract above is authoritative for planning*; if Slice 2 landed a renamed symbol (e.g. `Tree::self_` → `Tree::self_value`, or `Series.points` typed differently), adapt this slice's call sites to the real name — the *behavior* each task pins is what matters, not the spelling. Flag any rename in the task's commit message.
+> **If a Slice-2 name differs at implementation time:** the _contract above is authoritative for planning_; if Slice 2 landed a renamed symbol (e.g. `Tree::self_` → `Tree::self_value`, or `Series.points` typed differently), adapt this slice's call sites to the real name — the _behavior_ each task pins is what matters, not the spelling. Flag any rename in the task's commit message.
 
 **The 8 profiles slices** (this plan = Slice 3; each gets its own plan):
 
-1. Blockstore `ProfileIndex` + profile samples schema (`PCOL_*`) + symbol-DB artifact. *(slice 1 — `cargo test -p krabka-blockstore`)*
-2. `krabka-pprof` core — pprof model + codec, `SymbolDb` + `SymbolSource`, `ProfileType`, `ProfileStore` + result types, MERGE → flamegraph (fold-before-symbolize, `Tree`, 4-ints-per-bar). *(slice 2 — `cargo test -p krabka-pprof`)*
-3. **Engine completeness** *(this plan)* — `SelectSeries`, `Diff`, `max_nodes`/`"other"`, raw-pprof output, `SelectMergeSpanProfile`, `SelectHeatmap`, cross-block partial-tree merge.
-4. Ingest service — distributor (`push.v1` + `/ingest` + OTLP `v1development`) → `(tenant, series_fingerprint)`-WAL; block-builder. *(slices 4–8 — `cargo test -p krabka-profiles`)*
+1. Blockstore `ProfileIndex` + profile samples schema (`PCOL_*`) + symbol-DB artifact. _(slice 1 — `cargo test -p krabka-blockstore`)_
+2. `krabka-pprof` core — pprof model + codec, `SymbolDb` + `SymbolSource`, `ProfileType`, `ProfileStore` + result types, MERGE → flamegraph (fold-before-symbolize, `Tree`, 4-ints-per-bar). _(slice 2 — `cargo test -p krabka-pprof`)_
+3. **Engine completeness** _(this plan)_ — `SelectSeries`, `Diff`, `max_nodes`/`"other"`, raw-pprof output, `SelectMergeSpanProfile`, `SelectHeatmap`, cross-block partial-tree merge.
+4. Ingest service — distributor (`push.v1` + `/ingest` + OTLP `v1development`) → `(tenant, series_fingerprint)`-WAL; block-builder. _(slices 4–8 — `cargo test -p krabka-profiles`)_
 5. Querier + Connect `querier.v1` API + legacy `/pyroscope/render`.
 6. Query-frontend — split/shard + partial-tree merge + select-series shard-merge.
 7. Native symbolization — debuginfod + DWARF/ELF/`.gopclntab`.
@@ -61,15 +61,15 @@ The samples fact-table columns (defined by Slice 1, surfaced through `ProfileSca
 
 ## File structure (`crates/pprof/` — extends Slice 2)
 
-| File | Responsibility | New / extended |
-|---|---|---|
-| `src/engine.rs` | `FlameEngine` — add `select_series`/`diff`/`select_merge_profile`/`select_merge_span_profile`/`select_heatmap` methods + the cross-scan partial-tree merge helper | extended |
-| `src/series.rs` | `Series`/`SeriesAgg` (types frozen in Slice 2) + the `SelectSeries` time-bucketing aggregation over `PCOL_TOTAL_VALUE` | extended |
-| `src/tree.rs` | `Tree::to_flamegraph` `max_nodes` truncation + synthetic `"other"` kernel (4-ints-per-bar encoder) | extended |
-| `src/diff.rs` | the diff aligner (zero-value placeholders) + the 7-ints-per-bar `FlameGraphDiff` encoder | **new** |
-| `src/raw_profile.rs` | merged-`(frames,value)` → `PprofProfile` re-encoder (`SelectMergeProfile` body) | **new** |
-| `src/heatmap.rs` | `Heatmap` result type + the `(time-bucket × value-bucket)` binning kernel | **new** |
-| `src/lib.rs` | module decls + re-exports (`Series`, `SeriesAgg`, `Heatmap`, …) | extended |
+| File                 | Responsibility                                                                                                                                                    | New / extended |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| `src/engine.rs`      | `FlameEngine` — add `select_series`/`diff`/`select_merge_profile`/`select_merge_span_profile`/`select_heatmap` methods + the cross-scan partial-tree merge helper | extended       |
+| `src/series.rs`      | `Series`/`SeriesAgg` (types frozen in Slice 2) + the `SelectSeries` time-bucketing aggregation over `PCOL_TOTAL_VALUE`                                            | extended       |
+| `src/tree.rs`        | `Tree::to_flamegraph` `max_nodes` truncation + synthetic `"other"` kernel (4-ints-per-bar encoder)                                                                | extended       |
+| `src/diff.rs`        | the diff aligner (zero-value placeholders) + the 7-ints-per-bar `FlameGraphDiff` encoder                                                                          | **new**        |
+| `src/raw_profile.rs` | merged-`(frames,value)` → `PprofProfile` re-encoder (`SelectMergeProfile` body)                                                                                   | **new**        |
+| `src/heatmap.rs`     | `Heatmap` result type + the `(time-bucket × value-bucket)` binning kernel                                                                                         | **new**        |
+| `src/lib.rs`         | module decls + re-exports (`Series`, `SeriesAgg`, `Heatmap`, …)                                                                                                   | extended       |
 
 ---
 
@@ -78,10 +78,12 @@ The samples fact-table columns (defined by Slice 1, surfaced through `ProfileSca
 ### Task 1: `Series`/`SeriesAgg` types + the pure step-bucketing kernel
 
 **Files:**
+
 - Modify: `crates/pprof/src/series.rs` (created in Slice 2 B3 with the frozen `Series`/`SeriesAgg` types; this task adds the kernel fns)
 - Modify: `crates/pprof/src/lib.rs` (extend the existing re-exports if a kernel fn needs to be public)
 
 **Interfaces:**
+
 - Consumes: the Slice-2-frozen `Series`/`SeriesAgg` types (already in `series.rs`; do NOT redeclare them or re-`mod series;`). Nothing from DataFusion yet — this task pins the bucketing arithmetic in isolation.
 - Produces (added to the existing `series.rs`):
   - (existing, frozen in Slice 2 — restated for reference) `pub struct Series { pub labels: Vec<(String, String)>, pub points: Vec<(i64, f64)> }` (`(timestamp_ms, value)`); `pub enum SeriesAgg { Sum, Average }` (`Copy`).
@@ -199,10 +201,12 @@ git commit -m "feat(pprof): Series/SeriesAgg + step-bucketing kernel (step in se
 ### Task 2: `FlameEngine::select_series` — DataFusion `GROUP BY group_by, step-bucket → SUM/AVERAGE`
 
 **Files:**
+
 - Modify: `crates/pprof/src/engine.rs` (add `select_series`)
 - Modify: `crates/pprof/src/series.rs` (add a `pub(crate)` row-assembly helper if the DataFusion result is collected as rows)
 
 **Interfaces:**
+
 - Consumes: `ProfileStore::select` (→ `ProfileScan { ctx, samples_table, .. }`), the `label_selector → Vec<LabelMatcher>` helper, the `PCOL_TOTAL_VALUE`/`PCOL_PROFILE_TYPE`/`COL_TIMESTAMP` columns, `step_ms_from_secs`/`step_bucket_ms`/`fold_bucket`/`Series`/`SeriesAgg` (Task 1).
 - Produces:
   - `pub async fn select_series(&self, tenant: &str, profile_type: &str, label_selector: &str, group_by: &[String], step_secs: f64, agg: SeriesAgg, start_ms: i64, end_ms: i64) -> Result<Vec<Series>, ProfileError>` — exactly the Slice-2 §6.5 `FlameEngine` signature.
@@ -299,7 +303,7 @@ In `engine.rs`, add the method. Parse `label_selector` → matchers; call `store
 // }
 ```
 
-> **DataFusion note (verify against rev 0838a4d):** the step-bucket expression is integer arithmetic on `COL_TIMESTAMP` — express as `(timestamp / step_ms) * step_ms` in SQL (DataFusion integer division floors toward zero; guard the negative-timestamp case the kernel handles by filtering to `[start_ms, end_ms]` with `start_ms >= 0`, which the query API guarantees). If the SQL path is awkward, build the same plan via `DataFrame::aggregate(group_exprs, aggr_exprs)`; the *result rows* (label values + bucket + folded value) are the contract, pinned by Task 1's kernel + this task's engine test. Reuse the kernel `step_bucket_ms`/`fold_bucket` if you collect to rows and fold in Rust instead of SQL — either is acceptable as long as the test passes.
+> **DataFusion note (verify against rev 0838a4d):** the step-bucket expression is integer arithmetic on `COL_TIMESTAMP` — express as `(timestamp / step_ms) * step_ms` in SQL (DataFusion integer division floors toward zero; guard the negative-timestamp case the kernel handles by filtering to `[start_ms, end_ms]` with `start_ms >= 0`, which the query API guarantees). If the SQL path is awkward, build the same plan via `DataFrame::aggregate(group_exprs, aggr_exprs)`; the _result rows_ (label values + bucket + folded value) are the contract, pinned by Task 1's kernel + this task's engine test. Reuse the kernel `step_bucket_ms`/`fold_bucket` if you collect to rows and fold in Rust instead of SQL — either is acceptable as long as the test passes.
 
 - [ ] **Step 4: Run to verify it passes**
 
@@ -322,9 +326,11 @@ git commit -m "feat(pprof): FlameEngine::select_series — total_value time-seri
 ### Task 3: `Tree::to_flamegraph` `max_nodes` truncation with a min-value heap threshold + synthetic `"other"`
 
 **Files:**
+
 - Modify: `crates/pprof/src/tree.rs` (extend `Tree::to_flamegraph`; add the pure truncation kernel)
 
 **Interfaces:**
+
 - Consumes: the Slice-2 `Tree` (parent/children, `total`, `self_`) + the 4-ints-per-bar `FlameGraph`/`Level` encoder.
 - Produces:
   - `pub fn to_flamegraph(self, max_nodes: i64) -> FlameGraph` — **made byte-exact for truncation**: when the tree has more than `max_nodes` nodes, keep the highest-`total` nodes (a min-value threshold via a binary heap), and for each surviving parent whose children were partly pruned, emit **one synthetic `"other"` child** carrying the **sum of the pruned children's totals** (and their summed `self_`), so the level's totals still sum to the parent's total. `max_nodes <= 0` means "no limit" (Pyroscope treats `0`/negative as unbounded; the default is `2048`).
@@ -428,13 +434,15 @@ git commit -m "feat(pprof): max_nodes flamegraph truncation with total-conservin
 ### Task 4: Diff aligner + 7-ints-per-bar `FlameGraphDiff` encoder
 
 **Files:**
+
 - Create: `crates/pprof/src/diff.rs`
 - Modify: `crates/pprof/src/lib.rs` (`mod diff;`)
 
 **Interfaces:**
+
 - Consumes: two `Tree`s (left + right), the shared name-interning approach from the Slice-2 `FlameGraph` encoder, `FlameGraphDiff`/`Level`.
 - Produces:
-  - `pub fn diff_trees(left: Tree, right: Tree, max_nodes: i64) -> FlameGraphDiff` — walk both trees in lockstep over the **union of child sets** at each node (a child present on only one side gets a **zero-value placeholder** on the other), so every bar exists on both sides; encode levels in **groups of 7**: `[xOffLeft, totalLeft, selfLeft, xOffRight, totalRight, selfRight, nameIndex]`; set `left_ticks = left.root.total`, `right_ticks = right.root.total`. `max_nodes` truncation applies to the **merged** structure (collapse to `"other"` using the *combined* left+right total as the ranking key, so a node large on either side survives).
+  - `pub fn diff_trees(left: Tree, right: Tree, max_nodes: i64) -> FlameGraphDiff` — walk both trees in lockstep over the **union of child sets** at each node (a child present on only one side gets a **zero-value placeholder** on the other), so every bar exists on both sides; encode levels in **groups of 7**: `[xOffLeft, totalLeft, selfLeft, xOffRight, totalRight, selfRight, nameIndex]`; set `left_ticks = left.root.total`, `right_ticks = right.root.total`. `max_nodes` truncation applies to the **merged** structure (collapse to `"other"` using the _combined_ left+right total as the ranking key, so a node large on either side survives).
 
 > **Zero-value alignment is the load-bearing rule:** a diff bar must occupy the same `nameIndex` position on both sides even when one side never observed that frame — Pyroscope renders the absence as a 0-width/0-self bar so left/right line up visually. Pin: a frame present only on the right yields `totalLeft == 0 && selfLeft == 0` for that bar, and vice-versa; the `nameIndex` is shared.
 
@@ -538,10 +546,12 @@ git commit -m "feat(pprof): diff_trees — zero-aligned 7-ints-per-bar FlameGrap
 ### Task 5: `FlameEngine::diff` — two MERGEs → `diff_trees`
 
 **Files:**
+
 - Modify: `crates/pprof/src/engine.rs` (add `diff` + factor a `merge_to_tree` helper)
 
 **Interfaces:**
-- Consumes: the Slice-2 MERGE path (factor the part that yields a symbolized `Tree`, *before* `to_flamegraph`, into a `pub(crate) async fn merge_to_tree(...) -> Result<Tree, ProfileError>`), `diff_trees` (Task 4).
+
+- Consumes: the Slice-2 MERGE path (factor the part that yields a symbolized `Tree`, _before_ `to_flamegraph`, into a `pub(crate) async fn merge_to_tree(...) -> Result<Tree, ProfileError>`), `diff_trees` (Task 4).
 - Produces:
   - `pub async fn diff(&self, tenant: &str, left: (&str, &str, i64, i64), right: (&str, &str, i64, i64), max_nodes: i64) -> Result<FlameGraphDiff, ProfileError>` — exactly the Slice-2 §6.5 signature. Each tuple is `(profile_type, label_selector, start_ms, end_ms)`; resolve each side to a `Tree` via `merge_to_tree` **independently** (own scan, own symbolization), then `diff_trees(left_tree, right_tree, max_nodes)`.
 
@@ -601,10 +611,12 @@ git commit -m "feat(pprof): FlameEngine::diff via two independent MERGE-to-Tree 
 ### Task 6: `FlameEngine::select_merge_profile` — merged raw pprof bytes
 
 **Files:**
+
 - Create: `crates/pprof/src/raw_profile.rs`
 - Modify: `crates/pprof/src/engine.rs` (add `select_merge_profile`), `crates/pprof/src/lib.rs` (`mod raw_profile;`)
 
 **Interfaces:**
+
 - Consumes: `merge_to_tree` (Task 5) — or, more precisely, the per-`(frames, value)` symbolized stack set the merge produces; the Slice-2 `PprofProfile` (`encode`), `Frame`, `ProfileType` (to fill the pprof `sample_type`/`period_type` from the 5-part string).
 - Produces:
   - `pub async fn select_merge_profile(&self, tenant: &str, profile_type: &str, label_selector: &str, start_ms: i64, end_ms: i64) -> Result<Vec<u8>, ProfileError>` — the Slice-2 §6.5 signature; returns the merged profile as **raw pprof bytes** (the `google.v1.Profile` the Connect `SelectMergeProfile` returns).
@@ -671,9 +683,11 @@ git commit -m "feat(pprof): select_merge_profile — merged Tree -> raw pprof by
 ### Task 7: `FlameEngine::select_merge_span_profile` — span-scoped MERGE
 
 **Files:**
+
 - Modify: `crates/pprof/src/engine.rs` (add `select_merge_span_profile` + thread a span predicate through `merge_to_tree`)
 
 **Interfaces:**
+
 - Consumes: `merge_to_tree` (Task 5), the `PCOL_SPAN_ID` column, the `span_selector`.
 - Produces:
   - `pub async fn select_merge_span_profile(&self, tenant: &str, profile_type: &str, label_selector: &str, span_selector: &[u64], start_ms: i64, end_ms: i64, max_nodes: i64) -> Result<FlameGraph, ProfileError>` — MERGE restricted to samples whose `PCOL_SPAN_ID` is in `span_selector` (span-scoped profiling, Pyroscope `SelectMergeSpanProfile`). Returns a `FlameGraph` (same shape as `select_merge_stacktraces`). Empty `span_selector` ⇒ `ProfileError::Plan` (a span profile with no span ids is a client error; do not silently return the whole profile).
@@ -729,17 +743,19 @@ git commit -m "feat(pprof): select_merge_span_profile — span-id-scoped MERGE"
 ### Task 8: `SelectHeatmap` — `(time-bucket × value-bucket)` count matrix
 
 **Files:**
+
 - Create: `crates/pprof/src/heatmap.rs`
 - Modify: `crates/pprof/src/engine.rs` (add `select_heatmap`), `crates/pprof/src/lib.rs` (`mod heatmap;`)
 
 **Interfaces:**
+
 - Consumes: `ProfileScan` (`PCOL_TOTAL_VALUE` per profile + `COL_TIMESTAMP`), the step-bucket kernel (Task 1).
 - Produces:
   - `pub struct Heatmap { pub start_ms: i64, pub end_ms: i64, pub time_buckets: usize, pub value_buckets: usize, pub min_value: i64, pub max_value: i64, pub counts: Vec<Vec<u64>> /* [time][value] */ }` (`Clone`, `Debug`, `PartialEq`).
   - `pub fn bin_heatmap(points: &[(i64 /*ts_ms*/, i64 /*total_value*/)], start_ms: i64, end_ms: i64, time_buckets: usize, value_buckets: usize) -> Heatmap` — pure binning: time axis split into `time_buckets` even spans over `[start_ms, end_ms)`, value axis split linearly over `[min, max]`, counting profiles per `(time, value)` cell.
   - `pub async fn select_heatmap(&self, tenant: &str, profile_type: &str, label_selector: &str, start_ms: i64, end_ms: i64, time_buckets: usize, value_buckets: usize) -> Result<Heatmap, ProfileError>` — scan profiles (profile grain), collect `(ts, total_value)`, `bin_heatmap`.
 
-> **Heatmap fidelity is the least load-bearing surface (spec §13 open question):** Grafana's *minimum* Pyroscope-datasource surface does not call `SelectHeatmap`; it is here for completeness. Pin the binning arithmetic with the kernel test; confirm the exact response shape (axis count, bound inclusivity) against the pinned Pyroscope tag in Slice 8 before investing further. Flag `// verify against Pyroscope <tag>`.
+> **Heatmap fidelity is the least load-bearing surface (spec §13 open question):** Grafana's _minimum_ Pyroscope-datasource surface does not call `SelectHeatmap`; it is here for completeness. Pin the binning arithmetic with the kernel test; confirm the exact response shape (axis count, bound inclusivity) against the pinned Pyroscope tag in Slice 8 before investing further. Flag `// verify against Pyroscope <tag>`.
 
 - [ ] **Step 1: Write the failing kernel test**
 
@@ -795,11 +811,13 @@ git commit -m "feat(pprof): select_heatmap — (time x value) count matrix binni
 ### Task 9: Cross-block partial-tree merge — the distributed invariant
 
 **Files:**
+
 - Modify: `crates/pprof/src/engine.rs` (ensure `merge_to_tree` resolves **per-scan-partition** to partial trees, then `Tree::merge`)
 
 **Interfaces:**
+
 - Consumes: `ProfileScan` (whose `samples_table` may be a UNION of several blocks, each with its **own** `stacktrace_partition` numbering), `SymbolSource::resolve(partition, id)`, `Tree::merge`.
-- Produces: the *invariant*, not a new public method — pin that `merge_to_tree` groups the folded `(stacktrace_partition, stacktrace_id) -> SUM(value)` rows, resolves each id **within its own partition** via `scan.symbols.resolve(partition, id)`, builds the `Tree` from the *symbolized* frames, and that two blocks sharing the same partition *number* but different symbol tables never collide (raw ids never cross a block boundary — only symbolized partial trees merge).
+- Produces: the _invariant_, not a new public method — pin that `merge_to_tree` groups the folded `(stacktrace_partition, stacktrace_id) -> SUM(value)` rows, resolves each id **within its own partition** via `scan.symbols.resolve(partition, id)`, builds the `Tree` from the _symbolized_ frames, and that two blocks sharing the same partition _number_ but different symbol tables never collide (raw ids never cross a block boundary — only symbolized partial trees merge).
 
 > **The load-bearing invariant (spec §6.4):** a `stacktrace_id` is only meaningful within its own block's `SymbolDb` partition. The fold (`GROUP BY (partition, id) -> SUM`) is per-scan; resolution is keyed by `(partition, id)` through the scan's `SymbolSource`; the resulting frames are merged into the `Tree`. When the querier (slice 5) hands a UNION `ProfileScan` whose `SymbolSource` dispatches `(partition, id)` to the right block's symbols, the engine's per-`(partition, id)` resolve is automatically block-correct. This task pins that the engine resolves through `(partition, id)` and never assumes a global id space.
 
@@ -825,7 +843,7 @@ git commit -m "feat(pprof): select_heatmap — (time x value) count matrix binni
 - [ ] **Step 2: Run to verify it fails (or passes — confirm behavior)**
 
 Run: `cargo test -p krabka-pprof --lib engine`
-Expected: if Slice 2 already keyed resolution by `(partition, id)`, this PASSES and the task is a *pin* (commit the test, note in the message). If it FAILS (Slice 2 resolved by `id` only), fix `merge_to_tree` to key by `(partition, id)` — this is exactly the bug this task exists to prevent.
+Expected: if Slice 2 already keyed resolution by `(partition, id)`, this PASSES and the task is a _pin_ (commit the test, note in the message). If it FAILS (Slice 2 resolved by `id` only), fix `merge_to_tree` to key by `(partition, id)` — this is exactly the bug this task exists to prevent.
 
 - [ ] **Step 3: Implement / confirm**
 
@@ -850,9 +868,11 @@ git commit -m "test(pprof): pin cross-partition resolve — raw stacktrace ids n
 ### Task 10: Whole-crate gate + a `Tree::merge` associativity property test
 
 **Files:**
+
 - Create: `crates/pprof/tests/merge_associativity.rs`
 
 **Interfaces:**
+
 - Consumes: `Tree`, `Tree::merge`, `Tree::to_flamegraph`.
 - Produces: a property test that merging partial trees in any order/grouping yields the same `FlameGraph` (the distributed-merge correctness the query-frontend, slice 6, relies on).
 
@@ -894,11 +914,13 @@ Expected: PASS (128 cases). If it fails, the bug is in `Tree::merge` or the enco
 - [ ] **Step 3: Full crate gate**
 
 Run:
+
 ```bash
 cargo test -p krabka-pprof
 cargo clippy -p krabka-pprof --all-targets
 cargo fmt -p krabka-pprof --check
 ```
+
 Expected: all PASS, no warnings, formatting clean.
 
 - [ ] **Step 4: Commit**
@@ -924,9 +946,9 @@ git commit -m "test(pprof): Tree::merge order-independence property + slice-3 wh
 
 **Rule-fidelity (the subtle ones are pinned by a unit test BEFORE any integration):** step-in-seconds → ms + `div_euclid` bucket start + SUM/AVG (Task 1 kernel); `PCOL_TOTAL_VALUE` not resummed (Task 2); `"other"` total-conservation + tie-keeps-all + unbounded-on-zero (Task 3); zero-value diff alignment + 7-ints layout + ticks-from-roots (Task 4); span-empty-is-error (Task 7); heatmap cell binning + `max==min` degenerate (Task 8); cross-partition same-id-different-symbol (Task 9); merge order-independence (Task 10). Each cites the Pyroscope behavior it encodes.
 
-**Churn-prone API handling:** `SelectSeries`/`SelectHeatmap` are *ordinary* DataFusion `GROUP BY`/aggregations over `ProfileScan.samples_table` — **no** new `UserDefinedLogicalNodeCore` or `ExecutionPlan` is introduced (unlike the metrics `HistogramFold` slice). The two DataFusion touchpoints (the two-stage profile-grain → step-bucket aggregation in `select_series`, the profile-grain collect in `select_heatmap`) are given as **structure + `// verify against rev 0838a4d`** and pinned by pure kernels (`step_bucket_ms`/`fold_bucket`/`bin_heatmap`) the engine reuses, so any DataFrame/SQL-builder drift surfaces as a failing engine test, not silent corruption — the kernels themselves are dependency-free and always pass. The pprof re-encode (Task 6) goes through the Slice-2 `PprofProfile` codec (prost 0.14), not a fresh proto. No Connect/proto codegen in this slice (that is slice 5).
+**Churn-prone API handling:** `SelectSeries`/`SelectHeatmap` are _ordinary_ DataFusion `GROUP BY`/aggregations over `ProfileScan.samples_table` — **no** new `UserDefinedLogicalNodeCore` or `ExecutionPlan` is introduced (unlike the metrics `HistogramFold` slice). The two DataFusion touchpoints (the two-stage profile-grain → step-bucket aggregation in `select_series`, the profile-grain collect in `select_heatmap`) are given as **structure + `// verify against rev 0838a4d`** and pinned by pure kernels (`step_bucket_ms`/`fold_bucket`/`bin_heatmap`) the engine reuses, so any DataFrame/SQL-builder drift surfaces as a failing engine test, not silent corruption — the kernels themselves are dependency-free and always pass. The pprof re-encode (Task 6) goes through the Slice-2 `PprofProfile` codec (prost 0.14), not a fresh proto. No Connect/proto codegen in this slice (that is slice 5).
 
-**Greenfield / no-back-compat respected:** the `merge_to_tree` extraction (Task 5) *changes* the Slice-2 `select_merge_stacktraces` internals in place (no shim, no V2); `merge_to_tree` gains an `Option<&[u64]>` span parameter in Task 7 by editing the signature, not adding an overload. No feature flags, no migration code. The only thing preserved is the **Pyroscope wire/encoding contract** (4-/7-ints-per-bar, step-in-seconds, profile-type strings) — the constraint that actually matters.
+**Greenfield / no-back-compat respected:** the `merge_to_tree` extraction (Task 5) _changes_ the Slice-2 `select_merge_stacktraces` internals in place (no shim, no V2); `merge_to_tree` gains an `Option<&[u64]>` span parameter in Task 7 by editing the signature, not adding an overload. No feature flags, no migration code. The only thing preserved is the **Pyroscope wire/encoding contract** (4-/7-ints-per-bar, step-in-seconds, profile-type strings) — the constraint that actually matters.
 
 **Parallelization note (for the executor):** Phase A Tasks 1→2 are sequential (2 consumes 1). Task 3 (`tree.rs`) is independent of Phase A → can run in the **same batch** as Task 1. Phase C Task 4 (`diff.rs`, new file) is independent of Tasks 1/3 → batch it with them; Task 5 depends on Task 4 **and** the `merge_to_tree` extraction, so sequence it after. Phase D: Task 6 (`raw_profile.rs`), Task 8 (`heatmap.rs`) are disjoint new files → one parallel batch, but **all of** Tasks 5/6/7/8/9 edit `engine.rs`, so the `engine.rs` method additions must be reconciled (they add disjoint methods + share the `merge_to_tree` helper — append-only, low-conflict, but land them sequentially or merge the method block). Task 9 must follow Task 5 (it constrains `merge_to_tree`). Task 10 is last (whole-crate gate). Recommended batches: **B1** = {1, 3, 4} (disjoint files: `series.rs`, `tree.rs`, `diff.rs`), then **B2** = {2} + {5} (engine, sequential on `merge_to_tree` extraction), then **B3** = {6, 7, 8} (reconcile `engine.rs`), then {9}, then {10}.
 

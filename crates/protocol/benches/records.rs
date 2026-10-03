@@ -6,6 +6,7 @@
 //! regression in any one shape shows up clearly.
 
 use bytes::{Bytes, BytesMut};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use krabka_compression::CompressionType;
 use krabka_protocol::{
     DecodeBorrow,
@@ -14,7 +15,6 @@ use krabka_protocol::{
         validate_one_v2_batch,
     },
 };
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
 
 // ---------------------------------------------------------------------------
 // Fixture builders

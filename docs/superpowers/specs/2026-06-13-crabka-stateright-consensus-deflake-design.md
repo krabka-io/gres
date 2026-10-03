@@ -13,23 +13,23 @@ different tools:
 
 1. **Jepsen-style concurrency-correctness checking.** This is what
    [`stateright`](https://github.com/stateright/stateright) is for: it explores
-   the *entire* state space of an abstract `Model` (BFS/DFS over all action
+   the _entire_ state space of an abstract `Model` (BFS/DFS over all action
    interleavings) and checks `always`/`eventually`/`sometimes` and
    **linearizability** properties. It does **not** run the real broker, real
    TCP, or the real tokio runtime — it checks a state machine.
 
 2. **Flaky sleep-based integration tests.** The repo has ~481 `sleep(` and ~163
-   `timeout(` calls across ~60 test files. The large majority are *real-broker
-   integration tests* that spin up `Broker::start()` on loopback TCP and then
+   `timeout(` calls across ~60 test files. The large majority are _real-broker
+   integration tests_ that spin up `Broker::start()` on loopback TCP and then
    `loop { if cond { break }; sleep(50ms) }` to wait for distributed state to
    converge. stateright cannot replace these — but their flakiness is fixable by
    replacing fixed-duration sleeps with **deterministic event/condition
    synchronization** (awaiting `watch` channels / `Notify`, or a paused tokio
    clock).
 
-The two are **complementary**: a stateright model proves the *algorithm* is
-correct under all interleavings; a de-flaked integration test proves the *real
-wiring* matches the model without flaking.
+The two are **complementary**: a stateright model proves the _algorithm_ is
+correct under all interleavings; a de-flaked integration test proves the _real
+wiring_ matches the model without flaking.
 
 This program is too large for one implementation plan (≈6 candidate model
 subsystems + ≈60 test files). **Phase 1** (this spec) does the highest-value
@@ -42,7 +42,7 @@ sleep-using tests.
 
 1. Add `stateright` to the workspace (dev-dependency only).
 2. A stateright **linearizable model of the KRaft consensus core** that wraps the
-   *real* `QuorumStateMachine` production code.
+   _real_ `QuorumStateMachine` production code.
 3. **Deterministic-sync test infrastructure** on `BrokerHandle` + test support
    (expose watch channels; generic `wait_for_*` awaiters; paused-clock helper).
 4. **De-flake the consensus-correctness test batch** onto that infrastructure.
@@ -69,7 +69,7 @@ sleep-using tests.
     via `SimNodeLog` trait; in-memory `SimLog` (Clone) at `mod.rs` ~line 88.
   - `crates/raft/tests/kraft_sim.rs` (in-memory `SimLog`) and
     `kraft_log_sim.rs` (real on-disk `KraftLog`) include that harness.
-  - The harness explores *one* staggered-timeout schedule and asserts invariants
+  - The harness explores _one_ staggered-timeout schedule and asserts invariants
     at a fixed point. stateright adds **all** interleavings + linearizability +
     automated counterexample discovery.
 - The broker exposes the synchronization surface needed for de-flaking, but does
@@ -98,6 +98,7 @@ sleep-using tests.
 ## Workstream A — Raft linearizable stateright model
 
 ### Layout
+
 - `stateright = "=0.31.0"` in `[workspace.dependencies]`; `stateright = { workspace = true }`
   under `[dev-dependencies]` of `crates/raft`. Dev-dep only.
 - New `crates/raft/tests/model/mod.rs` (the model harness) and
@@ -109,11 +110,13 @@ sleep-using tests.
   without coupling the two.
 
 ### Model design (low-level `Model` trait, not the actor module)
-Rationale: `QuorumStateMachine` is already `Event`-in / `Action`s-out, so it *is*
+
+Rationale: `QuorumStateMachine` is already `Event`-in / `Action`s-out, so it _is_
 the transition function. The actor module would force the code through an
 `Actor` I/O shape for no benefit.
 
 `ModelState`, `#[derive(Clone, Debug, PartialEq, Eq, Hash)]`:
+
 - `nodes: BTreeMap<NodeId, NodeModel>` — `NodeModel { sm: QuorumStateMachine, log: SimLog }`
   holding the **real** production state machine + the existing in-memory log.
 - `network` — in-flight envelopes. **Open decision (see Risks):** unordered
@@ -126,6 +129,7 @@ the transition function. The actor module would force the code through an
   state, recomputed and fingerprinted per state.
 
 `Action`, `#[derive(Clone, Debug, PartialEq, Eq, Hash)]`:
+
 - `Deliver(src, dst, Msg)` — pop the envelope, translate to `Event`, feed the
   **real** `sm.on_event(...)` on `dst`.
 - `DropMsg(src, dst, Msg)` — message loss (remove without delivering).
@@ -134,7 +138,7 @@ the transition function. The actor module would force the code through an
 - `Timeout(NodeId, TimerKind)` — election / fetch timeout fires. **Modeled as a
   nondeterministic fire-able action, NOT a numeric clock advance** (a `u64`
   clock in the state would explode the space — every distinct `now` becomes a
-  new state). `on_event` is still called with a `SimInstant`, but the *value*
+  new state). `on_event` is still called with a `SimInstant`, but the _value_
   is derived deterministically from the action (e.g. a fixed monotone bump that
   does not enter the fingerprint), so two timeout firings produce identical
   states.
@@ -155,6 +159,7 @@ Every offered action must be applicable (use `None` from `next_state` only for
 genuinely illegal transitions).
 
 `next_state(state, action)` — clone state, mutate the clone, return `Some`:
+
 1. For `Deliver`: remove envelope; if `dst` crashed, return; else translate
    `Msg`→`Event`, call `next.nodes[dst].sm.on_event(event, &log, now)` (**real
    production code**), route each emitted `Action` into network envelopes / log
@@ -172,6 +177,7 @@ a single-value register, so we implement our own `SequentialSpec` rather than
 reuse the built-in `register`.)
 
 ### Properties
+
 - `Property::always("election_safety", …)` — at most one leader per epoch.
 - `Property::always("log_matching", …)` — any two logs agreeing at `(offset)`
   agree on the entry's `epoch`, and on the whole prefix up to it.
@@ -189,6 +195,7 @@ deadlocks or is over-pruned makes all `always` invariants vacuously true and the
 test passes green while checking nothing.
 
 ### State-space bounding (keep CI fast)
+
 - `within_boundary(&self, &State) -> bool` — the primary finiteness knob. Cap:
   in-flight message count, total client appends, max epoch, max log length,
   concurrent crashes ≤ `f`. (Unbounded epoch/offset counters otherwise make the
@@ -204,6 +211,7 @@ test passes green while checking nothing.
   `spawn_simulation()` as a randomized fallback for spaces too large to exhaust.
 
 ### Source change required
+
 Add `Eq, Hash` derives to `QuorumState` (`types.rs:54`), `Role` (`role.rs`),
 and any nested types they own that are not already `Eq`/`Hash`. Confirm no field
 blocks `Hash`/`Eq` (no `f64`, no `HashMap`). `Action::TransitionedTo(&'static str)`
@@ -213,6 +221,7 @@ source; it does not alter behavior.
 ## Workstream B — Deterministic-sync test infrastructure
 
 ### Broker hooks (`crates/broker/src/broker.rs`)
+
 - `#[doc(hidden)] pub fn watch_image_for_test(&self) -> watch::Receiver<Arc<MetadataImage>>`
   and `watch_leader_for_test(&self) -> watch::Receiver<Option<NodeId>>` — delegate
   to the existing `MetadataObserver` channels. (`_for_test` naming matches the
@@ -231,6 +240,7 @@ source; it does not alter behavior.
   image watch does not reflect local LEO/HWM.)
 
 ### Test support (`crates/broker/tests/support/mod.rs`)
+
 - Rewrite the internal sleep-poll loops in `start_n_node` / `start_n_node_with`
   / `wait_for_all_brokers_registered` to use the new awaiters. Preserve the
   existing `start_n_node_with_retry` outer-retry behavior (it guards against
@@ -245,7 +255,7 @@ source; it does not alter behavior.
 
 Convert these files from `loop { if cond { break }; sleep() }` to the new
 `wait_for_*` awaiters. **All correctness assertions are preserved**; only the
-*waiting* changes:
+_waiting_ changes:
 
 - `crates/broker/tests/quorum.rs`
 - `crates/broker/tests/leader_election.rs`
@@ -256,7 +266,7 @@ Convert these files from `loop { if cond { break }; sleep() }` to the new
 - `crates/raft/tests/snapshot.rs`
 
 (`crates/raft/tests/kraft_engine_sim.rs` is already deterministic — left as-is.)
-These subsystems' correctness properties are now *also* covered exhaustively by
+These subsystems' correctness properties are now _also_ covered exhaustively by
 the Workstream-A model; the integration tests verify the real wiring matches.
 
 ## Verification plan

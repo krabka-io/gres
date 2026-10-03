@@ -28,7 +28,7 @@ Two new guarantees:
    gets per-partition `NOT_ENOUGH_REPLICAS_AFTER_APPEND` (code 20) for
    any partition whose HW didn't catch up in time. With slice 10a's
    static ISR (= `replicas` from the metadata image, no shrink yet),
-   this means *all* replicas. The `min.insync.replicas` knob ships
+   this means _all_ replicas. The `min.insync.replicas` knob ships
    with slice 10b alongside ISR shrink.
 
 2. **Consumer fetches clamp at the High Watermark.** A consumer Fetch

@@ -50,11 +50,11 @@ and acceptance of one plus rejection of `"0"`, `"not-a-number"`, `"-1"`, and
 u64 overflow.
 
 - [ ] Convert the existing private cap tests into failing public configurable
-API tests for whole-block, metadata, and selected-row-group reads. Each must
-reject a real object above a one-byte cap and accept it at its exact size.
+      API tests for whole-block, metadata, and selected-row-group reads. Each must
+      reject a real object above a one-byte cap and accept it at its exact size.
 
 - [ ] Add failing `BlockStore` tests proving its configured cap reaches metadata
-and selected-row-group reads and survives `empty_like`.
+      and selected-row-group reads and survives `empty_like`.
 
 - [ ] Verify RED:
 
@@ -87,13 +87,13 @@ Keep existing functions as wrappers using `BlockReadMaxBytes::default()`.
 Retain one shared reject-before-streaming size check.
 
 - [ ] Add `block_read_max_bytes: BlockReadMaxBytes` to `BlockStore`.
-`BlockStore::new` remains the default wrapper; add
-`BlockStore::new_with_block_read_max_bytes`. Add a metadata-read method and use
-the stored cap in it and `scan_block_row_groups`. Preserve the value in
-`empty_like`.
+      `BlockStore::new` remains the default wrapper; add
+      `BlockStore::new_with_block_read_max_bytes`. Add a metadata-read method and use
+      the stored cap in it and `scan_block_row_groups`. Preserve the value in
+      `empty_like`.
 
 - [ ] Re-export the type, default, alias, and configurable functions from
-`lib.rs`.
+      `lib.rs`.
 
 - [ ] Verify GREEN and package quality:
 
@@ -120,7 +120,7 @@ git commit -m "feat(blockstore): expose parquet read cap"
 ### Task 2: Thread the cap through traces
 
 - [ ] Add failing CLI tests for the default, invalid values, environment value,
-and command-line precedence:
+      and command-line precedence:
 
 ```text
 KRABKA_TRACES_BLOCK_READ_MAX_BYTES=1024
@@ -150,15 +150,15 @@ KRABKA_TRACES_BLOCK_READ_MAX_BYTES
 ```
 
 - [ ] Keep existing compactor helpers as default wrappers and add configurable
-variants only where required. Pass the configured value from `run_compactor`
-through index-window and whole-block compaction.
+      variants only where required. Pass the configured value from `run_compactor`
+      through index-window and whole-block compaction.
 
 - [ ] Construct capped `BlockStore` values in the production querier and
-query-frontend paths. Change `TraceIndexCatalog` to call the `BlockStore`
-metadata method so both query paths use the stored value.
+      query-frontend paths. Change `TraceIndexCatalog` to call the `BlockStore`
+      metadata method so both query paths use the stored value.
 
 - [ ] Leave the in-memory live-store path on the default because it does not
-read persisted Parquet blocks.
+      read persisted Parquet blocks.
 
 - [ ] Verify GREEN, production callers, help, and package quality:
 
@@ -207,7 +207,7 @@ CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
 ```
 
 - [ ] Add only the traces-querier environment entry. Do not add unused entries
-to roles absent from the demo.
+      to roles absent from the demo.
 
 - [ ] Verify GREEN and rendered Compose:
 
@@ -248,8 +248,8 @@ configured default, compatibility API, propagation, deployment, or test rather
 than an unresolved owner.
 
 - [ ] Append a Parquet-read-cap section to `docs/configuration-audit.md` with
-the default, validation, precedence, complete runtime/deployment flow, exact
-counts, and verification evidence.
+      the default, validation, precedence, complete runtime/deployment flow, exact
+      counts, and verification evidence.
 
 - [ ] Run final gates:
 

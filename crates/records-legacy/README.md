@@ -44,6 +44,7 @@ assert_eq!(decoded[0].offset, 42);
 ## Features
 
 This crate supports these compression features through `krabka-compression`:
+
 - `gzip`
 - `snappy`
 - `lz4`

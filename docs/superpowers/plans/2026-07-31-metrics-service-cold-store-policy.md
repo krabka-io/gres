@@ -26,9 +26,11 @@
 ### Task 1: Make cold-store policies injectable
 
 **Files:**
+
 - Modify: `crates/metrics-service/src/lib.rs`
 
 **Interfaces:**
+
 - Produces: `DEFAULT_COLD_CACHE_TTL: Time = 30s` and `DEFAULT_UNBOUNDED_COMPATIBILITY_LOOKBACK: Time = 1h`.
 - Produces: `RefreshingMetricBlockStore::with_cold_cache_ttl(self, Time) -> Self`.
 - Produces: `RefreshingMetricBlockStore::with_unbounded_compatibility_lookback(self, Time) -> Self`.
@@ -183,9 +185,11 @@ git commit -m "feat(metrics): inject cold-store policy"
 ### Task 2: Add CLI and environment wiring for every role
 
 **Files:**
+
 - Modify: `crates/metrics-service/src/main.rs`
 
 **Interfaces:**
+
 - Consumes: both named defaults and both `RefreshingMetricBlockStore` builders.
 - Produces: `--cold-cache-ttl` / `KRABKA_METRICS_COLD_CACHE_TTL`.
 - Produces: `--unbounded-compatibility-lookback` / `KRABKA_METRICS_UNBOUNDED_COMPATIBILITY_LOOKBACK`.
@@ -350,10 +354,12 @@ git commit -m "feat(metrics): configure cold-store policy"
 ### Task 3: Close the audit slice and verify
 
 **Files:**
+
 - Modify: `docs/configuration-audit.md`
 - Modify: `docs/superpowers/plans/2026-07-31-metrics-service-cold-store-policy.md`
 
 **Interfaces:**
+
 - Consumes: the completed library and binary configuration surface.
 - Produces: audit evidence that both cold-store policies are no longer pending.
 

@@ -7,11 +7,11 @@
 use std::{sync::Arc, time::Duration};
 
 use assert2::{assert, check};
+use http::{Method, Response};
 use krabka_operator::{
     controller::topic::reconcile,
     crd::{KafkaTopic, KafkaTopicSpec},
 };
-use http::{Method, Response};
 use kube::runtime::controller::Action;
 
 #[path = "shared/mod.rs"]

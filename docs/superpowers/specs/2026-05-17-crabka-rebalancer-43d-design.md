@@ -55,6 +55,7 @@ STATUS.md                                            # MODIFIED — slice 43d en
 ```
 
 The `capacity` module is a new top-level module (parallel to `goals` / `model` / `optimizer`) because:
+
 - Parsing + types are distinct from goal logic.
 - Slice 43e will reuse the same types for usage tables.
 - The YAML loader has co-located unit tests and a natural home.
@@ -72,8 +73,8 @@ version: 1
 brokers:
   1:
     max_replicas: 4096
-    disk_bytes: 1099511627776          # 1 TiB
-    network_in_bytes_per_sec: 125000000   # 1 Gbps
+    disk_bytes: 1099511627776 # 1 TiB
+    network_in_bytes_per_sec: 125000000 # 1 Gbps
     network_out_bytes_per_sec: 125000000
     cpu_cores: 8.0
   2:

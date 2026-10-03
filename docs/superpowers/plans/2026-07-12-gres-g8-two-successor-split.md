@@ -22,10 +22,12 @@
 ### Task 1: Stable r2/r3 process-harness proxies
 
 **Files:**
+
 - Modify: `crates/gres-ranges/tests/harness/process.rs`
 - Test: `crates/gres/tests/topology_process_nemesis.rs`
 
 **Interfaces:**
+
 - Produces: `ProcessHarness::split_successor_endpoints() -> [String; 2]` and restart support for `r0,r2,r3` that retargets both proxies to the current child range listener.
 - Consumes: existing `RangeProxy`, `spawn_node`, `restart_with_hosted_ranges`, TLS, and shutdown ownership.
 
@@ -56,9 +58,11 @@ Commit message: `test(gres): add stable split successor proxies`
 ### Task 2: Real Split CLI and production no-kill driver
 
 **Files:**
+
 - Modify: `crates/gres/tests/topology_process_nemesis.rs`
 
 **Interfaces:**
+
 - Consumes: `split_successor_endpoints`, `reconcile_activated_cutover`, `reconcile_one_rpc_phase`, `reconcile_one_retiring_range_wal`, and the counting retirement admin.
 - Produces: `initiate_split_with_cli`, a Split foundation driver that completes the actual sealed operation, and final target record `r0/r2/r3`.
 
@@ -89,9 +93,11 @@ Commit message: `test(gres): drive real two-successor split`
 ### Task 3: Exact ACK ledger, ownership scans, markers, and topics
 
 **Files:**
+
 - Modify: `crates/gres/tests/topology_process_nemesis.rs`
 
 **Interfaces:**
+
 - Consumes: `FramedTcpClient::call`, `RangeRequest::ScanRange`, `ScanRangeReq`, the Split target descriptors, ACK-ledger parsing, admin metadata, and canonical marker digest utilities.
 - Produces: per-successor ownership evidence and an exact full-ledger proof.
 
@@ -122,11 +128,13 @@ Commit message: `test(gres): prove split successor ownership`
 ### Task 4: Dedicated CI evidence and final review
 
 **Files:**
+
 - Create: `scripts/tests/gres-topology-process-split-foundation-ci.sh`
 - Create: `docs/superpowers/evidence/2026-07-12-gres-g8-two-successor-split.md`
 - Modify: `crates/gres/tests/topology_process_nemesis.rs`
 
 **Interfaces:**
+
 - Consumes: foundation JSON evidence.
 - Produces: a fail-closed one-process CI shard and published evidence.
 

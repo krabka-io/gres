@@ -33,6 +33,7 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use assert2::{assert, check};
 use base64::Engine as _;
+use http::{Method, Response};
 use krabka_operator::{
     controller::{
         kafka::reconcile as reconcile_kafka, kafka_node_pool::reconcile as reconcile_pool,
@@ -42,7 +43,6 @@ use krabka_operator::{
         Listener, ListenerAuthentication, ListenerAuthenticationGssapi, ListenerType, NodeRole,
     },
 };
-use http::{Method, Response};
 
 #[path = "shared/mod.rs"]
 mod shared;

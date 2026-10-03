@@ -52,7 +52,7 @@ Pod snapshots and query output are in `pods-before-kill.txt`,
 - A certificate signed by the tenant CA but carrying `CN=outside-tenant-range`
   completed cryptographic negotiation and was then rejected by application
   authorization as `range transport peer is not authorized for tenant
-  tenant-g7c`.
+tenant-g7c`.
 - The operator-issued certificate negotiated TLS 1.3 and verified successfully.
 - Unit tests prove plaintext and authenticated non-allowlisted connections never
   invoke the range service (`service.calls == 0`).

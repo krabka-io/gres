@@ -15,25 +15,25 @@ to the replicator's workload-definition YAML.
 
 The policy owns these independent values:
 
-| Setting | Default |
-|---|---:|
-| topic creation timeout | `10s` |
-| source poll timeout | `500ms` |
-| internal drain poll timeout | `500ms` |
-| consecutive empty drain polls | `3` |
-| worker build retry budget | `30s` |
-| worker build initial backoff | `250ms` |
-| worker build maximum backoff | `8s` |
-| connect commit interval | `500ms` |
-| connect maximum batch records | `500` |
-| supervisor interval | `3s` |
-| heartbeat interval | `1s` |
-| checkpoint interval | `5s` |
-| Kafka client DNS timeout | existing client default |
-| Kafka client connect timeout | `5s` |
-| Kafka client request timeout | `30s` |
-| replicated data-topic replication factor | `1` |
-| internal-topic replication factor | `1` |
+| Setting                                  |                 Default |
+| ---------------------------------------- | ----------------------: |
+| topic creation timeout                   |                   `10s` |
+| source poll timeout                      |                 `500ms` |
+| internal drain poll timeout              |                 `500ms` |
+| consecutive empty drain polls            |                     `3` |
+| worker build retry budget                |                   `30s` |
+| worker build initial backoff             |                 `250ms` |
+| worker build maximum backoff             |                    `8s` |
+| connect commit interval                  |                 `500ms` |
+| connect maximum batch records            |                   `500` |
+| supervisor interval                      |                    `3s` |
+| heartbeat interval                       |                    `1s` |
+| checkpoint interval                      |                    `5s` |
+| Kafka client DNS timeout                 | existing client default |
+| Kafka client connect timeout             |                    `5s` |
+| Kafka client request timeout             |                   `30s` |
+| replicated data-topic replication factor |                     `1` |
+| internal-topic replication factor        |                     `1` |
 
 Times are positive UOM `Time` values. Counts and batch records are positive
 `NonZeroUsize` values. Kafka replication factors use a `refined_type`-validated

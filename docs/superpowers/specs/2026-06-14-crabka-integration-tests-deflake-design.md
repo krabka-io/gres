@@ -8,7 +8,7 @@
 
 Make the `crates/integration-tests/tests/` e2e suite deterministic: replace the 27
 reducible `sleep(...)` calls with condition-awaits and bounded timeouts, so the tests
-cannot flake under load and fail *fast with a legible message* instead of hanging or
+cannot flake under load and fail _fast with a legible message_ instead of hanging or
 racing. The 2 deliberately time-based share-lock tests stay as sleeps (documented).
 
 ## Background
@@ -21,17 +21,17 @@ control, so almost all sleeps are reducible.
 
 A reconnaissance pass classified all 29 sleeps:
 
-| File | sleeps | broker | poll | keep |
-|---|---|---|---|---|
-| `consumer_cooperative_rebalance.rs` | 11 | 2 | 9 | 0 |
-| `consumer_integration.rs` | 5 | 0 | 5 | 0 |
-| `consumer_share_consumer.rs` | 9 | 4 | 3 | 2 |
-| `admin_round_trip.rs` | 2 | 0 | 2 | 0 |
-| `admin_log_dirs_round_trip.rs` | 2 | 1 | 1 | 0 |
-| **total** | **29** | **7** | **20** | **2** |
+| File                                | sleeps | broker | poll   | keep  |
+| ----------------------------------- | ------ | ------ | ------ | ----- |
+| `consumer_cooperative_rebalance.rs` | 11     | 2      | 9      | 0     |
+| `consumer_integration.rs`           | 5      | 0      | 5      | 0     |
+| `consumer_share_consumer.rs`        | 9      | 4      | 3      | 2     |
+| `admin_round_trip.rs`               | 2      | 0      | 2      | 0     |
+| `admin_log_dirs_round_trip.rs`      | 2      | 1      | 1      | 0     |
+| **total**                           | **29** | **7**  | **20** | **2** |
 
 The existing program already established the de-flake patterns and the discipline (a
-bounded inner-retry sleep *inside* a `timeout`-bounded poll loop is acceptable; a fixed
+bounded inner-retry sleep _inside_ a `timeout`-bounded poll loop is acceptable; a fixed
 sleep followed by an assert is not). `BrokerHandle` already exposes the awaiters these
 tests need (`wait_until_partition_present`, `wait_for_share_state_summary`, …, behind the
 existing test-helper `cfg`).
@@ -40,7 +40,7 @@ existing test-helper `cfg`).
 
 ### Pattern A — fixed-sleep-then-act → await the real condition
 
-The genuinely-flaky shape: a fixed sleep *guesses* that an async transition (a
+The genuinely-flaky shape: a fixed sleep _guesses_ that an async transition (a
 cooperative rebalance) has settled, then proceeds.
 
 ```rust
@@ -107,9 +107,9 @@ surface).
 ## Keep list (documented, not changed)
 
 - `consumer_share_consumer.rs:791` — sleeps until ~400 ms after a record is acquired, then
-  renews the share lock *before* its 1 s expiry (renew-before-expiry scenario).
+  renews the share lock _before_ its 1 s expiry (renew-before-expiry scenario).
 - `consumer_share_consumer.rs:803` — sleeps until ~1150 ms after acquire (past the original
-  1 s lock, before the renewed ~1400 ms deadline) to verify redelivery is *not* triggered.
+  1 s lock, before the renewed ~1400 ms deadline) to verify redelivery is _not_ triggered.
 
 These exercise time-based share-lock semantics; replacing the sleep with state-polling
 would destroy what they test. Each gets a one-line comment marking the sleep intentional.
@@ -146,8 +146,8 @@ No behavior change — only consolidation + bounding.
 - The 2 keep-list timing tests (above).
 - Non-integration-tests crates (the broker/raft/share de-flakes are already done; the
   remaining `jvm_*` / testcontainers tests are inherently sleep-based and excluded).
-- Any change to test *assertions* or coverage — this slice only changes *how the test
-  waits*, never *what it verifies*.
+- Any change to test _assertions_ or coverage — this slice only changes _how the test
+  waits_, never _what it verifies_.
 
 ## Verification
 

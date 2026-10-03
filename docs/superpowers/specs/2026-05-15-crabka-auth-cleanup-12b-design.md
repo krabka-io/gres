@@ -42,11 +42,11 @@ The scope is exclusively wiring + config + tests.
 
 ### Crates touched
 
-| Crate | Change |
-|-------|--------|
+| Crate           | Change                                                                                                                                  |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | `krabka-broker` | `controller_listener_protocol` on `BrokerConfig`; new `raft_handshake.rs` module; bootstrap-records loader; `Broker::start` wires both. |
-| `krabka-raft` | `RaftListenerHandshake` trait + `ControllerConfig::handshake` slot. No behavior change when slot is `None`. |
-| `krabka-cli` | No code change — its slice-12 output is now consumed for the first time. |
+| `krabka-raft`   | `RaftListenerHandshake` trait + `ControllerConfig::handshake` slot. No behavior change when slot is `None`.                             |
+| `krabka-cli`    | No code change — its slice-12 output is now consumed for the first time.                                                                |
 
 ### Controller listener protocol
 
@@ -198,7 +198,7 @@ fn load_bootstrap_records(
 
 Matches the framing `krabka-cli`'s format subcommand wrote in slice 12.
 
-The records are appended to the initial `submit_change` batch *after*
+The records are appended to the initial `submit_change` batch _after_
 the `V1ClusterId` record. openraft applies them in order; the metadata
 image has the SCRAM credentials before the broker accepts its first
 client connection.

@@ -20,6 +20,7 @@
 use std::{collections::BTreeMap, path::PathBuf};
 
 use bytes::Bytes;
+use futures_util::future::BoxFuture;
 use krabka_protocol::{
     Decode,
     owned::{
@@ -30,7 +31,6 @@ use krabka_protocol::{
         },
     },
 };
-use futures_util::future::BoxFuture;
 
 use crate::{
     broker::Broker,

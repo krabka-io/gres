@@ -8,8 +8,8 @@
 
 PG-4 deliberately bounded redo to the pgbench-class rmgr set and left three gaps that PG-5's gate cannot pass without:
 
-1. **SLRUs.** MVCC visibility reads transaction status from **clog** (`pg_xact`, 2 bits/xid) and row-lock state from **multixact** — paged files that are *not relations* (no block refs; they never pass through smgr on the pageserver side, and a booting compute reads them from its data directory before smgr is ever consulted). PG-3 retained the raw records in the meta lane, uninterpreted; PG-4b interprets them.
-2. **Relation lifecycle.** `SMGR` create/truncate records, commit-time relation drops (carried *inside* XACT commit records), and `DBASE` create/drop — without them, `GetRelSize` stays a hint (`exact=false`), truncated tails remain readable (wrong), and dropped relations never become `NotFound` or GC-eligible.
+1. **SLRUs.** MVCC visibility reads transaction status from **clog** (`pg_xact`, 2 bits/xid) and row-lock state from **multixact** — paged files that are _not relations_ (no block refs; they never pass through smgr on the pageserver side, and a booting compute reads them from its data directory before smgr is ever consulted). PG-3 retained the raw records in the meta lane, uninterpreted; PG-4b interprets them.
+2. **Relation lifecycle.** `SMGR` create/truncate records, commit-time relation drops (carried _inside_ XACT commit records), and `DBASE` create/drop — without them, `GetRelSize` stays a hint (`exact=false`), truncated tails remain readable (wrong), and dropped relations never become `NotFound` or GC-eligible.
 3. **The index long tail.** GIN, GiST, SP-GiST, BRIN, and hash redo arms — any workload using those index types currently hits `UnsupportedRmgr` (correct, loud, and a hard stop for real applications).
 
 ## Design Goals
@@ -24,7 +24,7 @@ PG-4 deliberately bounded redo to the pgbench-class rmgr set and left three gaps
 - **`pg_commit_ts`** (`track_commit_timestamp = off` v1), **`pg_subtrans`/`pg_serial`/`pg_notify`** (reset at startup, never materialized — documented).
 - **`CREATE DATABASE … STRATEGY FILE_COPY`** — refused loudly (`UnsupportedRecord`); the PG-15+ default `WAL_LOG` strategy works through ordinary block refs already.
 - **GENERIC/LOGICALMSG/REPLORIGIN rmgrs** (extension WAL, logical decoding concerns) — retained-uninterpreted, refused at redo if a page read requires them.
-- **Space reclamation from drops/truncates** (GC *eligibility* is marked; the reclamation pass rides PG-4's GC unchanged).
+- **Space reclamation from drops/truncates** (GC _eligibility_ is marked; the reclamation pass rides PG-4's GC unchanged).
 - Branching (PG-6), compute (PG-5b), live-ingest HA.
 
 ## Architecture Overview
@@ -57,7 +57,7 @@ SERVE:
 
 ### SLRU deltas are raw records; interpretation splits ingest-light / redo-full
 
-The ingest-time interpreter answers only *"which pages does this record touch?"* (an XACT commit's `xid` + subxids map to clog pages arithmetically; subxid arrays may span pages — one delta entry per touched page, sharing the record `Arc`, exactly PG-2's multi-block fan-out shape). The *full* interpretation ("set these 2-bit statuses") happens at redo time in a per-`(rmid, info)` arm, like every other rmgr. This keeps ingest thin and stateless, and reuses layers/compaction/GC/materialization for SLRUs with zero new storage machinery. *Alternative rejected — eager SLRU materialization at ingest:* a second stateful write path with its own crash-consistency story; the layer store already solves all of that.
+The ingest-time interpreter answers only _"which pages does this record touch?"_ (an XACT commit's `xid` + subxids map to clog pages arithmetically; subxid arrays may span pages — one delta entry per touched page, sharing the record `Arc`, exactly PG-2's multi-block fan-out shape). The _full_ interpretation ("set these 2-bit statuses") happens at redo time in a per-`(rmid, info)` arm, like every other rmgr. This keeps ingest thin and stateless, and reuses layers/compaction/GC/materialization for SLRUs with zero new storage machinery. _Alternative rejected — eager SLRU materialization at ingest:_ a second stateful write path with its own crash-consistency story; the layer store already solves all of that.
 
 ### The key space becomes a tagged enum (an explicit PG-3 amendment)
 
@@ -65,7 +65,7 @@ PG-3 specced `PageKey(RelTag, blkno)`; PG-4b amends it to the three-variant `Key
 
 ### Exact rel-size with an honest seam
 
-`GetRelSize` reads the `RelMeta` projection: seeded relations get **exact** sizes at import (file sizes are known); subsequent extends (max-blkno from ordinary page deltas), `SMGR` truncates/creates, and commit-carried drops update it. `exact=true` from this slice on; a read beyond `nblocks` errors (`BlockBeyondEof`), a read of a dropped relation is `NotFound`. This also finally makes trims *meaningful*: truncated/dropped ranges become GC-eligible under PG-4's existing horizon rule.
+`GetRelSize` reads the `RelMeta` projection: seeded relations get **exact** sizes at import (file sizes are known); subsequent extends (max-blkno from ordinary page deltas), `SMGR` truncates/creates, and commit-carried drops update it. `exact=true` from this slice on; a read beyond `nblocks` errors (`BlockBeyondEof`), a read of a dropped relation is `NotFound`. This also finally makes trims _meaningful_: truncated/dropped ranges become GC-eligible under PG-4's existing horizon rule.
 
 ### The long tail is five fixture-gated arm families
 
@@ -87,7 +87,7 @@ Not a wire surface. The byte-exactness bar extends to SLRUs: **`pg_xact`/`pg_mul
 
 - **Clog arithmetic units:** xid→(page, offset) mapping; subxid arrays spanning page boundaries fan out to every touched page; status-bit folding (commit/abort/sub-commit) produces the documented 2-bit encodings.
 - **Multixact units:** offsets/members page writes; zero-page arms.
-- **Lifecycle units:** truncate → `nblocks` drops at the record's LSN (reads beyond → `BlockBeyondEof`; reads *below* the truncate LSN still serve the old tail — versioned reads); drop → `NotFound` at ≥ LSN; `DBASE` FILE_COPY → loud refusal.
+- **Lifecycle units:** truncate → `nblocks` drops at the record's LSN (reads beyond → `BlockBeyondEof`; reads _below_ the truncate LSN still serve the old tail — versioned reads); drop → `NotFound` at ≥ LSN; `DBASE` FILE_COPY → loud refusal.
 - **`GetRelSize` exactness:** seeded size exact at LSN₀; grows with extends; truncate/drop respected; `exact=true` asserted end-to-end through the RPC.
 - **Per-family index differentials:** each index family's fixture workload byte-compares its index pages vs the standby — the family's shipping gate.
 - **The extended standby gate:** relation pages (PG-4's) **plus** `pg_xact`/`pg_multixact` segment bytes at the capture LSN; basebackup SLRU content assertions (PG-5a's `#[ignore]`s) enabled.

@@ -126,9 +126,10 @@ exporter. `testcontainers` + `testcontainers-modules` for the
 integration suite.
 
 `tokio` feature flags are minimal: `net` for TcpStream/TcpListener, `rt`
-+ `rt-multi-thread` for the runtime, `io-util` for `AsyncReadExt`/
-`AsyncWriteExt`, `macros` for `#[tokio::main]` + `tokio::select!`,
-`sync` for channels, `time` for timeouts.
+
+- `rt-multi-thread` for the runtime, `io-util` for `AsyncReadExt`/
+  `AsyncWriteExt`, `macros` for `#[tokio::main]` + `tokio::select!`,
+  `sync` for channels, `time` for timeouts.
 
 Add to root `[workspace.dependencies]`:
 
@@ -359,6 +360,7 @@ impl ApiVersionTable {
 ### Disconnect handling
 
 When the reader sees EOF or an I/O error:
+
 1. Signal shutdown to the writer (cancellation token).
 2. Drain any pending correlation-ID waiters with
    `ClientError::Disconnected`.
@@ -506,14 +508,14 @@ the codegen change is purely additive.
 
 ```yaml
 # .github/workflows/ci.yml addition
-  client-core-integration:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "1.95.0"
-      - run: cargo test -p krabka-client-core --tests -- --ignored
+client-core-integration:
+  runs-on: ubuntu-latest
+  steps:
+    - uses: actions/checkout@v6
+    - uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: "1.95.0"
+    - run: cargo test -p krabka-client-core --tests -- --ignored
 ```
 
 macOS / Windows runners skip the integration job; testcontainers on
@@ -544,7 +546,7 @@ The slice ships when **all** of these hold:
    DeleteTopic.
 9. New `client-core-integration` job runs Linux-only in CI.
 10. `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D
-    warnings`, `cargo test --workspace -- --include-ignored` all green.
+warnings`, `cargo test --workspace -- --include-ignored` all green.
 11. No regressions in existing differential tests, protocol unit
     tests, or compression tests.
 12. Rustdoc on every public type; crate-level doc explains the

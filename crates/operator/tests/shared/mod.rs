@@ -22,15 +22,15 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use http::{Method, Request, Response};
+use http_body_util::BodyExt as _;
+use hyper::body::Bytes;
 use krabka_operator::{
     config::OperatorConfig,
     context::Context,
     crd::{KafkaNodePool, KafkaNodePoolSpec, NodeRole},
     telemetry::new_registry_with_metrics,
 };
-use http::{Method, Request, Response};
-use http_body_util::BodyExt as _;
-use hyper::body::Bytes;
 use kube::Client;
 use tokio::sync::Mutex as AsyncMutex;
 use tower::{ServiceBuilder, service_fn};

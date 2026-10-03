@@ -43,6 +43,7 @@
 ## Task 1: Re-compose the stateright gate (three deltas)
 
 **Files:**
+
 - Modify: the Slice-5 diskless crash model
 
 - [ ] **Step 1: Add the deltas + assertions**
@@ -66,6 +67,7 @@ git commit -m "test(broker): re-composed diskless no-acked-loss gate (quorum + c
 ## Task 2: Extend the KRaft linearizability model
 
 **Files:**
+
 - Modify: `crates/raft/tests/model/mod.rs`
 
 - [ ] **Step 1: Failing test → implement**
@@ -86,6 +88,7 @@ git commit -m "test(raft): linearizability model for concurrent stateless WAL ap
 ## Task 3: The Jepsen black-box harness
 
 **Files:**
+
 - Create: `crates/integration-tests/tests/diskless_jepsen.rs`
 
 - [ ] **Step 1: Substrate + generator (failing test)**
@@ -94,7 +97,7 @@ Stand up a 3× `Broker::start(BrokerConfig::for_tests)` + quorum-WAL diskless cl
 
 - [ ] **Step 2: Nemesis (implement)**
 
-Fault injectors matching the model actions, on a **seeded** schedule (no `Math.random`): kill-accepting-broker, kill-a-WAL-quorum-node-*within-quorum* (leave f+1 alive), force-a-PUT-failure (inject into the object store), trigger-a-KRaft-leader-change. In-process "kill" = drop the `BrokerHandle` (pattern from `durability.rs`/`leader_election.rs`).
+Fault injectors matching the model actions, on a **seeded** schedule (no `Math.random`): kill-accepting-broker, kill-a-WAL-quorum-node-_within-quorum_ (leave f+1 alive), force-a-PUT-failure (inject into the object store), trigger-a-KRaft-leader-change. In-process "kill" = drop the `BrokerHandle` (pattern from `durability.rs`/`leader_election.rs`).
 
 - [ ] **Step 3: Checker (implement)**
 
@@ -126,6 +129,7 @@ git commit -m "test(integration): diskless Jepsen harness (no-acked-loss under r
 ## Task 4: The handoff-monotonicity Creusot lemma
 
 **Files:**
+
 - Modify: `crates/verified/src/consensus.rs`
 
 - [ ] **Step 1: Add + prove**
@@ -146,6 +150,7 @@ git commit -m "feat(verified): handoff-monotonicity lemma for the WAL-durability
 ## Task 5: Shipping-gate CI wiring + final gate
 
 **Files:**
+
 - Modify: CI config (the three legs as required checks).
 
 - [x] **Step 1:** Wire the three legs as **required** CI checks: the re-composed stateright model, the Creusot replay (incl. the 6c kernel + the handoff lemma), and the diskless Jepsen harness. The named live gate raises `nofile` to 65,536 before nextest. Document "diskless does not ship until these are green."

@@ -28,6 +28,7 @@
 use std::sync::Arc;
 
 use bytes::Bytes;
+use futures_util::StreamExt;
 use krabka_ids::LeaderEpoch;
 use krabka_remote_storage::{
     InmemoryRemoteLogMetadataManager, RemoteLogMetadataManager, RemoteLogSegmentMetadata,
@@ -35,7 +36,6 @@ use krabka_remote_storage::{
     RemoteStorageError, TopicIdPartition,
 };
 use krabka_units::prelude::{StdDurationExt as _, TimeExt as _};
-use futures_util::StreamExt;
 use tokio::{runtime::Handle, sync::watch, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tracing::{instrument, warn};

@@ -36,15 +36,15 @@
 
 ### Out (deferred)
 
-| Concern | Slice / why |
-|---|---|
-| `ipBlock` CIDR peers | future — add when external CIDR allow-lists become a need |
-| Egress `NetworkPolicy` | future — broker egress is currently unrestricted; rare ask |
-| Per-pool `networkPolicy` override | future — cluster-level is enough today |
-| Operator-controlled `GlobalNetworkPolicy` / `CiliumNetworkPolicy` | out — standard `networking.k8s.io/v1` only |
-| `spec.networkPolicy.metricsPeers` to scope :9404 ingress | future — allow-all is sufficient for the slice |
+| Concern                                                                 | Slice / why                                                                      |
+| ----------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `ipBlock` CIDR peers                                                    | future — add when external CIDR allow-lists become a need                        |
+| Egress `NetworkPolicy`                                                  | future — broker egress is currently unrestricted; rare ask                       |
+| Per-pool `networkPolicy` override                                       | future — cluster-level is enough today                                           |
+| Operator-controlled `GlobalNetworkPolicy` / `CiliumNetworkPolicy`       | out — standard `networking.k8s.io/v1` only                                       |
+| `spec.networkPolicy.metricsPeers` to scope :9404 ingress                | future — allow-all is sufficient for the slice                                   |
 | Strimzi-compatibility for `Kafka.spec.kafka.networkPolicy*` field paths | out — Crabka uses flat `spec.networkPolicy`; Phase 12 migration tool can rewrite |
-| Replication-quotas / SCRAM-listener ports | future — covered by their own slice when those listeners exist |
+| Replication-quotas / SCRAM-listener ports                               | future — covered by their own slice when those listeners exist                   |
 
 ### Constraints inherited
 
@@ -124,11 +124,11 @@ pub use network_policy::{NetworkPolicyPeer, NetworkPolicySpec};
 
 ### Status reasons (`NetworkPolicyReady`)
 
-| Condition | Reason | Resource rendered? |
-|---|---|---|
-| `network_policy` unset | `Disabled` | none — orphan cleanup runs if annotation present |
-| Apply succeeds | `Available` | yes |
-| Apply fails | `Error` | none for this reconcile; reconcile returns error and requeues |
+| Condition              | Reason      | Resource rendered?                                            |
+| ---------------------- | ----------- | ------------------------------------------------------------- |
+| `network_policy` unset | `Disabled`  | none — orphan cleanup runs if annotation present              |
+| Apply succeeds         | `Available` | yes                                                           |
+| Apply fails            | `Error`     | none for this reconcile; reconcile returns error and requeues |
 
 `Disabled` is surfaced as `NetworkPolicyReady=False reason=Disabled` rather than condition absence, so `kubectl wait --for=condition=NetworkPolicyReady` distinguishes "not configured" from "configuring."
 
@@ -366,9 +366,9 @@ Append `np_condition` to the existing `conditions` vector before `patch_status`.
 `charts/krabka-operator/templates/clusterrole.yaml` gains:
 
 ```yaml
-  - apiGroups: ["networking.k8s.io"]
-    resources: ["networkpolicies"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["networkpolicies"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 ```
 
 No `values.yaml` change.
@@ -433,13 +433,13 @@ New e2e job (or extension of the existing one):
    ```yaml
    spec:
      listeners:
-     - name: PLAIN
-       port: 9092
-       type: internal
-       networkPolicyPeers:
-       - namespaceSelector:
-           matchLabels:
-             role: clients
+       - name: PLAIN
+         port: 9092
+         type: internal
+         networkPolicyPeers:
+           - namespaceSelector:
+               matchLabels:
+                 role: clients
    ```
 5. Wait `kubectl wait Kafka/demo --for=condition=NetworkPolicyReady=True --timeout=60s`.
 6. Assert `kubectl get networkpolicy demo-broker-policy -o json` includes `policyTypes: ["Ingress"]` and the expected ingress-rule count.
@@ -494,19 +494,19 @@ deploy/crds/
 
 ## 8. Conflict analysis (for parallel batching)
 
-| File | Tasks touching it |
-|---|---|
-| `crd/network_policy.rs` | T1 (create) |
-| `crd/listener.rs` | T1 (add field + tests) |
-| `crd/kafka.rs` | T1 (add field + tests) |
-| `crd/mod.rs` | T1 (re-export) |
-| `controller/network_policy.rs` | T2 (create) |
-| `controller/mod.rs` | T2 (mod declaration) |
-| `controller/kafka.rs` | T3 (wire reconcile + status condition) |
-| `tests/reconcile_kafka.rs` | T3 (5 new test cases) |
-| `charts/.../clusterrole.yaml` | T4 (RBAC) |
-| `deploy/crds/crabka.io_kafkas.yaml` | T5 (regen) |
-| `.github/workflows/operator-e2e.yml` | T6 (Calico + peer test) |
+| File                                 | Tasks touching it                      |
+| ------------------------------------ | -------------------------------------- |
+| `crd/network_policy.rs`              | T1 (create)                            |
+| `crd/listener.rs`                    | T1 (add field + tests)                 |
+| `crd/kafka.rs`                       | T1 (add field + tests)                 |
+| `crd/mod.rs`                         | T1 (re-export)                         |
+| `controller/network_policy.rs`       | T2 (create)                            |
+| `controller/mod.rs`                  | T2 (mod declaration)                   |
+| `controller/kafka.rs`                | T3 (wire reconcile + status condition) |
+| `tests/reconcile_kafka.rs`           | T3 (5 new test cases)                  |
+| `charts/.../clusterrole.yaml`        | T4 (RBAC)                              |
+| `deploy/crds/crabka.io_kafkas.yaml`  | T5 (regen)                             |
+| `.github/workflows/operator-e2e.yml` | T6 (Calico + peer test)                |
 
 Parallel batches:
 

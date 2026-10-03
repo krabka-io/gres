@@ -25,10 +25,12 @@
 ### Task 1: Shared enum parsing
 
 **Files:**
+
 - Modify: `crates/client-consumer/src/builder.rs`
 - Modify: `crates/client-consumer/src/assignor/mod.rs`
 
 **Interfaces:**
+
 - Produces: `FromStr<Err = String>` for `AutoOffsetReset`, `IsolationLevel`, and `Assignor`.
 - Accepted values: `latest`, `earliest`, `none`, `read-uncommitted`, `read-committed`, `range`, and `cooperative-sticky`.
 
@@ -162,12 +164,14 @@ git commit -m "feat(consumer): parse behavior choices"
 ### Task 2: Demo CLI, propagation, and Compose
 
 **Files:**
+
 - Modify: `crates/observability-demo-app/src/main.rs`
 - Create: `crates/observability-demo-app/tests/consumer_behavior_config.rs`
 - Modify: `crates/observability-demo-app/tests/observability_demo_config.rs`
 - Modify: `demo/observability/docker-compose.yml`
 
 **Interfaces:**
+
 - Consumes: the three `FromStr` implementations from Task 1.
 - Produces: `effective_consumer_behavior(&Cli) -> io::Result<(AutoOffsetReset, IsolationLevel, Assignor)>`.
 - Propagates: resolved values into the matching existing Consumer builder setters.
@@ -282,10 +286,12 @@ git commit -m "feat(demo): expose consumer behavior"
 ### Task 3: Audit and close the slice
 
 **Files:**
+
 - Modify: `docs/configuration-audit.md`
 - Modify: `docs/superpowers/plans/2026-07-31-observability-demo-consumer-behavior.md`
 
 **Interfaces:**
+
 - Consumes: verified implementation and exact test counts from Tasks 1 and 2.
 - Produces: a completed plan and permanent audit record.
 

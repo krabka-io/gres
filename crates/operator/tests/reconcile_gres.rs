@@ -5,6 +5,7 @@ use std::{
 };
 
 use assert2::assert;
+use http::Method;
 use krabka_operator::{
     context::{PgdogAdminError, PgdogAdminLike, PgdogExpectedRoute, PgdogReloadRequest},
     controller::{
@@ -19,7 +20,6 @@ use krabka_operator::{
     },
 };
 use krabka_units::{Time, convert::TimeExt as _};
-use http::Method;
 
 #[path = "shared/mod.rs"]
 mod shared;

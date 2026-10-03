@@ -9,8 +9,8 @@
 
 use std::collections::BTreeMap;
 
-use krabka_units::{ByteSize, Ratio, Time};
 use k8s_openapi::api::core::v1::ResourceRequirements;
+use krabka_units::{ByteSize, Ratio, Time};
 use kube::CustomResource;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};

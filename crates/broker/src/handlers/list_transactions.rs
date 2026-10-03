@@ -18,6 +18,7 @@
 //! so the mapping is direct.
 
 use bytes::Bytes;
+use java_regex::{PatternSyntaxError, Regex};
 use krabka_metadata::{AclOperation, ResourceType};
 use krabka_protocol::{
     Decode,
@@ -26,7 +27,6 @@ use krabka_protocol::{
         list_transactions_response::{ListTransactionsResponse, TransactionState},
     },
 };
-use java_regex::{PatternSyntaxError, Regex};
 
 use crate::{
     authorizer::{AuthorizationRequest, AuthorizationResult},

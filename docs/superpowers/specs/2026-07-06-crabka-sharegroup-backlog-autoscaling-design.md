@@ -6,34 +6,34 @@
 
 ## Context — the one differentiated slice, honestly
 
-Of the messaging cycle's five slices, four are interop/parity (header carry-through, CloudEvents, per-offset ack, the SDK). **MSG-4 is the only genuine differentiation**: KEDA's stock `kafka` scaler understands *consumer-group* lag only, not KIP-932 *share-group* backlog, and no share-group scaler exists upstream. Since Crabka already ships the full KIP-932 stack (`ShareFetch`/`ShareAcknowledge`, `AcquisitionState`, redelivery, archiving), broker-native queue-backlog-driven scale-to-zero for competing-consumer workloads is something neither Confluent nor Supabase ships today.
+Of the messaging cycle's five slices, four are interop/parity (header carry-through, CloudEvents, per-offset ack, the SDK). **MSG-4 is the only genuine differentiation**: KEDA's stock `kafka` scaler understands _consumer-group_ lag only, not KIP-932 _share-group_ backlog, and no share-group scaler exists upstream. Since Crabka already ships the full KIP-932 stack (`ShareFetch`/`ShareAcknowledge`, `AcquisitionState`, redelivery, archiving), broker-native queue-backlog-driven scale-to-zero for competing-consumer workloads is something neither Confluent nor Supabase ships today.
 
-Two honest bounds on that moat: (1) share groups are an Apache Kafka KIP, so any KIP-932-compatible broker (Redpanda, Strimzi) *could* build the same bridge — the defensibility is first-mover + the fleet-wide correctness that makes it work rather than demo; (2) the durable moat is **combinatorial** — the same share-group topic on the same bucket is simultaneously a pub/sub channel, a work queue, a CDC stream, and an observability WAL. This slice scales **consumers** on backlog; it does **not** scale brokers (broker elasticity is gated on the diskless chapter — do not conflate).
+Two honest bounds on that moat: (1) share groups are an Apache Kafka KIP, so any KIP-932-compatible broker (Redpanda, Strimzi) _could_ build the same bridge — the defensibility is first-mover + the fleet-wide correctness that makes it work rather than demo; (2) the durable moat is **combinatorial** — the same share-group topic on the same bucket is simultaneously a pub/sub channel, a work queue, a CDC stream, and an observability WAL. This slice scales **consumers** on backlog; it does **not** scale brokers (broker elasticity is gated on the diskless chapter — do not conflate).
 
 The workload: serverless functions run as **share-group consumers** competing on a topic (each `ShareFetch`es, invokes, `ShareAcknowledge`s). More backlog → more replicas; zero backlog → zero replicas.
 
 ## The correctness landmine (why the naive design is wrong)
 
-The obvious design — *each broker emits its local partitions' backlog, PromQL sums fleet-wide* — **undercounts and causes false scale-to-zero of a backlogged group.** Grounding proved the two required states are **not co-located**:
+The obvious design — _each broker emits its local partitions' backlog, PromQL sums fleet-wide_ — **undercounts and causes false scale-to-zero of a backlogged group.** Grounding proved the two required states are **not co-located**:
 
-- The **`initialized` enumeration** (which `(group, topic, partition)` have share state) lives in `share_seeds_cache`, populated *only* by replaying the local `__consumer_offsets-0` log during bootstrap (`unified/mod.rs:896`, `bootstrap.rs:353`). With `OFFSETS_NUM_PARTITIONS = 1` (`bootstrap.rs:44`), this cache is complete on **exactly one broker**: the `__consumer_offsets-0` leader (the group coordinator).
+- The **`initialized` enumeration** (which `(group, topic, partition)` have share state) lives in `share_seeds_cache`, populated _only_ by replaying the local `__consumer_offsets-0` log during bootstrap (`unified/mod.rs:896`, `bootstrap.rs:353`). With `OFFSETS_NUM_PARTITIONS = 1` (`bootstrap.rs:44`), this cache is complete on **exactly one broker**: the `__consumer_offsets-0` leader (the group coordinator).
 - The **high-watermark** is data-partition-leader state (`Partition::high_watermark` locks local `replica_state`, `partition.rs:432`) — spread across the fleet, with **no remote-HWM accessor**.
 
-So "each broker emits its local intersection" produces series only for `initialized ∩ locally-led-data` on the coordinator; partitions led elsewhere are emitted by *no* broker → `sum()` reads low → a backlogged group scales to zero. This spec's architecture exists to close exactly that gap.
+So "each broker emits its local intersection" produces series only for `initialized ∩ locally-led-data` on the coordinator; partitions led elsewhere are emitted by _no_ broker → `sum()` reads low → a backlogged group scales to zero. This spec's architecture exists to close exactly that gap.
 
 ## Design Goals
 
 - **Fleet-complete backlog** as a Prometheus gauge on the broker's existing `/metrics` (`metrics_server.rs`, default `:9404`); `sum(krabka_broker_share_group_backlog{group_id="G"})` is the true fleet total.
 - **Never emit `-1`:** uninitialized SPSO → **full available backlog** (`hwm − log_start`); a data partition led elsewhere → fetch its **authoritative HWM cross-broker**, never `-1`, never a false `0`.
 - **Exactly one series per partition** — the coordinator broker is the single emitter, so `sum()` has no double-count and no gap; `sum() == 0` iff every initialized partition is genuinely drained.
-- **Scale-to-zero, safely** — `minReplicaCount: 0` with an `activationThreshold`; because emission is complete and never `-1`, an empty/zero `sum()` means *actually drained*, not *unknown*.
+- **Scale-to-zero, safely** — `minReplicaCount: 0` with an `activationThreshold`; because emission is complete and never `-1`, an empty/zero `sum()` means _actually drained_, not _unknown_.
 - **Reuse landed infra** — the metrics registry + `/metrics`, `ListOffsets`, and the peer-RPC client (`network/client.rs`); **no new HTTP surface, no new port, no wire/KIP byte change.**
 
 ## Non-goals
 
 - **Consumer-group lag autoscaling** — already **free**: Crabka advertises `ListOffsets`/`OffsetFetch`/`FindCoordinator`/`DescribeGroups` (`api_catalog.rs:46,48,56,75`), so KEDA's stock `kafka` scaler autoscales consumer-group workloads over the wire with zero Crabka code. Verify-only.
 - **The KEDA external-scaler gRPC service** — deferred; the stock `prometheus` scaler over the landed `/metrics` suffices. Only justified if sub-scrape-latency (~15 s) scale-to-zero is required.
-- **Changing `DescribeShareGroupOffsets` wire semantics** — the handler stays Kafka-byte-exact (`-1` for uninitialized on the wire); the metric is a *separate, more-complete* computation over the same coordinator/persister sources.
+- **Changing `DescribeShareGroupOffsets` wire semantics** — the handler stays Kafka-byte-exact (`-1` for uninitialized on the wire); the metric is a _separate, more-complete_ computation over the same coordinator/persister sources.
 - **Broker autoscaling / scale-to-zero of brokers** — gated on the diskless chapter; out of scope.
 - CloudEvents (MSG-2), per-offset ack (MSG-3), the SDK (MSG-5).
 
@@ -62,7 +62,7 @@ COORDINATOR broker only (the __consumer_offsets-0 leader — the one broker with
 
 ### Coordinator-single-emitter (the core correction)
 
-Enumeration runs **only on the coordinator broker**, because it is the only broker whose `share_seeds_cache` is complete (`OFFSETS_NUM_PARTITIONS = 1`). That one broker computes every initialized partition's backlog — reaching SPSO via `SharePersister::read_state` (local when it leads the `__share_group_state` partition, else RPC-forwarded, `persister_client.rs:223-253`) and HWM either locally or cross-broker (next decision). Because exactly one broker emits each `(group, topic, partition)`, `sum()` is exact. *Alternative rejected — data-leader-driven emission* (each broker emits partitions it leads, HWM stays local): needs a `partition → groups` reverse index that does not exist (only the forward `group → initialized partitions` index exists, on the coordinator). It is the documented scale-out path if coordinator fan-out becomes a bottleneck, not the MVP.
+Enumeration runs **only on the coordinator broker**, because it is the only broker whose `share_seeds_cache` is complete (`OFFSETS_NUM_PARTITIONS = 1`). That one broker computes every initialized partition's backlog — reaching SPSO via `SharePersister::read_state` (local when it leads the `__share_group_state` partition, else RPC-forwarded, `persister_client.rs:223-253`) and HWM either locally or cross-broker (next decision). Because exactly one broker emits each `(group, topic, partition)`, `sum()` is exact. _Alternative rejected — data-leader-driven emission_ (each broker emits partitions it leads, HWM stays local): needs a `partition → groups` reverse index that does not exist (only the forward `group → initialized partitions` index exists, on the coordinator). It is the documented scale-out path if coordinator fan-out becomes a bottleneck, not the MVP.
 
 ### `effective_backlog` — the `-1` avoidance, as a pure function
 
@@ -75,7 +75,7 @@ fn effective_backlog(hwm: i64, spso: i64, log_start: i64) -> i64 {
 }
 ```
 
-Cause (a) — uninitialized SPSO (`Ok(None)` → `UNINITIALIZED_START_OFFSET = -1`, `coordinator.rs:68`): a never-fetched partition still has its full contents queued, so backlog = `hwm − log_start`, **not** `-1` and **not** `0`. This is precisely the case the scaler most needs to catch (a brand-new group with a full topic must scale *up*). Cause (b) — non-local data partition: resolved by fetching HWM cross-broker, never by emitting `-1`.
+Cause (a) — uninitialized SPSO (`Ok(None)` → `UNINITIALIZED_START_OFFSET = -1`, `coordinator.rs:68`): a never-fetched partition still has its full contents queued, so backlog = `hwm − log_start`, **not** `-1` and **not** `0`. This is precisely the case the scaler most needs to catch (a brand-new group with a full topic must scale _up_). Cause (b) — non-local data partition: resolved by fetching HWM cross-broker, never by emitting `-1`.
 
 ### Remote-HWM read over the existing peer-RPC surface
 
@@ -104,15 +104,15 @@ metadata: { name: my-share-group-scaler, namespace: functions }
 spec:
   scaleTargetRef: { name: my-share-consumer }
   pollingInterval: 15
-  minReplicaCount: 0            # scale-to-zero
+  minReplicaCount: 0 # scale-to-zero
   maxReplicaCount: 20
   triggers:
-  - type: prometheus
-    metadata:
-      serverAddress: http://prometheus.monitoring.svc:9090
-      query: 'sum(krabka_broker_share_group_backlog{group_id="my-group"})'
-      threshold: '100'           # target backlog-per-replica; HPA drives replicas toward sum/threshold
-      activationThreshold: '1'   # wake from 0 only when backlog >= 1
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus.monitoring.svc:9090
+        query: 'sum(krabka_broker_share_group_backlog{group_id="my-group"})'
+        threshold: "100" # target backlog-per-replica; HPA drives replicas toward sum/threshold
+        activationThreshold: "1" # wake from 0 only when backlog >= 1
 ```
 
 Scale-to-zero is correct **only because emission is complete and never `-1`**: `sum()` reflects true fleet backlog, so an empty/zero result means genuinely drained, and `activationThreshold: 1` wakes a replica on any real backlog.
@@ -137,7 +137,7 @@ Scale-to-zero is correct **only because emission is complete and never `-1`**: `
 - **`effective_backlog` unit tests:** initialized (`hwm − spso`); uninitialized (`hwm − log_start`, the full-backlog case, **not** `-1`/`0`); `spso > hwm` clamps to `0`; all-zero → `0`.
 - **Metric encode:** register + `get_or_create` + `set(N)` + encode the registry → assert `krabka_broker_share_group_backlog{group_id=..,topic=..,partition=..} N` appears with **no** `_total` suffix (behavioral encode, not source-text).
 - **Poll loop, local:** a coordinator broker with one initialized share group, `hwm > log_start`, **uninitialized SPSO** → after a tick, the scraped series equals `hwm − log_start` (full backlog), not `-1`, not `0`.
-- **Poll loop, remote-HWM:** the same group's data partition led by a *different* broker → the series is **still emitted** with the correct backlog (exercises the `ListOffsets` peer read) — the co-location regression guard.
+- **Poll loop, remote-HWM:** the same group's data partition led by a _different_ broker → the series is **still emitted** with the correct backlog (exercises the `ListOffsets` peer read) — the co-location regression guard.
 - **Drained → 0:** acquire+Accept all records → the series reads `0` (enables scale-to-zero).
 - **Coordinator self-gate:** a non-coordinator broker emits **no** share-group series.
 - **Stale-series:** a partition that leaves `initialized` (or a group that disappears) is removed, not stuck at its last value.
@@ -145,7 +145,7 @@ Scale-to-zero is correct **only because emission is complete and never `-1`**: `
 ## Risks (carried into the plan)
 
 - **Remote-HWM fan-out / coordinator hotspot:** the coordinator issues a `ListOffsets` per non-co-led partition per tick, and concentrates all share-group metric work on one broker. Acceptable for MVP cardinality; the **data-leader-driven model** (with a coordinator-pushed `partition→groups` index) is the documented scale-out path. The plan must confirm the outbound `ListOffsets` path over `network/client.rs` (the replicator/`persister_client` peer-RPC pattern) and bound the per-tick cost.
-- **Leadership-handoff overlap:** the self-gate prevents double-count *if* `share_group_ids()`/`is_leader(__consumer_offsets-0)` flip together on handoff — a genuine correctness point the plan must test, not just assert.
+- **Leadership-handoff overlap:** the self-gate prevents double-count _if_ `share_group_ids()`/`is_leader(__consumer_offsets-0)` flip together on handoff — a genuine correctness point the plan must test, not just assert.
 - **Stale-series API:** `Family::remove`/`clear` in `prometheus-client 0.25` is unconfirmed; the plan verifies and, if absent, rebuilds the family per tick (snapshot-then-swap to avoid an empty-scrape window).
 - **`read_state` RPC per partition per tick:** a forwarded read for each non-locally-led `__share_group_state` partition; accept for MVP, consider a coordinator-side SPSO cache if load bites.
 - **Non-atomic HWM/SPSO reads:** sampled at slightly different instants (worse across the remote read); a momentarily-negative true backlog reads as `0` for one tick via `.max(0)` — acceptable for a ~15 s gauge, stated.

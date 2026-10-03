@@ -17,15 +17,15 @@ Two crates change:
 
 ### Wire surface (added handlers)
 
-| API key | Name                | Notes |
-|--------:|---------------------|-------|
-| 10      | FindCoordinator     | Real impl; returns this broker as the coordinator for any `coordinator_keys`. |
-| 11      | JoinGroup           | Blocks until rebalance completes or `rebalance_timeout_ms` elapses. |
-| 12      | Heartbeat           | Validates `(generation_id, member_id)`; returns `REBALANCE_IN_PROGRESS`/`UNKNOWN_MEMBER_ID` where appropriate. |
-| 13      | LeaveGroup          | Removes the member; non-empty groups transition to `PreparingRebalance`. |
-| 14      | SyncGroup           | Leader supplies assignment; non-leaders block until the leader's sync arrives. |
-| 8       | OffsetCommit        | Writes records to `__consumer_offsets-0` via the slice-4 partition writer. |
-| 9       | OffsetFetch         | Reads from in-memory `Group.committed_offsets` (populated on startup from the topic). |
+| API key | Name            | Notes                                                                                                          |
+| ------: | --------------- | -------------------------------------------------------------------------------------------------------------- |
+|      10 | FindCoordinator | Real impl; returns this broker as the coordinator for any `coordinator_keys`.                                  |
+|      11 | JoinGroup       | Blocks until rebalance completes or `rebalance_timeout_ms` elapses.                                            |
+|      12 | Heartbeat       | Validates `(generation_id, member_id)`; returns `REBALANCE_IN_PROGRESS`/`UNKNOWN_MEMBER_ID` where appropriate. |
+|      13 | LeaveGroup      | Removes the member; non-empty groups transition to `PreparingRebalance`.                                       |
+|      14 | SyncGroup       | Leader supplies assignment; non-leaders block until the leader's sync arrives.                                 |
+|       8 | OffsetCommit    | Writes records to `__consumer_offsets-0` via the slice-4 partition writer.                                     |
+|       9 | OffsetFetch     | Reads from in-memory `Group.committed_offsets` (populated on startup from the topic).                          |
 
 `ConsumerGroupHeartbeat` (api_key 68) and friends stay `UNSUPPORTED_VERSION`; KIP-848 is a later slice.
 
@@ -65,6 +65,7 @@ Only `range` is implemented. The broker is assignor-agnostic (it just plumbs the
 A real internal topic with **1 partition** (single-broker MVP — coordinator is always us). Created on first `Broker::start` if not present. `Broker::start` replays the topic synchronously before binding the TCP listener, populating `GroupManager` with the saved group memberships, generations, and committed offsets.
 
 Record formats mirror Apache Kafka:
+
 - `OffsetCommitKey` (version 1) + `OffsetCommitValue` (version 3) per `(group_id, topic, partition)` commit
 - `GroupMetadataKey` + `GroupMetadataValue` per group state snapshot, written at the end of every successful rebalance
 
@@ -144,7 +145,7 @@ crates/client-consumer/                         # NEW crate
 
 The detailed dance from Section 3 of the brainstorming is captured here. Key gates:
 
-1. JoinGroup arrives → `Group::add_member` adds it. If first member, generation += 1 and the group's `rebalance_deadline` is `now + max(session_timeout, rebalance_timeout)` from the joining member's view. The handler then `await`s a per-group `Notify` *with a deadline*.
+1. JoinGroup arrives → `Group::add_member` adds it. If first member, generation += 1 and the group's `rebalance_deadline` is `now + max(session_timeout, rebalance_timeout)` from the joining member's view. The handler then `await`s a per-group `Notify` _with a deadline_.
 2. When either (a) every expected member has joined or (b) the deadline elapses, the broker transitions to `CompletingRebalance`, elects the oldest member as leader, and `notify_waiters()`s.
 3. Every waiting JoinGroup handler wakes, snapshots the current state, and returns the `JoinGroupResponse` (leader gets `members: full list`, others get `members: []`).
 4. SyncGroup from the leader stores assignments per-member and `notify_waiters()`s the sync gate. SyncGroup from non-leaders parks until the leader arrives, then responds with that member's assignment.
@@ -187,13 +188,13 @@ The replay is synchronous and runs in `Broker::start`'s task; it must complete b
 
 ### Wire-level codes (additions to `crates/broker/src/codes.rs`)
 
-| Code | Name                          | Where |
-|-----:|-------------------------------|-------|
-| 22   | ILLEGAL_GENERATION            | `Heartbeat`, `OffsetCommit`, `SyncGroup` when generation_id mismatches. |
-| 23   | INCONSISTENT_GROUP_PROTOCOL   | `JoinGroup` when proposed protocols share no member. |
-| 25   | UNKNOWN_MEMBER_ID             | Member not found in group. |
-| 27   | REBALANCE_IN_PROGRESS         | Heartbeat / OffsetCommit while group is `PreparingRebalance` or `CompletingRebalance`. |
-| 79   | MEMBER_ID_REQUIRED            | First JoinGroup with empty `member_id`; broker generates one, returns it in the response, client retries. |
+| Code | Name                        | Where                                                                                                     |
+| ---: | --------------------------- | --------------------------------------------------------------------------------------------------------- |
+|   22 | ILLEGAL_GENERATION          | `Heartbeat`, `OffsetCommit`, `SyncGroup` when generation_id mismatches.                                   |
+|   23 | INCONSISTENT_GROUP_PROTOCOL | `JoinGroup` when proposed protocols share no member.                                                      |
+|   25 | UNKNOWN_MEMBER_ID           | Member not found in group.                                                                                |
+|   27 | REBALANCE_IN_PROGRESS       | Heartbeat / OffsetCommit while group is `PreparingRebalance` or `CompletingRebalance`.                    |
+|   79 | MEMBER_ID_REQUIRED          | First JoinGroup with empty `member_id`; broker generates one, returns it in the response, client retries. |
 
 The pre-slice-5 codes (`COORDINATOR_NOT_AVAILABLE`, `NOT_COORDINATOR`, `UNKNOWN_SERVER_ERROR`, `UNSUPPORTED_VERSION`) stay in their existing roles.
 
@@ -204,6 +205,7 @@ Add variants `GroupInvalidState { group_id, state }`, `UnknownMember { group_id,
 ### `ConsumerError`
 
 `krabka-client-consumer::ConsumerError` carries:
+
 - `Client(krabka_client_core::ClientError)` for transport errors
 - `RebalanceFailed(String)`
 - `NotSubscribed`

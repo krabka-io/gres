@@ -68,14 +68,14 @@ async fn tick_all(...) {
    and Kafka's behavior.
 5. For each deletable segment, run the full lifecycle:
    - `update_remote_log_segment_metadata(state =
-     DeleteSegmentStarted)`
+DeleteSegmentStarted)`
    - `rsm.delete_log_segment_data(metadata)` (on `spawn_blocking`)
    - `update_remote_log_segment_metadata(state =
-     DeleteSegmentFinished)`
-   Any failure logs at WARN and short-circuits the partition's pass;
-   leftover `DeleteSegmentStarted` metadata is harmless (the next tick
-   sees it via list but it is filtered out of the
-   `CopySegmentFinished`-only readable set).
+DeleteSegmentFinished)`
+     Any failure logs at WARN and short-circuits the partition's pass;
+     leftover `DeleteSegmentStarted` metadata is harmless (the next tick
+     sees it via list but it is filtered out of the
+     `CopySegmentFinished`-only readable set).
 
 ### Pure-logic helper
 
@@ -223,7 +223,7 @@ sole record of which partitions need the cascade.
   (DeleteFinished drops them) and `rsm.fetch_log_segment` errors with
   `SegmentNotFound`.
 - `remote_retention_pass_noop_when_nothing_qualifies` — fresh segments
-  + large retention; assert zero evictions.
+  - large retention; assert zero evictions.
 - `remote_retention_pass_handles_partial_delete_failure` — wire an RSM
   whose `delete_log_segment_data` errors on the second call; verify the
   first segment is fully cleaned, the second is left in

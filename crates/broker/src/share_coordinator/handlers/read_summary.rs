@@ -11,6 +11,7 @@
 use std::sync::Arc;
 
 use bytes::{Bytes, BytesMut};
+use futures_util::future::BoxFuture;
 use krabka_protocol::{
     Decode, Encode,
     owned::{
@@ -20,7 +21,6 @@ use krabka_protocol::{
         },
     },
 };
-use futures_util::future::BoxFuture;
 
 use crate::{
     broker::Broker, codes, error::BrokerError,

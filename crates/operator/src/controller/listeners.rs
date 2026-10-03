@@ -5,12 +5,12 @@
 
 use std::{collections::BTreeMap, net::IpAddr};
 
-use krabka_security::{ListenerProtocol, SaslMechanism, ca::SubjectAltName};
-use krabka_units::fmt::Human as _;
 use k8s_openapi::api::{
     core::v1::{Node, Service},
     networking::v1::Ingress,
 };
+use krabka_security::{ListenerProtocol, SaslMechanism, ca::SubjectAltName};
+use krabka_units::fmt::Human as _;
 use kube::Resource as _;
 
 use crate::{

@@ -6,7 +6,7 @@
 > forces uncached: the **cogroup result store** (all four kinds) and the
 > **`KStream.to_table`** store. No new cache machinery — the cache core,
 > `TupleForwarder` suppression seam, `flush_cache_into`, and `cache_owner`-rooted
-> flush all exist from #491; these two stores were simply never *marked* cached.
+> flush all exist from #491; these two stores were simply never _marked_ cached.
 
 ## 1. Goal
 
@@ -16,7 +16,7 @@ cogroup result store and the `to_table` store must:
 - **Suppress** the per-record immediate downstream forward (the deduped `Change`
   is forwarded later, at cache evict/flush).
 - Serve **read-your-writes** through the cache (interactive queries and — for
-  cogroup — *cross-input* aggregation within a batch see not-yet-flushed writes).
+  cogroup — _cross-input_ aggregation within a batch see not-yet-flushed writes).
 - Defer the **changelog** write to flush, and restore correctly from it.
 - Leave every existing golden **byte-identical** when caching is disabled
   (`TopologyTestDriver` forces `cache_max_bytes = 0`).
@@ -114,12 +114,12 @@ it is unique to the multi-writer-single-store cogroup shape.
 
 ### 4.3 Changes (4 terminal aggregations)
 
-| Site | File | Change |
-|------|------|--------|
-| non-windowed (KV) | `dsl/cogrouped.rs:337` | `caching` is already destructured (`:303`). Replace `mark_store_caching(&store_for_reg, false)` with `mark_store_caching(&store_for_reg, caching)` and delete the deferral comment + `let _ = caching;`. |
-| time-windowed | `dsl/time_windowed_cogrouped.rs:71,87` | Add `caching` to the `Materialized` destructure; inside the registrar, after `add_window_store`, call `state.topology.mark_store_caching(&store_for_reg, caching)`. |
-| session-windowed | `dsl/session_windowed_cogrouped.rs:85,101` | Same: destructure `caching`; mark after `add_session_store`. |
-| sliding-windowed | `dsl/sliding_windowed_cogrouped.rs:78,101` | Same: destructure `caching`; mark after `add_window_store`. |
+| Site              | File                                       | Change                                                                                                                                                                                                   |
+| ----------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| non-windowed (KV) | `dsl/cogrouped.rs:337`                     | `caching` is already destructured (`:303`). Replace `mark_store_caching(&store_for_reg, false)` with `mark_store_caching(&store_for_reg, caching)` and delete the deferral comment + `let _ = caching;`. |
+| time-windowed     | `dsl/time_windowed_cogrouped.rs:71,87`     | Add `caching` to the `Materialized` destructure; inside the registrar, after `add_window_store`, call `state.topology.mark_store_caching(&store_for_reg, caching)`.                                      |
+| session-windowed  | `dsl/session_windowed_cogrouped.rs:85,101` | Same: destructure `caching`; mark after `add_session_store`.                                                                                                                                             |
+| sliding-windowed  | `dsl/sliding_windowed_cogrouped.rs:78,101` | Same: destructure `caching`; mark after `add_window_store`.                                                                                                                                              |
 
 **Window-size hazard (already mitigated):** the cache flush rebuilds `Windowed<K>`
 from store-key bytes + the store's recorded `window_size_ms`. Each windowed cogroup
@@ -162,7 +162,7 @@ each store is marked exactly once even with N inputs.
 
 - **Versioned-KTable caching.** Kafka does not cache versioned stores: the
   version-chain (`BTreeMap<validFrom, Option<V>>`) model is incompatible with the
-  single-value-per-key record cache. Leaving versioned stores uncached *is* the
+  single-value-per-key record cache. Leaving versioned stores uncached _is_ the
   parity-correct behavior.
 - **emit-final / on-window-close caching.** Kafka does not cache emit-final
   aggregates: per-update emits are deliberately suppressed and the final record is

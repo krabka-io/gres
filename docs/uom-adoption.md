@@ -3,17 +3,17 @@
 `krabka-units` wraps [`uom`](https://docs.rs/uom) so a size, a rate, or a timeout
 carries its dimension in the type. This is the sibling of
 [`docs/newtype-safety-rollout.md`](newtype-safety-rollout.md): newtypes give
-*identifiers* distinct types, quantities give *magnitudes* distinct dimensions.
+_identifiers_ distinct types, quantities give _magnitudes_ distinct dimensions.
 
 ## The vocabulary
 
-| Alias | `uom` quantity | Base unit | Use for |
-| --- | --- | --- | --- |
-| `ByteSize` | `Information` | byte | message/segment/buffer sizes, quota balances |
-| `ByteRate` | `InformationRate` | byte/s | producer and replication quotas, measured throughput |
-| `Time` | `Time` | second | timeouts, intervals, retention windows, latencies |
-| `Frequency` | `Frequency` | hertz | records/s, requests/s |
-| `Ratio` | `Ratio` | — | fill factors, sampling probabilities, percentages |
+| Alias       | `uom` quantity    | Base unit | Use for                                              |
+| ----------- | ----------------- | --------- | ---------------------------------------------------- |
+| `ByteSize`  | `Information`     | byte      | message/segment/buffer sizes, quota balances         |
+| `ByteRate`  | `InformationRate` | byte/s    | producer and replication quotas, measured throughput |
+| `Time`      | `Time`            | second    | timeouts, intervals, retention windows, latencies    |
+| `Frequency` | `Frequency`       | hertz     | records/s, requests/s                                |
+| `Ratio`     | `Ratio`           | —         | fill factors, sampling probabilities, percentages    |
 
 All five store `f64` in base units, which is what lets `uom` combine them:
 `ByteSize / Time` is a `ByteRate`, checked by the compiler.
@@ -38,7 +38,7 @@ let drain: Time = quota.time_to_transfer(backlog); // 5s
   byte-exact; convert at the hand-written boundary instead.
 - **Instants.** An offset, a leader epoch, or an epoch-milliseconds timestamp is a
   coordinate, not a magnitude — those stay `krabka-ids` newtypes. `Time` is an
-  *extent*: a difference between instants, never an instant.
+  _extent_: a difference between instants, never an instant.
 - **Counts of things.** A partition count, a replica count, a retry budget, a
   record count. Dimensionless integers are already unambiguous.
 - **Atomics and verified kernels.** `AtomicU64` cannot hold a quantity, and the

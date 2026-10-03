@@ -11,7 +11,7 @@ Make Crabka clusters reachable from outside the Kubernetes cluster with the same
 ## Decisions captured during brainstorm
 
 1. **Single spec, multiple slices.** This document covers all three roadmap slices in the listener family. Implementation lands in two operator slices (25, 27) plus one Crabka-core slice (25a). Slice 27 is described here but its implementation plan is deferred until Phase 4 lands TLS.
-2. **Broker config delivery: TOML file.** The operator writes a per-broker TOML file into a ConfigMap; the broker reads it via a new `--config-file` flag and `serde + toml`. Chosen over Kafka-style `server.properties` for parser simplicity (no `=`/escape/comment-rules code), Rust ergonomics, and because the broker config file is *internal* — not part of any Kafka wire-protocol compatibility constraint.
+2. **Broker config delivery: TOML file.** The operator writes a per-broker TOML file into a ConfigMap; the broker reads it via a new `--config-file` flag and `serde + toml`. Chosen over Kafka-style `server.properties` for parser simplicity (no `=`/escape/comment-rules code), Rust ergonomics, and because the broker config file is _internal_ — not part of any Kafka wire-protocol compatibility constraint.
 3. **Plaintext-only this chunk.** No TLS, no SASL/SCRAM, no inter-broker mTLS in 25/25a. `tls: true` on the schema is rejected at reconcile with a status condition. The Phase 4 slices (30/31) wire authentication later.
 4. **Slice 27 schema landed early; reconcile deferred.** `type: ingress | route` is accepted by the CRD schema in slice 25 so users see a forward-stable surface, but the reconciler rejects those types with `ListenersValid=False reason=IngressDeferred` until slice 27 implements them.
 5. **NodePort + LoadBalancer combined into one operator slice (25).** Their object topologies are structurally identical (one per-broker Service + one bootstrap Service; only `type` and advertised-host derivation differ). Bundling avoids a duplicate scaffold PR.
@@ -22,11 +22,11 @@ Make Crabka clusters reachable from outside the Kubernetes cluster with the same
 
 ### Slice split
 
-| # | Title | Crate | Approx size |
-|---|-------|-------|------------|
-| 25a | Broker `--config-file` (TOML) + multi-listener wiring | `krabka-broker` | ~0.8x |
-| 25 | Operator: `Kafka.spec.listeners` schema, internal/nodeport/loadbalancer reconcile, per-broker Services, advertised-listener computation, ConfigMap rewrite | `krabka-operator` | ~1.5x |
-| 27 | Operator: Ingress (SNI) + OpenShift Route reconcile | `krabka-operator` | ~1x (deferred — plan written after Phase 4) |
+| #   | Title                                                                                                                                                      | Crate             | Approx size                                 |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- | ------------------------------------------- |
+| 25a | Broker `--config-file` (TOML) + multi-listener wiring                                                                                                      | `krabka-broker`   | ~0.8x                                       |
+| 25  | Operator: `Kafka.spec.listeners` schema, internal/nodeport/loadbalancer reconcile, per-broker Services, advertised-listener computation, ConfigMap rewrite | `krabka-operator` | ~1.5x                                       |
+| 27  | Operator: Ingress (SNI) + OpenShift Route reconcile                                                                                                        | `krabka-operator` | ~1x (deferred — plan written after Phase 4) |
 
 Slice 25 depends on slice 25a (must land first). Slice 27 depends on Phase 4 slices 30/31.
 
@@ -105,7 +105,7 @@ If `spec.listeners` is empty (or absent), the operator synthesizes a single inte
   tls: false
 ```
 
-This is critical for the slice-25 upgrade test: an existing slice-19/20/21/24 cluster must roll *zero* pods on operator upgrade. The synthesized listener must produce a byte-identical TOML to what the new code would emit, so the slice-21 config-hash is unchanged.
+This is critical for the slice-25 upgrade test: an existing slice-19/20/21/24 cluster must roll _zero_ pods on operator upgrade. The synthesized listener must produce a byte-identical TOML to what the new code would emit, so the slice-21 config-hash is unchanged.
 
 #### Validation (status condition `ListenersValid`)
 
@@ -128,7 +128,7 @@ New CLI flag on `krabka-broker`:
 krabka-broker --config-file=/path/to/broker.toml [--broker-id N]
 ```
 
-Mutually exclusive with `--listen-addr` / `--advertised-listener`. CLI flags that *don't* overlap with the file (e.g. `--broker-id`, `--metrics-listen-addr`) still apply and override file values where both are set.
+Mutually exclusive with `--listen-addr` / `--advertised-listener`. CLI flags that _don't_ overlap with the file (e.g. `--broker-id`, `--metrics-listen-addr`) still apply and override file values where both are set.
 
 File format — `serde + toml`:
 
@@ -236,11 +236,11 @@ The bootstrap selector targets all broker pods of the cluster (any pool), so a c
 
 For each (listener, broker) pair, the operator computes `advertised = host:port`:
 
-| Type | Host | Port |
-|------|------|------|
-| `internal` | `<pod-name>.<headless-svc>.<namespace>.svc.cluster.local` (static template per pod) | `listener.port` |
-| `nodeport` | `brokers[b].advertisedHost` ?? `Node[pod-b's nodeName].status.addresses[ExternalIP]` ?? `…[InternalIP]` | `brokers[b].advertisedPort` ?? `brokers[b].nodePort` ?? `Service[<cluster>-<listener>-<b>].spec.ports[0].nodePort` |
-| `loadbalancer` | `brokers[b].advertisedHost` ?? `Service[<cluster>-<listener>-<b>].status.loadBalancer.ingress[0].hostname` ?? `.ip` | `listener.port` |
+| Type           | Host                                                                                                                | Port                                                                                                               |
+| -------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `internal`     | `<pod-name>.<headless-svc>.<namespace>.svc.cluster.local` (static template per pod)                                 | `listener.port`                                                                                                    |
+| `nodeport`     | `brokers[b].advertisedHost` ?? `Node[pod-b's nodeName].status.addresses[ExternalIP]` ?? `…[InternalIP]`             | `brokers[b].advertisedPort` ?? `brokers[b].nodePort` ?? `Service[<cluster>-<listener>-<b>].spec.ports[0].nodePort` |
+| `loadbalancer` | `brokers[b].advertisedHost` ?? `Service[<cluster>-<listener>-<b>].status.loadBalancer.ingress[0].hostname` ?? `.ip` | `listener.port`                                                                                                    |
 
 If any required dynamic value is missing (the Node for a pod hasn't been assigned yet, an LB hasn't been provisioned yet), the operator does **not** write a partial TOML. It sets:
 
@@ -277,17 +277,19 @@ hash( serialize_broker_properties(spec)
 
 **Upgrade-zero-restart property:** when a slice-24 cluster has no `spec.listeners` set (the only valid pre-slice-25 state), `canonical_listener_intent` is empty, so the resulting hash is identical to slice-24's hash for the same `spec.config`. No roll. Once the user adds an actual listener, the hash changes once (intended roll) and any subsequent advertised-address change (Node IP, LB hostname) flows through the same mechanism.
 
-This is *coarse* for NodePort with frequent reschedules — a single broker's Node-IP change rolls the whole pool. For LB-typed listeners (stable cloud-assigned hostnames in practice) it's a non-issue. Documented as known coarseness.
+This is _coarse_ for NodePort with frequent reschedules — a single broker's Node-IP change rolls the whole pool. For LB-typed listeners (stable cloud-assigned hostnames in practice) it's a non-issue. Documented as known coarseness.
 
 A future refinement could maintain per-broker config-hashes for per-pod targeting, but that would require either per-pod annotations that StatefulSet doesn't natively support, or moving away from StatefulSet for finer-grained control. Out of scope here.
 
 ### Watches and RBAC (slice 25)
 
 **Watches added:**
+
 - `Node` (cluster-scoped) — informer used to look up a pod's node's external IP for the NodePort case.
 - `Service` (already watched) — but reconcile now reacts to `status.loadBalancer.ingress` changes, not just metadata.
 
 **RBAC additions:**
+
 ```
 - apiGroups: [""]
   resources: ["nodes"]
@@ -340,8 +342,9 @@ Conditions on `KafkaStatus`:
 - `ListenersReady` — all dynamic external addresses resolved and ConfigMap written.
 
 `bootstrap_servers` semantics by type:
+
 - `internal`: the headless Service FQDN, `host:listener.port`.
-- `nodeport`: the bootstrap Service's `nodePort` paired with… *something*. K8s NodePort doesn't have a canonical external host; the operator picks the first ready Node's ExternalIP (or InternalIP fallback) as a hint. Documented in the status condition's message: "bootstrap host is one of N node IPs; clients should be configured with all of them or with an external DNS that round-robins."
+- `nodeport`: the bootstrap Service's `nodePort` paired with… _something_. K8s NodePort doesn't have a canonical external host; the operator picks the first ready Node's ExternalIP (or InternalIP fallback) as a hint. Documented in the status condition's message: "bootstrap host is one of N node IPs; clients should be configured with all of them or with an external DNS that round-robins."
 - `loadbalancer`: the bootstrap Service's resolved LB hostname/IP, `host:listener.port`.
 
 ## Test strategy
@@ -400,11 +403,13 @@ Test plan deferred until Phase 4 lands TLS. Sketch: SNI passthrough verified by 
 ## Acceptance criteria
 
 ### Slice 25a
+
 1. `cargo build -p krabka-broker` produces a binary that accepts `--config-file`.
 2. `cargo test -p krabka-broker --test cli_smoke` covers config-file boot.
 3. TOML parser unit tests cover all error cases listed above.
 
 ### Slice 25
+
 1. `cargo build -p krabka-operator` clean.
 2. `cargo test -p krabka-operator` passes all reconcile-unit tests above.
 3. CI kind job: NodePort e2e and LoadBalancer e2e both pass.

@@ -6,7 +6,7 @@
 
 ## Design Goals
 
-Match PostgreSQL 18.4's observable name-resolution semantics, which were captured from a live `postgres:18.4` before any of this was designed. Several of the captured behaviours contradict what a careful reading of the documentation would suggest — `DROP TABLE nope.t` reports a missing *schema* where `SELECT * FROM nope.t` reports a missing *relation*; a nonexistent entry in `search_path` is silently skipped rather than rejected; a syntactically broken `search_path` value is accepted. Every semantic in this document comes from that capture, and where the capture is silent this document says so rather than guessing.
+Match PostgreSQL 18.4's observable name-resolution semantics, which were captured from a live `postgres:18.4` before any of this was designed. Several of the captured behaviours contradict what a careful reading of the documentation would suggest — `DROP TABLE nope.t` reports a missing _schema_ where `SELECT * FROM nope.t` reports a missing _relation_; a nonexistent entry in `search_path` is silently skipped rather than rejected; a syntactically broken `search_path` value is accepted. Every semantic in this document comes from that capture, and where the capture is silent this document says so rather than guessing.
 
 Have exactly one implementation of resolution. Today there are three independently coded resolution orders and four mutually inconsistent parser policies for qualified names, which is why the same missing relation surfaces as `3F000` at parse time from `INSERT` (`crates/pgparser/src/parser.rs:3489-3493`) and as `42P01` at execution time from `SELECT` (`crates/pgparser/src/parser.rs:8718-8722`). Under a flat namespace those divergences are cosmetic. Under a search path they are the whole feature, because every one of them is a place shadowing can silently not happen.
 
@@ -24,7 +24,7 @@ A relation name exists in three forms, and almost every defect described below c
 
 **As stored** is a two-part catalog key built from `(schema, name)` with each part length-prefixed. It is never derived from a name by string surgery.
 
-One function crosses each boundary, and the type system enforces that: after this wave, `krabka_pgcatalog::get_table(kv, &str)` does not exist, so a bare-name lookup does not compile. That is the mechanism, not a convention, and it is what makes shadowing work for *every* operation rather than for the handful someone remembered to update.
+One function crosses each boundary, and the type system enforces that: after this wave, `krabka_pgcatalog::get_table(kv, &str)` does not exist, so a bare-name lookup does not compile. That is the mechanism, not a convention, and it is what makes shadowing work for _every_ operation rather than for the handful someone remembered to update.
 
 The thing making a change of this size tractable is that there is no catalog cache anywhere in the engine — no `OnceLock`, no snapshot, no generation counter, no invalidation. `get_table` (`crates/pgcatalog/src/lib.rs:953-975`) is a bare `kv.get`. So there is no cache-coherence problem hiding behind the resolution seam; there is only a large mechanical edit.
 
@@ -42,7 +42,7 @@ DROP TABLE nope.t;         ERROR: 3F000  schema "nope" does not exist
 CREATE TABLE nope.t (x);   ERROR: 3F000  schema "nope" does not exist
 ```
 
-The split is not lookup-versus-creation, which is the natural guess. `DROP` resolves the schema first and reports the schema; only a `SELECT`-style *reference* reports the relation. So the resolver takes a disposition argument with three values, not two, and only the executor knows which one applies.
+The split is not lookup-versus-creation, which is the natural guess. `DROP` resolves the schema first and reports the schema; only a `SELECT`-style _reference_ reports the relation. So the resolver takes a disposition argument with three values, not two, and only the executor knows which one applies.
 
 Note also that the error names the case-folded, dotted, unquoted form — `SELECT * FROM S.T` reports `relation "s.t" does not exist`, not the source text. Since the lexer already folds unquoted identifiers and preserves quoted ones, a `RelationRef` built straight from `Ident` tokens renders correctly with no extra machinery.
 
@@ -72,7 +72,7 @@ What this does **not** fix, and should not be claimed to: `ALTER SCHEMA … RENA
 
 ### One resolution seam, and a bare-name lookup that cannot compile
 
-Three resolution orders exist today and no two agree. `build_table_expr` (`crates/pgexec/src/exec.rs:7381-7403`) tries CTE, then virtual catalog relation, then view, then table. `build_table_expr_schema_with_ctes` (`:8648-8678`) repeats that order in a second, schema-only copy. `catalog_fn::resolve_relation_by_name` (`crates/pgexec/src/catalog_fn.rs:509-532`) strips `pg_catalog.` or `public.` — a *fourth* qualifier policy, disagreeing with `unqualified_relation`'s `public.`/`pg_temp.` — then tries base relation, view, sequence, index. Every DDL site bypasses all three and calls `get_table` directly with no order at all.
+Three resolution orders exist today and no two agree. `build_table_expr` (`crates/pgexec/src/exec.rs:7381-7403`) tries CTE, then virtual catalog relation, then view, then table. `build_table_expr_schema_with_ctes` (`:8648-8678`) repeats that order in a second, schema-only copy. `catalog_fn::resolve_relation_by_name` (`crates/pgexec/src/catalog_fn.rs:509-532`) strips `pg_catalog.` or `public.` — a _fourth_ qualifier policy, disagreeing with `unqualified_relation`'s `public.`/`pg_temp.` — then tries base relation, view, sequence, index. Every DDL site bypasses all three and calls `get_table` directly with no order at all.
 
 These collapse into `resolve(ctx, ref, disposition)`. The disposition is the three-valued thing the oracle forced above; the context supplies the search path and the session's backend id.
 
@@ -109,7 +109,7 @@ CREATE TABLE t (x int);        -> ERROR: 3F000 no schema has been selected to cr
 
 Two consequences follow that are easy to miss. `current_schemas` filters against the catalog at read time, so resolution consults the catalog and not just the GUC. And `current_schema` returns NULL when no explicit entry exists, so its return type becomes nullable — today's `Datum::Text("public")` literal cannot express that.
 
-`pg_catalog` is implicit-first unless listed explicitly, in which case it sits where it was written, and the implicit entry genuinely shadows: after `CREATE TABLE public.pg_class (x int)`, `SELECT count(*) FROM pg_class` still reads the catalog relation. Creation lands in the first *existing* explicit entry — `SET search_path = nosuch, s1, s2` puts a new table in `s1`.
+`pg_catalog` is implicit-first unless listed explicitly, in which case it sits where it was written, and the implicit entry genuinely shadows: after `CREATE TABLE public.pg_class (x int)`, `SELECT count(*) FROM pg_class` still reads the catalog relation. Creation lands in the first _existing_ explicit entry — `SET search_path = nosuch, s1, s2` puts a new table in `s1`.
 
 The cost of not having this is already measured in the tree: one leaked `SET search_path` in the conformance corpus accounted for 75 false mismatches (`crates/gres-conformance/src/main.rs:358-366`).
 
@@ -117,7 +117,7 @@ The cost of not having this is already measured in the tree: one leaked `SET sea
 
 The temp namespace is `pg_temp_<backendid>` (observed `pg_temp_27`) and sits **first** in the resolution order, ahead of the implicit `pg_catalog`: `current_schemas(true)` returns `{pg_temp_27,pg_catalog,public}`. It is not in `search_path` and is never written there.
 
-That name needs a per-session id, and the engine reports a per-*process* one. `pg_backend_pid()` returns `std::process::id()` (`crates/pgexec/src/catalog_fn.rs:325-329`), so every session in the process reports the same value, and `pg_stat_activity.pid` (`crates/pgexec/src/catalog_rel.rs:1009`) repeats it. But a genuine per-connection id already exists one crate away: `CancelRegistry::register` allocates one from a `NEXT_PID` counter (`crates/pgwire/src/server.rs:30`, `:191-193`), announces it in `BackendKeyData` (`crates/pgwire/src/session.rs:602`), and hands it to the engine at `connect_with_pid` (`:608`) — where `SqlEngine` uses it for exactly one thing, registering the session on the notification bus (`crates/pgexec/src/lib.rs:3063`), and keeps no field of its own.
+That name needs a per-session id, and the engine reports a per-_process_ one. `pg_backend_pid()` returns `std::process::id()` (`crates/pgexec/src/catalog_fn.rs:325-329`), so every session in the process reports the same value, and `pg_stat_activity.pid` (`crates/pgexec/src/catalog_rel.rs:1009`) repeats it. But a genuine per-connection id already exists one crate away: `CancelRegistry::register` allocates one from a `NEXT_PID` counter (`crates/pgwire/src/server.rs:30`, `:191-193`), announces it in `BackendKeyData` (`crates/pgwire/src/session.rs:602`), and hands it to the engine at `connect_with_pid` (`:608`) — where `SqlEngine` uses it for exactly one thing, registering the session on the notification bus (`crates/pgexec/src/lib.rs:3063`), and keeps no field of its own.
 
 So this is plumbing, not invention. The session gains a `backend_id`, `pg_backend_pid()` and `pg_stat_activity.pid` report it instead of the process id — which is independently a bug fix, since in PostgreSQL those are by definition the value `BackendKeyData` announced, that being how a cancel request addresses a backend — and the temp namespace is named from it. `Engine::connect()` passing 0 (`crates/pgexec/src/lib.rs:3030`) has to go: a session with no registered id has no temp namespace.
 
@@ -127,7 +127,7 @@ The honest cost: a crashed backend leaves its rows behind, and `NEXT_PID` restar
 
 `ON COMMIT DELETE ROWS` and `ON COMMIT DROP` are refused today with a message that names exactly this gap: "a temporary table is an ordinary relation here, with no session-scoped lifetime to hang the disposition off" (`crates/pgexec/src/exec.rs:297-310`). Once there is one, the disposition is stored on the table record and a commit-time drain walks the session's temp namespace. `DISCARD TEMP`, an explicit no-op today (`crates/pgexec/src/session.rs:3741-3742`) and the primitive a connection pooler issues on reset, is the same walk with `DROP`; so is session teardown. Three callers, one function.
 
-One wrinkle to record rather than discover: DDL here is non-transactional and commits its own batch (`crates/pgexec/src/session.rs:5217-5227`), so `ON COMMIT DROP` issues a catalog batch *after* the data commit rather than as part of it. A process death between the two leaves the relation, which the first-use purge then cleans up.
+One wrinkle to record rather than discover: DDL here is non-transactional and commits its own batch (`crates/pgexec/src/session.rs:5217-5227`), so `ON COMMIT DROP` issues a catalog batch _after_ the data commit rather than as part of it. A process death between the two leaves the relation, which the first-use purge then cleans up.
 
 `CREATE TEMP TABLE s.t` is `42P16 cannot create temporary relation in non-temporary schema`. No new error variant is needed — `ExecError::InvalidTableDefinition` already maps to `42P16` (`crates/pgexec/src/error.rs:48`, `:605`).
 
@@ -135,11 +135,11 @@ One wrinkle to record rather than discover: DDL here is non-transactional and co
 
 Every DDL statement takes `catalog_lock` (`crates/pgexec/src/session.rs:5206`) and holds it across `committer.commit(ops).await` (`:5224`) — a Raft round-trip on a multi-node deployment. The comment above it (`:5050-5053`) is explicit that this protects two distinct things: the shared catalog keyspace, and the atomicity of `next_table_id`'s read-bump-commit (`read_next_table_id`, `crates/pgcatalog/src/lib.rs:2841-2850`, read at `:729` and bumped in the same batch at `:739-742`).
 
-A temp relation needs the second and not the first. Nothing outside the session can see its schema, so nothing outside the session can collide on its name. It does still need a globally unique *id*, because row keys are `/<table_id>/<index_id>/<rowid>` in one shared keyspace (`crates/pgkv/src/key.rs:1-3`).
+A temp relation needs the second and not the first. Nothing outside the session can see its schema, so nothing outside the session can collide on its name. It does still need a globally unique _id_, because row keys are `/<table_id>/<index_id>/<rowid>` in one shared keyspace (`crates/pgkv/src/key.rs:1-3`).
 
 Leaving it alone was considered and is the option this design exists to avoid: it makes every `CREATE TEMP TABLE` a cluster-wide serialization point, which for a temp-table-per-request workload is not a slow feature but an unusable one.
 
-Splitting `catalog_lock` into a keyspace lock and a counter lock, holding the counter lock only across the read and bump, is a real improvement — it removes the Raft round-trip from the critical *section*. It does not remove it from the *statement*: the counter bump is still a durable write, so `CREATE TEMP TABLE` still costs a commit.
+Splitting `catalog_lock` into a keyspace lock and a counter lock, holding the counter lock only across the read and bump, is a real improvement — it removes the Raft round-trip from the critical _section_. It does not remove it from the _statement_: the counter bump is still a durable write, so `CREATE TEMP TABLE` still costs a commit.
 
 So: split the lock **and** allocate ids in per-session blocks. A session claims a contiguous run under the counter lock and hands ids out locally, so the common `CREATE TEMP TABLE` needs no coordination at all and the amortized cost is one bump per block. The block is claimed lazily on first use, so a session that creates no temp table claims nothing. Block size is a constant rather than a GUC; eight is enough that a request-scoped temp table almost never refills, and a wasted block costs eight ids out of a `u32`. The lock split is independently useful and is the first step toward the concurrent-DDL work the `:5053` comment already defers.
 
@@ -149,7 +149,7 @@ Rejected: a separate reserved id band for temp relations, so they never touch th
 
 ### The wire carries a `table_id`, not a name
 
-`ScanRequest` and its relatives ship `table_name: String` (`crates/gres-ranges/src/forward.rs:2715`, `:3003`, `:3213`, `:3859`) and the *remote* node resolves it against *its own* catalog (`:3394-3395`, `:3472`, `:3535`). A session-dependent name cannot survive that.
+`ScanRequest` and its relatives ship `table_name: String` (`crates/gres-ranges/src/forward.rs:2715`, `:3003`, `:3213`, `:3859`) and the _remote_ node resolves it against _its own_ catalog (`:3394-3395`, `:3472`, `:3535`). A session-dependent name cannot survive that.
 
 Shipping a canonical `(schema, name)` pair is the minimal change and is wrong for temp relations: the remote node has no notion of the originating session, so `pg_temp_27` there is either meaningless or — if that node also has a session 27 — someone else's data. It also re-resolves, so a rename between planning and scanning changes what is read.
 
@@ -157,7 +157,7 @@ Excluding temp relations from distributed plans is sound and overreaching: it fo
 
 Ship the id. It is already the authority everywhere else — row keys, lock identities, and D6's foreign-key referents, whose record documents this exact rationale (`crates/pgcatalog/src/lib.rs:192-215`): names are denormalized display copies rewritten on rename, ids are identity. Making the wire id-keyed makes the schema question disappear from it rather than answering it, and the remote side gets its column layout from an id-keyed lookup instead of a name-keyed one. That works for a temp relation for the same reason the overlay was rejected: its catalog row is in the one shared keyspace, readable from any node.
 
-What this does not buy is isolation. A temp relation becomes unresolvable *by name* from another session, but a deliberate `SELECT * FROM pg_temp_27.t` from a different session still reads it.
+What this does not buy is isolation. A temp relation becomes unresolvable _by name_ from another session, but a deliberate `SELECT * FROM pg_temp_27.t` from a different session still reads it.
 
 The open question this document recorded — what PostgreSQL raises there — was put to the oracle afterwards, with one session holding a temp table open while another qualified it. **PostgreSQL raises nothing consistent, and there is no refusal to copy:**
 
@@ -170,9 +170,9 @@ CREATE TABLE pg_temp_93.other …;   42P16  cannot create relations in temporary
 CREATE TEMP TABLE pg_temp_93.o2 …; 42P16  of other sessions
 ```
 
-The `SELECT` answering zero rows is not a rule but an artefact: the relation's pages are in the owning backend's local buffers, so a foreign reader sees a relation with no blocks on disk, and only a path that actually reaches `ReadBufferExtended` raises `0A000`. Only the *creation* refusal is a real, stated rule, and it is the one implemented. A reference to another session's namespace is left alone, and that this engine then reads the rows where PostgreSQL reads none is recorded as a divergence.
+The `SELECT` answering zero rows is not a rule but an artefact: the relation's pages are in the owning backend's local buffers, so a foreign reader sees a relation with no blocks on disk, and only a path that actually reaches `ReadBufferExtended` raises `0A000`. Only the _creation_ refusal is a real, stated rule, and it is the one implemented. A reference to another session's namespace is left alone, and that this engine then reads the rows where PostgreSQL reads none is recorded as a divergence.
 
-Two other things the same capture settled. `pg_temp_<n>`'s `n` is PostgreSQL's backend *slot* id, not its pid: a session reporting `pg_backend_pid() = 4004` had namespace `pg_temp_88`. In this engine the wire layer's per-connection id is both, so the two agree by construction. And `pg_class` and `pg_namespace` both show *other* sessions' temporary relations and namespaces, while `information_schema.tables` and `.columns` hide them — PostgreSQL's `pg_is_other_temp_schema` filter is on the standard's views only, not on the catalog.
+Two other things the same capture settled. `pg_temp_<n>`'s `n` is PostgreSQL's backend _slot_ id, not its pid: a session reporting `pg_backend_pid() = 4004` had namespace `pg_temp_88`. In this engine the wire layer's per-connection id is both, so the two agree by construction. And `pg_class` and `pg_namespace` both show _other_ sessions' temporary relations and namespaces, while `information_schema.tables` and `.columns` hide them — PostgreSQL's `pg_is_other_temp_schema` filter is on the standard's views only, not on the catalog.
 
 ### The `public` schema bug is real and is fixable ahead of everything else
 
@@ -182,7 +182,7 @@ Two other things the same capture settled. `pg_temp_<n>`'s `n` is PostgreSQL's b
 - `pg_namespace_rows` then emits **two** rows for `public`, both with oid 2200: one hardcoded (`crates/pgexec/src/exec.rs:9134-9139`) and one from `list_schemas` (`:9140-9147`), since `namespace_oid("public")` is the constant either way (`crates/pgexec/src/catalog_rel.rs:266-277`, `crates/pgexec/src/exec.rs:8761`).
 - Symmetrically, `DROP SCHEMA public` on a fresh store is `3F000` (`crates/pgcatalog/src/lib.rs:598-605`).
 
-The fix has to respect that `public` is droppable where the other two builtins are not, so it cannot simply join `BUILTIN_SCHEMAS`, whose entries `list_schemas` appends unconditionally (`:512-517`). Two options. Bootstrapping a real `public` row at store initialization is the cleaner model and needs an initialization seam the catalog does not have — every default today is derived lazily from an absent key, `read_next_table_id` returning 1 being the pattern (`:2841-2849`). Making `public` a *droppable builtin* — present unless a tombstone key exists, `DROP SCHEMA public` writing the tombstone, `CREATE SCHEMA public` removing it and otherwise reporting `42P06` — stays lazy and is three small changes. Take the tombstone, and delete the hardcoded projection row.
+The fix has to respect that `public` is droppable where the other two builtins are not, so it cannot simply join `BUILTIN_SCHEMAS`, whose entries `list_schemas` appends unconditionally (`:512-517`). Two options. Bootstrapping a real `public` row at store initialization is the cleaner model and needs an initialization seam the catalog does not have — every default today is derived lazily from an absent key, `read_next_table_id` returning 1 being the pattern (`:2841-2849`). Making `public` a _droppable builtin_ — present unless a tombstone key exists, `DROP SCHEMA public` writing the tombstone, `CREATE SCHEMA public` removing it and otherwise reporting `42P06` — stays lazy and is three small changes. Take the tombstone, and delete the hardcoded projection row.
 
 This is independent of everything else in this document and should land first, on its own.
 
@@ -202,7 +202,7 @@ The internal ordering is:
 
 Keys cannot precede `RelationRef`: builders taking `(schema, name)` with every caller holding only a `String` means every call site does an ad-hoc split, which is `split_schema` reintroduced at every site instead of deleted at one.
 
-Keys and `RelationRef` without the resolution seam *would* compile and *would* give `CREATE TABLE s.t` and `SELECT * FROM s.t` end to end — real schemas, everything qualified. That is the ordering the research recommended, and it is the one place this design disagrees with it. Without the seam, each of the 88 non-test lookup sites needs a schema from somewhere, and that "somewhere" becomes a per-site judgement made 88 times; a good fraction would hardcode `public`. The tree would be correct for fully qualified names while carrying 88 fresh opportunities to get shadowing wrong — which is exactly the defect class the seam exists to make impossible. It is mergeable in the narrow sense that it builds and passes tests, and it is not a state anyone should want to stop at.
+Keys and `RelationRef` without the resolution seam _would_ compile and _would_ give `CREATE TABLE s.t` and `SELECT * FROM s.t` end to end — real schemas, everything qualified. That is the ordering the research recommended, and it is the one place this design disagrees with it. Without the seam, each of the 88 non-test lookup sites needs a schema from somewhere, and that "somewhere" becomes a per-site judgement made 88 times; a good fraction would hardcode `public`. The tree would be correct for fully qualified names while carrying 88 fresh opportunities to get shadowing wrong — which is exactly the defect class the seam exists to make impossible. It is mergeable in the narrow sense that it builds and passes tests, and it is not a state anyone should want to stop at.
 
 The seam without the context is not a smaller change either; it is a rename, since a resolution function with nothing to resolve against just relocates today's hardcoded order.
 
@@ -216,7 +216,7 @@ The seam without the context is not a smaller change either; it is a rename, sin
 
 The conversion rule is oracle-verified: a permanent view over a temp table is silently converted, landing in the temp namespace with `relpersistence = 't'`, and reported with `NOTICE: view "t_v" will be a temporary view`. The conversion is implementable — resolve the view body once at `CREATE VIEW` and set the view's persistence from what it reads. The notice is not, because there is no notice channel anywhere: `pgwire::Severity` has `Error` and `Fatal` only (`crates/pgwire/src/error.rs:20-26`), there is no `NoticeResponse` encoder, and `execute_ddl` returns `(QueryResult, Vec<WriteOp>)` (`crates/pgexec/src/session.rs:5217`) with nowhere to put one. The compatibility matrix already records a sibling gap — PostgreSQL's `NOTICE` on a skipped `CREATE TABLE IF NOT EXISTS` is not emitted either. A notice channel is a small wave of its own that would pay for itself across all of these; it is out of scope here because it touches the wire crate and every result path, and because the conformance harness diffs SQLSTATE and cannot see it either way.
 
-The deeper problem is that views have no dependency identity. A view is stored as source text (`crates/pgcatalog/src/lib.rs:333-337`) and re-parsed in the *reader's* context at scan time (`crates/pgexec/src/exec.rs:7390`). Today that is merely fragile — `rename_table_view_ops` has to token-walk the stored text, rewriting only `FROM`/`JOIN` slots and unaliased `<table>.<column>` qualifiers, and refuses with `0A000` when the name appears anywhere it cannot prove (`crates/pgexec/src/exec.rs:13931-13951`). With a search path it becomes a correctness regression: a view created under `search_path = s1` and read under `search_path = s2` silently reads a different relation.
+The deeper problem is that views have no dependency identity. A view is stored as source text (`crates/pgcatalog/src/lib.rs:333-337`) and re-parsed in the _reader's_ context at scan time (`crates/pgexec/src/exec.rs:7390`). Today that is merely fragile — `rename_table_view_ops` has to token-walk the stored text, rewriting only `FROM`/`JOIN` slots and unaliased `<table>.<column>` qualifiers, and refuses with `0A000` when the name appears anywhere it cannot prove (`crates/pgexec/src/exec.rs:13931-13951`). With a search path it becomes a correctness regression: a view created under `search_path = s1` and read under `search_path = s2` silently reads a different relation.
 
 The mitigation is one field — store the creator's resolved search path beside the definition and re-parse under it — and it should land with this wave, because the regression is introduced by this wave. It is a patch over the representation and not a fix: a later `DROP SCHEMA s1` still silently changes what the view returns, where PostgreSQL refuses the drop. The real fix is to store a view as a resolved dependency list plus a rewritten body, the analogue of PostgreSQL's `pg_rewrite`, and that is a wave of its own.
 
@@ -235,7 +235,7 @@ The compatibility matrix rows that this wave rewrites are `CREATE SCHEMA` (curre
 Divergences this wave deliberately leaves in place:
 
 - A `NOTICE` is never emitted, so the temp-view conversion is silent. No notice channel exists.
-- A view's stored text is re-parsed in the *reader's* context, and the creator's search path is not recorded beside it. A view created under one `search_path` and read under another resolves its base relation against the reader's path. The conversion rule itself does not depend on this — a view body here is one `FROM` item naming a base relation, so its persistence is decided once, at `CREATE VIEW` — but the rebinding remains.
+- A view's stored text is re-parsed in the _reader's_ context, and the creator's search path is not recorded beside it. A view created under one `search_path` and read under another resolves its base relation against the reader's path. The conversion rule itself does not depend on this — a view body here is one `FROM` item naming a base relation, so its persistence is decided once, at `CREATE VIEW` — but the rebinding remains.
 - A temp relation is unresolvable by name from another session, and creating in another session's namespace is refused, but a deliberate `SELECT * FROM pg_temp_<n>.t` reads the rows where PostgreSQL reads none. PostgreSQL has no refusal to copy there; see the open question above, now answered.
 - `ALTER SCHEMA … RENAME TO` stays `0A000`, for the reason its existing message gives.
 - Table ids are no longer densely allocated in creation order.

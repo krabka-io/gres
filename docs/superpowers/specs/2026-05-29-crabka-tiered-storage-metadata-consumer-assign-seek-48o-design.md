@@ -32,8 +32,8 @@ Consumer::builder()
 
 The group `Consumer` is subscription-based; manual partition assignment
 and offset-seek live at the `krabka-client-core` layer
-(`crates/client-consumer/src/lib.rs:39`: *"assign() (manual partition
-consumption) — use krabka-client-core"*). 48p needs to resume from a
+(`crates/client-consumer/src/lib.rs:39`: _"assign() (manual partition
+consumption) — use krabka-client-core"_). 48p needs to resume from a
 committed offset; 48q needs to consume only assigned partitions. Both
 require dropping below the group consumer.
 

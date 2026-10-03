@@ -8,13 +8,13 @@
 //! - `MetadataImage::matching_acls`, called once per `authorize()`.
 //! - `MetadataRecord` serialize and deserialize with wincode.
 
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use krabka_metadata::{
     AclEntry, AclOperation, BrokerEndpoint, BrokerRegistrationRecord, LeaderEpoch, MetadataImage,
     MetadataRecord, NodeId, PartitionRecord, PatternType, PermissionType, ResourceType,
     TopicRecord,
 };
 use krabka_security::ListenerProtocol;
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use serde_wincode::SerdeCompat;
 use uuid::Uuid;
 use wincode::{Deserialize as _, Serialize as _};

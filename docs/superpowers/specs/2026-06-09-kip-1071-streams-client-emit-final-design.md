@@ -11,8 +11,8 @@ Add native **emit-on-window-close** (`EmitStrategy.ON_WINDOW_CLOSE`, KIP-825) to
 three windowed aggregation surfaces — time (tumbling/hopping), sliding (KIP-450),
 and session windows. This closes the last "emit semantics" gap: today every windowed
 aggregation is **emit-on-update**, and the only way to get final-only results is the
-`suppress(untilWindowCloses)` workaround, which is a *separate downstream node + buffer
-store*. Native emit-final is configured **on the windowed aggregation itself** and emits
+`suppress(untilWindowCloses)` workaround, which is a _separate downstream node + buffer
+store_. Native emit-final is configured **on the windowed aggregation itself** and emits
 finals **directly from the existing window store** — no extra node, no extra store.
 
 ## Scope
@@ -39,14 +39,14 @@ Out of scope:
 Native emit-final is fundamentally different from the existing
 `suppress(untilWindowCloses)` workaround:
 
-| | `suppress(untilWindowCloses)` (exists) | Native emit-final (this slice) |
-|---|---|---|
-| Where configured | Downstream `.suppress()` on the result `KTable` | On the windowed handle, *before* the terminal agg |
-| Topology | Adds a separate `KSTREAM-SUPPRESS` node + buffer store + changelog | **No new node, no new store** — same `KSTREAM-AGGREGATE` node |
-| Emit source | A dedicated suppress buffer | Reads finals straight from the existing window store |
-| Aggregate node | Still emits-on-update (just buffered later) | Itself stops emitting on update |
+|                  | `suppress(untilWindowCloses)` (exists)                             | Native emit-final (this slice)                                |
+| ---------------- | ------------------------------------------------------------------ | ------------------------------------------------------------- |
+| Where configured | Downstream `.suppress()` on the result `KTable`                    | On the windowed handle, _before_ the terminal agg             |
+| Topology         | Adds a separate `KSTREAM-SUPPRESS` node + buffer store + changelog | **No new node, no new store** — same `KSTREAM-AGGREGATE` node |
+| Emit source      | A dedicated suppress buffer                                        | Reads finals straight from the existing window store          |
+| Aggregate node   | Still emits-on-update (just buffered later)                        | Itself stops emitting on update                               |
 
-**Fidelity anchor:** emit-final is a *behavioral mode on the aggregate processor*, not a
+**Fidelity anchor:** emit-final is a _behavioral mode on the aggregate processor_, not a
 new pipeline stage. The JVM parameterizes one `KStreamWindowAggregate` class by
 `EmitStrategy`; the topology bytes are **identical** whether emit-on-update or
 emit-on-close is chosen. Therefore lowering and store registration stay byte-for-byte the
@@ -107,7 +107,7 @@ aggregate, the session aggregate):
 ### 4. New store scan method
 
 The typed window store currently exposes only per-key reads (`fetch_single`,
-`fetch(key, from, to)`). Finding closed windows *across all keys* needs a new method —
+`fetch(key, from, to)`). Finding closed windows _across all keys_ needs a new method —
 the byte key layout is `key‖windowStart:8B‖seq:4B` (key-prefixed), so a `range()`
 shortcut over window-start is impossible; the scan filters a `scan_all()`:
 
@@ -123,7 +123,7 @@ Session store gets the analogous scan keyed by `session.end`.
 
 - **Emitted `Change` shape (highest risk):** JVM emit-final forwards each final as
   `Change(new, old = null)` — a one-shot, not an update pair. Implement `Change(final,
-  None)` but treat the exact shape (old=null vs old=prior) as **capture-decided**; the
+None)` but treat the exact shape (old=null vs old=prior) as **capture-decided**; the
   first golden run confirms it.
 - **Empty / seed-only windows:** only windows present in the store emit; a window that
   never received a record (would hold only the `init` seed) does not emit.
@@ -143,7 +143,7 @@ Session store gets the analogous scan keyed by `session.end`.
   a session is final only once `stream_time > session.end + grace` with no further merge
   possible. Scan by `session.end ≤ window_close_time` using the session triplet
   (`store/session.rs` + `store/session_schema.rs`). The merge logic itself is unchanged —
-  emit-final only changes *when/whether* the merged result is forwarded.
+  emit-final only changes _when/whether_ the merged result is forwarded.
 
 ## Edge cases
 

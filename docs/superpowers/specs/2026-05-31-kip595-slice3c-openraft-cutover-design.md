@@ -63,6 +63,7 @@ execute(Action):
 
 The loop also implements the timer/liveness mechanisms the 3a/3b simulations
 flagged as deliberately omitted from the pure core:
+
 - cancel the opposite timer on a role transition (a healthy follower must not
   keep an armed election timer);
 - a fetch-watchdog expiry while the leader is still reachable **re-polls**, it
@@ -82,7 +83,7 @@ flagged as deliberately omitted from the pure core:
   replies on `reply_tx`.
 
 This makes the engine testable as 3 in-process `KraftController` tasks over an
-in-memory `PeerSender` *before* the broker runs them over real TCP.
+in-memory `PeerSender` _before_ the broker runs them over real TCP.
 
 ## `ControllerHandle` mapping (API unchanged)
 
@@ -129,9 +130,10 @@ the `RaftStateMachine`/`RaftLogStorage`/`RaftSnapshotBuilder` impls in
 by the engine); `declare_raft_types!` + the `Raft` alias in `types.rs`;
 `RaftError::Openraft`; `kraft_spike.rs` + its feature in `lib.rs`/Cargo.
 **Keep:** `AppData`/`AppDataResponse`/`Node`/`NodeId`; `SnapshotWriter`/`Reader`
-+ checkpoint format; `MetadataImage`; `reconfig.rs` (`ReconfigOps` trait +
-coordinator + mock tests); `error.rs` (minus the openraft variant; add
-`Unsupported`).
+
+- checkpoint format; `MetadataImage`; `reconfig.rs` (`ReconfigOps` trait +
+  coordinator + mock tests); `error.rs` (minus the openraft variant; add
+  `Unsupported`).
 
 ## Acceptance / testing
 

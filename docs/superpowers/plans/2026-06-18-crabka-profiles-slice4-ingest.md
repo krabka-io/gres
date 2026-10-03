@@ -48,6 +48,7 @@ OTLP /v1development ────┘     (Connect + OTLP builders + plain /ingest
 ## Dependency & slice roadmap
 
 **Depends on (consume exactly — do not re-implement):**
+
 - **`krabka-blockstore` (slice 1, profiles-generalized)** — `BlockStore`, `BlockWriter::new(store: Arc<dyn object_store::ObjectStore>)` + `BlockWriter::write_block(tenant:&str, object_key:&str, schema:SchemaRef, batches:&[RecordBatch]) -> Result<BlockMeta>`, `BlockMeta`, the **`ProfileIndex`** impl (`BlockIndex`) with the label-postings + `__profile_type__` index + stacktrace-partition-map update methods + `save`, the **samples fact-table schema builder** + the **`PCOL_*` column constants** (`PCOL_PROFILE_TYPE`, `PCOL_STACKTRACE_ID`, `PCOL_VALUE`, `PCOL_STACKTRACE_PARTITION`, `PCOL_TOTAL_VALUE`, `PCOL_SPAN_ID`, `PCOL_TRACE_ID`) plus the mandatory `COL_FINGERPRINT`/`COL_TIMESTAMP`, and the **symbol-DB on-block artifact** key/suffix constant. `Labels`/`LabelMatcher`/`MatchOp`/`SeriesFingerprint` remain available. **Verify the exact `ProfileIndex` + samples-schema + symdb-artifact API against the slice-1 plan before consuming; if a name differs, align to it.**
 - **`krabka-pprof` (slices 2–3)** — `PprofProfile` (`decode(&[u8]) -> Result<PprofProfile, ProfileError>` / `encode(&self) -> Vec<u8>`), the `perftools.profiles` wire model with `sample_type[]`/`sample[].value[]`/`location[]`/`function[]`/`mapping[]`/`string_table[]`; `SymbolDb` (`intern_stacktrace(partition:u64, location_refs:&[u32]) -> u32`, `resolve`, `encode()/decode()`); `ProfileType { name, sample_type, sample_unit, period_type, period_unit }` (`parse(&str)`/`Display` 5-part colon form); `Frame { function:String, file:String, line:i32 }`; `ProfileError`. **Verify against the slice-2 plan; align to generated names if they differ.**
 - **`krabka-client-producer`** — `Producer::builder().bootstrap(..).build().await? -> Result<Producer, ProducerError>`; `Producer::send(ProducerRecord) -> impl Future<Output = oneshot::Receiver<Result<RecordMetadata, ProducerError>>>` (the call is `async`; await it, then await the returned `oneshot::Receiver` for the ack: `producer.send(rec).await.await??`); `ProducerRecord { topic:String, partition:Option<i32>, key:Option<Bytes>, value:Option<Bytes>, headers:Vec<Header>, timestamp_ms:Option<i64> }` (`Default`); `Producer::flush()`. **The producer hashes `key` with MurmurHash2 to choose a partition** — set `key` = `partition_key(tenant, fp)` and leave `partition: None`. (Verify against `crates/client-producer/src/{record,producer}.rs`.)
@@ -59,31 +60,32 @@ OTLP /v1development ────┘     (Connect + OTLP builders + plain /ingest
 **THIS slice defines (Slices 5/6/7 consume):** `ProfileRecord` (Task 5) — the WAL topic record (tenant + series `Labels` + `profile_type:String` + decoded payload `samples[(stacktrace_location_refs, value, span_id, trace_id)]` + the symbol set to merge into the block symdb). `PROFILES_WAL_TOPIC = "__krabka_profiles_wal"`. `partition_key(tenant:&str, fp:u64) -> Bytes`. `DecodedProfile` + the multi-value split (`split_sample_types`). The block-builder's `intern_record`/`samples_batch`/`object_key`.
 
 **The 8 profiles slices** (this plan = Slice 4):
-1. Blockstore `ProfileIndex` + samples schema + symbol-DB artifact. 2. `krabka-pprof` core. 3. Engine completeness. **4. Ingest service *(this plan)*.** 5. Querier + Connect `querier.v1` + legacy render. 6. Query-frontend. 7. Native symbolization. 8. Hardening.
+
+1. Blockstore `ProfileIndex` + samples schema + symbol-DB artifact. 2. `krabka-pprof` core. 3. Engine completeness. **4. Ingest service _(this plan)_.** 5. Querier + Connect `querier.v1` + legacy render. 6. Query-frontend. 7. Native symbolization. 8. Hardening.
 
 ---
 
 ## File structure (`crates/profiles/`)
 
-| File | Responsibility |
-|---|---|
-| `Cargo.toml` | crate manifest; ingest + blockstore + pprof + client deps; `[build-dependencies] connectrpc-axum-build` |
-| `build.rs` | connect/prost-codegen `push.v1` + OTLP `profiles/v1development` + pprof protos → `OUT_DIR` |
-| `proto/push/v1/push.proto` | vendored Pyroscope `push.v1.PusherService` |
-| `proto/opentelemetry/proto/profiles/v1development/profiles.proto` | vendored OTLP profiles (**commit-pinned**) + the `ProfilesService` collector proto |
-| `src/lib.rs` | module decls + public re-exports + crate docs; the `pb` codegen include |
-| `src/error.rs` | `ProfilesError` + per-edge HTTP status mapping |
-| `src/wire/mod.rs` | `pb` re-exports + the prost round-trip behavior-pin tests |
-| `src/ingest/mod.rs` | `DecodedProfile`, `RawProfile`, relabel + require-service_name + label limits + `__session_id__` cap |
-| `src/ingest/split.rs` | `split_sample_types` — one series per pprof `sample_type[]` → 5-part `__profile_type__` |
-| `src/ingest/push_v1.rs` | `push.v1` `PushRequest` → `Vec<RawProfile>` (gunzip + pprof decode) |
-| `src/ingest/otlp.rs` | OTLP `ExportProfilesServiceRequest` (`ProfilesDictionary` interned) → `Vec<RawProfile>` |
-| `src/ingest/legacy.rs` | `/ingest` query+multipart → `RawProfile` (pprof/jfr/groups; `sample_type_config`) |
-| `src/wal.rs` | `ProfileRecord`, `PROFILES_WAL_TOPIC`, `partition_key`, encode/decode |
-| `src/distributor/mod.rs` | axum router (Connect `push.v1` + OTLP `Export` builders + plain `/ingest`), serve, limits, produce |
-| `src/blockbuilder.rs` | consumer-group loop → intern symdb → samples batch → block + symdb + `ProfileIndex` → commit |
-| `src/bin/krabka-profiles.rs` | `clap` role-selectable entrypoint (`--target`) |
-| `tests/ingest_roundtrip.rs` | end-to-end distributor → WAL → block-builder → block (in-process broker) |
+| File                                                              | Responsibility                                                                                          |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `Cargo.toml`                                                      | crate manifest; ingest + blockstore + pprof + client deps; `[build-dependencies] connectrpc-axum-build` |
+| `build.rs`                                                        | connect/prost-codegen `push.v1` + OTLP `profiles/v1development` + pprof protos → `OUT_DIR`              |
+| `proto/push/v1/push.proto`                                        | vendored Pyroscope `push.v1.PusherService`                                                              |
+| `proto/opentelemetry/proto/profiles/v1development/profiles.proto` | vendored OTLP profiles (**commit-pinned**) + the `ProfilesService` collector proto                      |
+| `src/lib.rs`                                                      | module decls + public re-exports + crate docs; the `pb` codegen include                                 |
+| `src/error.rs`                                                    | `ProfilesError` + per-edge HTTP status mapping                                                          |
+| `src/wire/mod.rs`                                                 | `pb` re-exports + the prost round-trip behavior-pin tests                                               |
+| `src/ingest/mod.rs`                                               | `DecodedProfile`, `RawProfile`, relabel + require-service_name + label limits + `__session_id__` cap    |
+| `src/ingest/split.rs`                                             | `split_sample_types` — one series per pprof `sample_type[]` → 5-part `__profile_type__`                 |
+| `src/ingest/push_v1.rs`                                           | `push.v1` `PushRequest` → `Vec<RawProfile>` (gunzip + pprof decode)                                     |
+| `src/ingest/otlp.rs`                                              | OTLP `ExportProfilesServiceRequest` (`ProfilesDictionary` interned) → `Vec<RawProfile>`                 |
+| `src/ingest/legacy.rs`                                            | `/ingest` query+multipart → `RawProfile` (pprof/jfr/groups; `sample_type_config`)                       |
+| `src/wal.rs`                                                      | `ProfileRecord`, `PROFILES_WAL_TOPIC`, `partition_key`, encode/decode                                   |
+| `src/distributor/mod.rs`                                          | axum router (Connect `push.v1` + OTLP `Export` builders + plain `/ingest`), serve, limits, produce      |
+| `src/blockbuilder.rs`                                             | consumer-group loop → intern symdb → samples batch → block + symdb + `ProfileIndex` → commit            |
+| `src/bin/krabka-profiles.rs`                                      | `clap` role-selectable entrypoint (`--target`)                                                          |
+| `tests/ingest_roundtrip.rs`                                       | end-to-end distributor → WAL → block-builder → block (in-process broker)                                |
 
 Each file has one responsibility; `blockbuilder.rs` is the only file that touches the blockstore writer + `SymbolDb` interning, isolating the churn-prone surface.
 
@@ -92,12 +94,14 @@ Each file has one responsibility; `blockbuilder.rs` is the only file that touche
 ### Task 1: Crate scaffold + dependency wiring + error type
 
 **Files:**
+
 - Create: `crates/profiles/Cargo.toml`
 - Create: `crates/profiles/src/lib.rs`
 - Create: `crates/profiles/src/error.rs`
 - Modify: root `Cargo.toml` (`[workspace] members` += `"crates/profiles"`; add `flate2`, `multer` to `[workspace.dependencies]` if absent)
 
 **Interfaces:**
+
 - Produces: a compiling `krabka-profiles` crate; `pub enum ProfilesError` (`thiserror`) with `fn status_code(&self) -> u16`; `pub fn crate_smoke() -> bool` (placeholder, removed in Task 3) so there is a test to run.
 
 - [ ] **Step 1: Add the crate to the workspace + ingest deps**
@@ -281,6 +285,7 @@ git commit -m "feat(profiles): scaffold krabka-profiles crate + error type"
 ### Task 2: Vendored protos + Connect/prost codegen (`push.v1` + OTLP + pprof)
 
 **Files:**
+
 - Create: `crates/profiles/build.rs`
 - Create: `crates/profiles/proto/push/v1/push.proto`
 - Create: `crates/profiles/proto/types/v1/types.proto` (`LabelPair` shared message)
@@ -290,6 +295,7 @@ git commit -m "feat(profiles): scaffold krabka-profiles crate + error type"
 - Modify: `crates/profiles/src/lib.rs` (declare `pub mod wire;` + the `pb` include)
 
 **Interfaces:**
+
 - Produces: generated message + Connect-server types reachable as `crate::wire::pb::push::v1::{PushRequest, PushResponse, RawProfileSeries, RawSample, LabelPair}`, `crate::wire::pb::push::v1::pusher_service_connect::PusherServiceServiceBuilder`, `crate::wire::pb::otlp_profiles::{ExportProfilesServiceRequest, ExportProfilesServiceResponse, ProfilesData, ProfilesDictionary, Sample, Stack, ...}`, and `crate::wire::pb::otlp_profiles::profiles_service_connect::ProfilesServiceServiceBuilder`.
 
 - [ ] **Step 1: Vendor the `push.v1` proto**
@@ -566,10 +572,12 @@ git commit -m "feat(profiles): vendor push.v1 + OTLP profiles protos + connect/p
 ### Task 3: `DecodedProfile` / `RawProfile` + relabel + require-service_name + label limits
 
 **Files:**
+
 - Create: `crates/profiles/src/ingest/mod.rs`
 - Modify: `crates/profiles/src/lib.rs` (declare `pub mod ingest;`, drop the placeholder)
 
 **Interfaces:**
+
 - Produces (consumed by every `ingest/*` door + the distributor):
   - `struct RawProfile { pub labels: krabka_blockstore::Labels, pub profile: krabka_pprof::PprofProfile }` — one decoded pprof + its series labels, BEFORE the multi-value split.
   - `struct DecodedProfile { pub labels: krabka_blockstore::Labels, pub profile_type: String, pub samples: Vec<DecodedSample> }` — AFTER the split (one per sample type).
@@ -852,10 +860,12 @@ git commit -m "feat(profiles): DecodedProfile + relabel/require-service_name/lim
 ### Task 4: `split_sample_types` — multi-value split → one series per profile type
 
 **Files:**
+
 - Modify: `crates/profiles/src/ingest/split.rs`
 - Modify: `crates/profiles/src/ingest/mod.rs` (re-export)
 
 **Interfaces:**
+
 - Consumes: `RawProfile`, `krabka_pprof::{PprofProfile, ProfileType}`, `DecodedProfile`, `DecodedSample`.
 - Produces:
   - `fn split_sample_types(raw: &RawProfile) -> Result<Vec<DecodedProfile>, ProfilesError>` — for each `sample_type[i]` build one `DecodedProfile` whose `profile_type` is the 5-part `name:sample_type:sample_unit:period_type:period_unit` string and whose samples take `value[i]` from each pprof sample. Sets `__profile_type__` + `__period_type__`/`__period_unit__` labels.
@@ -1002,10 +1012,12 @@ git commit -m "feat(profiles): multi-value split — one series per pprof sample
 ### Task 5: `ProfileRecord` — the WAL topic record (Slices 5/6/7 consume this)
 
 **Files:**
+
 - Create: `crates/profiles/src/wal.rs`
 - Modify: `crates/profiles/src/lib.rs`
 
 **Interfaces:**
+
 - Produces (the SHARED CONTRACT this slice owns):
   - `const PROFILES_WAL_TOPIC: &str = "__krabka_profiles_wal"`
   - `struct ProfileRecord { pub tenant: String, pub labels: Vec<(String, String)>, pub profile_type: String, pub samples: Vec<WalSample>, pub symbols: WalSymbolSet }` (`serde`, `Clone`, `Debug`, `PartialEq`)
@@ -1235,10 +1247,12 @@ git commit -m "feat(profiles): ProfileRecord WAL topic record + serde-wincode co
 ### Task 6: `push.v1` door — `PushRequest` → `Vec<RawProfile>` (gunzip + pprof decode)
 
 **Files:**
+
 - Create: `crates/profiles/src/ingest/push_v1.rs`
 - Modify: `crates/profiles/src/ingest/mod.rs`
 
 **Interfaces:**
+
 - Consumes: `pb::push::v1::PushRequest`, `pb::types::v1::LabelPair`, `krabka_pprof::PprofProfile`.
 - Produces:
   - `fn decode_push(req: &pb::push::v1::PushRequest, max_decompressed: usize) -> Result<Vec<RawProfile>, ProfilesError>` — for each `RawProfileSeries`, build `Labels` from `labels[]`, then for each `RawSample` gunzip `raw_profile` and `PprofProfile::decode` → one `RawProfile`.
@@ -1377,11 +1391,13 @@ git commit -m "feat(profiles): push.v1 door — gunzip raw_profile + pprof decod
 ### Task 7: OTLP `v1development` door + legacy `/ingest` door
 
 **Files:**
+
 - Create: `crates/profiles/src/ingest/otlp.rs`
 - Create: `crates/profiles/src/ingest/legacy.rs`
 - Modify: `crates/profiles/src/ingest/mod.rs`
 
 **Interfaces:**
+
 - Produces:
   - `fn decode_otlp(req: &pb::otlp_profiles::ExportProfilesServiceRequest) -> Result<Vec<RawProfile>, ProfilesError>` — resolve the interned `ProfilesDictionary` (`string_table`, `stack_table`, `location_table`, `function_table`, `mapping_table`) into a `PprofProfile`-equivalent `RawProfile` per `Profile`, deriving `__name__`/`service_name` from resource attributes.
   - `struct IngestQuery { pub name: String, pub labels: Vec<(String, String)>, pub format: IngestFormat, pub sample_rate: u32 }`; `enum IngestFormat { Pprof, Jfr, Groups }`.
@@ -1695,10 +1711,12 @@ git commit -m "feat(profiles): OTLP v1development + legacy /ingest pprof doors"
 ### Task 8: Distributor — Connect `push.v1` + OTLP `Export` builders + `/ingest` route, produce
 
 **Files:**
+
 - Create: `crates/profiles/src/distributor/mod.rs`
 - Modify: `crates/profiles/src/lib.rs`
 
 **Interfaces:**
+
 - Produces:
   - `trait WalSink: Send + Sync { async fn append(&self, rec: ProfileRecord) -> Result<(), ProfilesError>; }` (the recording-fake seam for tests; `KafkaSink` wraps the producer).
   - `struct DistributorState { pub sink: Arc<dyn WalSink>, pub limits: TenantLimits, pub relabel: Vec<RelabelConfig>, pub max_decompressed: usize }` (the axum `State`/`Extension`).
@@ -1780,6 +1798,7 @@ Expected: FAIL — `cannot find function process_raw`.
 - [ ] **Step 3: Implement `distributor/mod.rs`**
 
 Implement:
+
 - `WalSink` trait (use `async_trait` — add `async-trait = { workspace = true }` to deps if not present; metrics/traces slices use the same seam) + `KafkaSink { producer: Arc<Producer> }` whose `append` builds a `ProducerRecord { topic: PROFILES_WAL_TOPIC.into(), key: Some(partition_key(&rec.tenant, rec.series_fingerprint())), value: Some(Bytes::from(rec.encode()?)), partition: None, ..Default::default() }` and `producer.send(record).await.await??` (verify the ack pattern against `crates/client-producer/src/producer.rs`).
 - `process_raw`: for each `RawProfile`: `apply_relabel(&mut labels, &state.relabel)` → if `false` skip; `require_service_name`; `enforce_limits`; `cap_session_id(.., state.limits.session_id_buckets)`; `split_sample_types` → for each `DecodedProfile` build a `ProfileRecord { tenant, labels: profile.labels.iter()…collect(), profile_type, samples: …, symbols: extract_symbols(&raw.profile) }` and `state.sink.append(rec).await?`.
 - `extract_symbols(&PprofProfile) -> WalSymbolSet`: map the pprof string/function/location/mapping tables 1:1 to `WalSymbolSet` (slice-2 getters). This is the symbol set the block-builder interns.
@@ -1826,10 +1845,12 @@ git commit -m "feat(profiles): distributor — push.v1/OTLP/ingest doors, split,
 ### Task 9: Block-builder — WAL consumer-group → samples fact table + dedup SymbolDb + ProfileIndex
 
 **Files:**
+
 - Create: `crates/profiles/src/blockbuilder.rs`
 - Modify: `crates/profiles/src/lib.rs`
 
 **Interfaces:**
+
 - Produces:
   - `fn object_key(tenant: &str, partition: i32, min_offset: i64, max_offset: i64, min_ts: i64, max_ts: i64) -> String` — deterministic idempotent block key; the symbol-DB artifact key is the block key + the slice-1 symdb suffix.
   - `fn intern_record(symdb: &mut SymbolDb, rec: &ProfileRecord) -> Result<Vec<u32>, ProfilesError>` — merge `rec.symbols` into `symdb`, intern each sample's `stacktrace_location_refs` → a `stacktrace_id` per sample (returns one id per sample, in order). Records the `stacktrace_partition` chosen.
@@ -1920,6 +1941,7 @@ Expected: FAIL — `cannot find function object_key`.
 - [ ] **Step 3: Implement `blockbuilder.rs`**
 
 Implement:
+
 - `object_key`: `format!("blocks/{tenant}/{partition:05}/{min_offset:020}-{max_offset:020}-{min_ts}-{max_ts}.parquet")` (deterministic ⇒ idempotent overwrite). The symdb artifact key = `format!("{key}{}", krabka_blockstore::SYMDB_SUFFIX)`.
 - `intern_record`: register `rec.symbols` tables into the `SymbolDb` (offsetting indices into the symdb's growing tables), choose a `stacktrace_partition` (per-tenant or per-block — match the slice-1 convention; default a single partition `0` for a block, noted `// TODO(slice4-stacktrace-partition-policy)`), then `symdb.intern_stacktrace(partition, &offset_refs)` per sample → `Vec<u32>`.
 - `samples_batch`: build Arrow arrays for the slice-1 `PCOL_*` columns (`COL_FINGERPRINT` UInt64, `COL_TIMESTAMP` Int64, `PCOL_PROFILE_TYPE` Dictionary<Utf8>, `PCOL_STACKTRACE_ID` UInt64, `PCOL_VALUE` Int64, `PCOL_STACKTRACE_PARTITION` UInt64, `PCOL_TOTAL_VALUE` Int64, `PCOL_SPAN_ID` UInt64 nullable, `PCOL_TRACE_ID` Binary nullable) via the slice-1 schema builder. `total_value` = the per-profile sum of values for that series+type (precomputed for SelectSeries).
@@ -1955,10 +1977,12 @@ git commit -m "feat(profiles): block-builder — WAL to samples fact table + ded
 ### Task 10: Role-selectable binary
 
 **Files:**
+
 - Create: `crates/profiles/src/bin/krabka-profiles.rs`
 - Modify: `crates/profiles/Cargo.toml` (`[[bin]]` if needed; clap already a dep)
 
 **Interfaces:**
+
 - Produces: a binary with `--target distributor|block-builder` (other targets — `querier`, `query-frontend`, `compactor`, `symbolizer` — stubbed with a "not yet implemented in this slice" message). Distributor wires a real `Producer` + `serve`; block-builder wires a `Consumer` + `BlockStore` + `run`.
 
 - [ ] **Step 1: Write the failing test (arg parsing)**
@@ -1997,6 +2021,7 @@ Expected: FAIL — `cannot find type Cli`.
 - [ ] **Step 3: Implement the binary**
 
 `#[derive(Parser)] struct Cli { #[arg(long)] target: Target, #[arg(long, default_value = "127.0.0.1:4040")] listen: String, #[arg(long, default_value = "127.0.0.1:9092")] bootstrap: String }` + `#[derive(Clone, ValueEnum)] enum Target { Distributor, BlockBuilder, Querier, QueryFrontend, Compactor, Symbolizer }` (clap renames `BlockBuilder` → `block-builder`). `main`: parse, `tracing_subscriber` init, `CancellationToken` from `tokio::signal::ctrl_c`, match `target`:
+
 - `Distributor` → `Producer::builder().bootstrap(&cli.bootstrap).build().await?`, wrap in `KafkaSink`, build `DistributorState`, `distributor::serve(cli.listen.parse()?, state, shutdown).await?`.
 - `BlockBuilder` → `Consumer::builder().bootstrap(&cli.bootstrap).group_id("krabka-profiles-block-builder").subscribe([PROFILES_WAL_TOPIC.to_string()]).auto_offset_reset(AutoOffsetReset::Earliest).build().await?`, build a `BlockStore` over the configured object store (memory for now; real config `// TODO(slice4-objstore-config)`), `blockbuilder::run(consumer, blockstore, "index/profiles.json", shutdown).await?`.
 - `Querier | QueryFrontend | Compactor | Symbolizer` → `eprintln!` + `std::process::exit(2)` with "target not implemented until slice {N}".
@@ -2022,10 +2047,12 @@ git commit -m "feat(profiles): role-selectable krabka-profiles binary (distribut
 ### Task 11: End-to-end broker round-trip (in-process broker)
 
 **Files:**
+
 - Create: `crates/profiles/tests/ingest_roundtrip.rs`
 - Create: `crates/profiles/tests/support/mod.rs` (minimal in-process broker start, if needed)
 
 **Interfaces:**
+
 - Consumes the public API: `distributor::{router, process_raw, KafkaSink}`, `Producer`, `Consumer`, `blockbuilder::build_block`, `ProfileRecord`, `PROFILES_WAL_TOPIC`, blockstore.
 
 This is the one test that needs a real broker. Use the in-process broker test-support (`BrokerConfig::for_tests` + `Broker::start`) — no Docker, runs in CI. Mark any Docker-only path `#[ignore]`.
@@ -2078,6 +2105,7 @@ git commit -m "test(profiles): end-to-end push.v1 -> WAL -> block-builder -> blo
 ## Self-review
 
 **Spec coverage (against §5 ingest + §3 architecture + §11 Slice 4):**
+
 - `push.v1.PusherService/Push` (gzipped-pprof `raw_profile` → gunzip → pprof decode) → Tasks 2, 6, 8.
 - Legacy `POST /ingest` (`?name=app{labels}&format=...`, multipart `profile` pprof + `sample_type_config`) → Tasks 7, 8.
 - OTLP `ProfilesService/Export` `v1development` (interned `ProfilesDictionary` → pprof-equivalent) → Tasks 2, 7, 8.
@@ -2088,6 +2116,7 @@ git commit -m "test(profiles): end-to-end push.v1 -> WAL -> block-builder -> blo
 - In-process broker round-trip test (testcontainers `#[ignore]` Docker fallback) → Task 11.
 
 **Deviations flagged (deferred with explicit TODO markers, not silently dropped):**
+
 - JFR + folded-text (`groups`/`tree`/`lines`/`speedscope`) `/ingest` formats — Task 7 returns `UnsupportedFormat` with `// TODO(slice4-ingest-jfr)`/`-folded`; the load-bearing `pprof` multipart path is done+tested.
 - Full `relabel_configs` grammar (modulus/hashmod/labelmap) — Task 3 `// TODO(slice4-relabel-full)`; drop/keep/replace + structural caps are implemented/tested.
 - OTLP resource-attribute `service.name` resolution — Task 7 `// TODO(slice4-otlp-resource)`; `require_service_name` enforces `unknown_service` downstream regardless.
@@ -2100,6 +2129,7 @@ git commit -m "test(profiles): end-to-end push.v1 -> WAL -> block-builder -> blo
 **Type consistency:** `RawProfile` (Task 3) is produced by all three doors (Tasks 6/7) and consumed by `process_raw` (Task 8) → `split_sample_types` (Task 4) → `DecodedProfile`. `ProfileRecord`/`WalSample`/`WalSymbolSet`/`partition_key` (Task 5) are consumed by the distributor produce path (Task 8) and the block-builder (Task 9). `ProfilesError::status_code()` is the single ingest status mapping (Task 1), used by the distributor (Task 8). The slice-1 blockstore API (`BlockStore::new`/`writer`/`index_mut`/`write_block`/`ProfileIndex` updates/`save`/`PCOL_*`/`SYMDB_SUFFIX`) and the slice-2 `krabka-pprof` API (`PprofProfile`/`SymbolDb`/`ProfileType`/`Frame`/`ProfileError`) are consumed exactly as the dependency roadmap pins them — verify-against notes flag every consumer-side assumption.
 
 **Known risks (flagged, not hidden):**
+
 - **OTLP `v1development` proto churn** — the single highest-churn surface; commit-pinned (tag comment) + behavior-pinned by the Task-2 round-trip test, so a drift is a failing test, not silent corruption. Contained to `proto/` + `wire/` + `ingest/otlp.rs`.
 - **`krabka-pprof` consumer-side assumptions** — Tasks 4/6/7/9 reuse the slice-2 `PprofProfile::sample_types()`/`string()` + `SymbolDb::intern_stacktrace` (which exist) and assume additional per-sample/period getters (`samples`, `value_at`, `location_refs`, `timestamp_ns`, `span_id`, `trace_id`, `period_type_strings`) + `PprofProfile::from_otlp` that slice 2 does **not** define yet — add these to slice 2 (greenfield) as a companion change. Pinned by the split/intern behavior tests.
 - **connect codegen + protoc in CI** — Task 2 `build.rs` needs `protoc`; mirrors grpc-gateway's `system_protoc_available()` + `fetch_protoc` fallback. Pinned by the two prost round-trip tests so a codegen break is a compile error.

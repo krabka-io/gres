@@ -71,8 +71,7 @@ CLI / environment / typed default
 
 Authentication remains before body buffering and JSON decoding. An
 authenticated request above the configured limit still returns HTTP 413 with
-`request body too large`; malformed JSON within the limit still returns HTTP
-400.
+`request body too large`; malformed JSON within the limit still returns HTTP 400.
 
 ## Tests
 

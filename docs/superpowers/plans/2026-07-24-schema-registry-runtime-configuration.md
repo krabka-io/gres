@@ -20,18 +20,18 @@
 
 ## Runtime Field Table
 
-| Field | Type | Direct/operator default | Constraint |
-|---|---:|---:|---|
-| `election_session_timeout_ms` | `i32` | `10000` | `>= 1` |
-| `election_rebalance_timeout_ms` | `i32` | `30000` | `>= session` |
-| `election_heartbeat_interval_ms` | `u64` | `3000` | `1..session` |
-| `election_reconnect_backoff_ms` | `u64` | `500` | `>= 1` |
-| `store_reader_retry_backoff_ms` | `u64` | `250` | `>= 1` |
-| `store_reader_fetch_max_wait_ms` | `i32` | `500` | `>= 1` |
-| `store_reader_fetch_max_bytes` | `i32` | `1048576` | `>= 1` |
-| `schemas_topic_create_timeout_ms` | `i32` | `15000` | `>= 1` |
-| `default_compatibility_level` | enum string | `BACKWARD` | existing compatibility enum |
-| `default_mode` | enum string | `READWRITE` | `READWRITE`, `READONLY`, or `IMPORT` |
+| Field                             |        Type | Direct/operator default | Constraint                           |
+| --------------------------------- | ----------: | ----------------------: | ------------------------------------ |
+| `election_session_timeout_ms`     |       `i32` |                 `10000` | `>= 1`                               |
+| `election_rebalance_timeout_ms`   |       `i32` |                 `30000` | `>= session`                         |
+| `election_heartbeat_interval_ms`  |       `u64` |                  `3000` | `1..session`                         |
+| `election_reconnect_backoff_ms`   |       `u64` |                   `500` | `>= 1`                               |
+| `store_reader_retry_backoff_ms`   |       `u64` |                   `250` | `>= 1`                               |
+| `store_reader_fetch_max_wait_ms`  |       `i32` |                   `500` | `>= 1`                               |
+| `store_reader_fetch_max_bytes`    |       `i32` |               `1048576` | `>= 1`                               |
+| `schemas_topic_create_timeout_ms` |       `i32` |                 `15000` | `>= 1`                               |
+| `default_compatibility_level`     | enum string |              `BACKWARD` | existing compatibility enum          |
+| `default_mode`                    | enum string |             `READWRITE` | `READWRITE`, `READONLY`, or `IMPORT` |
 
 Direct-only existing setting: `admin_listen_addr`, default `0.0.0.0:9404`, gains `--admin-listen-addr` backed by `KRABKA_ADMIN_LISTEN_ADDR`. The operator has no admin Service, so a CRD field would be inert.
 

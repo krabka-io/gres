@@ -3,7 +3,7 @@
 ## Goal
 
 Build a standalone **`krabka-grpc-gateway`** service that lets non-Kafka
-applications produce to and consume from *real* Kafka topics over **gRPC /
+applications produce to and consume from _real_ Kafka topics over **gRPC /
 Connect-RPC** and **HTTP webhooks (JSON)**, with server-side **exactly-once
 deduplication** of caller-initiated duplicate sends. The gateway speaks the
 ordinary Kafka wire protocol to the broker using Crabka's own native idempotent
@@ -74,7 +74,7 @@ produce / consume / dedup core.**
 ### Process shape
 
 A single binary, `krabka-grpc-gateway`. One **axum** server hosts the
-Connect/gRPC service *and* the inbound webhook HTTP routes on the same listener
+Connect/gRPC service _and_ the inbound webhook HTTP routes on the same listener
 (content-negotiated). The **outbound webhook delivery** subsystem runs as
 background tasks (one consumer group per subscription) in the same process. A
 health/readiness endpoint reports per-dedup-partition warm-up state.
@@ -114,15 +114,15 @@ crates/grpc-gateway/
 
 ### Reused Crabka building blocks (no new Kafka-protocol code)
 
-| Need | Reuse |
-|---|---|
-| Bootstrap / connection pool | `krabka-client-core` (`bootstrap`, `pool`, `transport`) |
-| Idempotent + transactional produce | `krabka-client-producer` (`InitProducerId`, `(pid,epoch,seq)`, txn) |
-| Group consume + commit | `krabka-client-consumer` (`subscribe`, `poll`, `commit_sync/async`) |
-| TLS / mTLS / principal / hot reload | `krabka-security` (`tls`, `mtls`, `principal`, `reload`) |
-| ACL evaluation (trusted-proxy) | factor `crates/broker/src/authorizer` → shared `krabka-authz` |
-| JSON field extraction (webhook-in) | `jsonpath-rust` (already a workspace dep) |
-| Outbound HTTP client | `reqwest` (already in the dep graph via OTLP) |
+| Need                                | Reuse                                                               |
+| ----------------------------------- | ------------------------------------------------------------------- |
+| Bootstrap / connection pool         | `krabka-client-core` (`bootstrap`, `pool`, `transport`)             |
+| Idempotent + transactional produce  | `krabka-client-producer` (`InitProducerId`, `(pid,epoch,seq)`, txn) |
+| Group consume + commit              | `krabka-client-consumer` (`subscribe`, `poll`, `commit_sync/async`) |
+| TLS / mTLS / principal / hot reload | `krabka-security` (`tls`, `mtls`, `principal`, `reload`)            |
+| ACL evaluation (trusted-proxy)      | factor `crates/broker/src/authorizer` → shared `krabka-authz`       |
+| JSON field extraction (webhook-in)  | `jsonpath-rust` (already a workspace dep)                           |
+| Outbound HTTP client                | `reqwest` (already in the dep graph via OTLP)                       |
 
 ## Components
 
@@ -143,7 +143,7 @@ present, sticky otherwise). Per-record results (`partition`, `offset`,
 **Claim topic.** Internal compacted topic `__krabka_grpc_dedup`, `N`
 partitions, `cleanup.policy=compact,delete`, `retention.ms = dedup_window_ms`.
 Key = `idempotency_key`; value = `{topic, partition, offset, produce_ts}`. The
-retention bound is *both* the topic size bound and the dedup-window guarantee.
+retention bound is _both_ the topic size bound and the dedup-window guarantee.
 
 **Ownership sharding (mutual exclusion).** Gateway replicas form a consumer
 group (`__krabka_grpc_gateway_dedup_owners`) subscribed to `__krabka_grpc_dedup`.
@@ -167,6 +167,7 @@ During warm-up / rebalance gaps the owner answers `UNAVAILABLE`; the origin
 re-resolves and retries.
 
 **Strict-EOS write path (owner, on a map miss):**
+
 1. acquire the sharded **per-key lock**;
 2. re-check the map (may have filled while waiting);
 3. still missing → using the partition's **transactional producer**
@@ -180,11 +181,12 @@ Map **hit** → return the cached `(partition, offset, deduplicated=true)` witho
 producing.
 
 **Why this is strictly exactly-once:**
-- *Single writer per key* — ownership sharding ⇒ no two replicas race a key.
-- *Atomic claim* — record + claim land in one transaction; `read_committed`
+
+- _Single writer per key_ — ownership sharding ⇒ no two replicas race a key.
+- _Atomic claim_ — record + claim land in one transaction; `read_committed`
   materialization hides partial state; a crash mid-txn aborts ⇒ clean retry.
-- *No cold-start gap* — per-partition warm-up gate before serving.
-- *No zombies* — `transactional.id` pinned to the dedup-partition ⇒ on ownership
+- _No cold-start gap_ — per-partition warm-up gate before serving.
+- _No zombies_ — `transactional.id` pinned to the dedup-partition ⇒ on ownership
   move the new owner's `InitProducerId` bumps the epoch and **fences** the old
   owner (the KIP-447 pattern Crabka already implements).
 
@@ -304,6 +306,7 @@ render a JSON envelope `{topic, partition, offset, timestamp, key, headers, valu
 `X-Crabka-Timestamp`.
 
 **Delivery semantics — at-least-once, ordered:**
+
 - `2xx` → delivered; commit the partition's contiguous-delivered prefix.
 - non-`2xx` / timeout → retry with exponential backoff + jitter up to
   `max_attempts`. The partition is **head-of-line blocked** while retrying (no
@@ -337,18 +340,22 @@ the broker's existing telemetry stack.
 ## Data flow
 
 ### Send (keyed, strict EOS)
+
 `Send/SendStream | webhook-in → produce core → hash(key)%N → own? handle :
 forward → per-key lock → map check → (miss) txn{record→user-topic, claim→dedup} →
 commit → map update → result`.
 
 ### Subscribe (gRPC, at-least-once)
+
 `Start → join group → poll loop → stream Inbound → caller Ack → commit offset`.
 
 ### Webhook inbound
+
 `POST → size-limit → verify HMAC → extract idempotency_key → Record → produce+dedup
 core → 200 {partition, offset, deduplicated}`.
 
 ### Webhook outbound
+
 `group poll → filter → render JSON envelope → sign → POST → 2xx? commit prefix :
 backoff-retry (head-of-line) → exhausted? → DLQ + commit`.
 
@@ -463,7 +470,7 @@ Disjoint sets that can run concurrently within a phase:
 A separate in-flight component will provide **Avro / JSON Schema / Protobuf**
 schema management. Integration is purely additive via the codec seam (§5):
 
-- **`SchemaRegistryCodec`** wraps the registry *client*; `produce.rs` /
+- **`SchemaRegistryCodec`** wraps the registry _client_; `produce.rs` /
   `consume.rs` / webhook front-ends are unchanged — only the injected codec
   differs. Dependency direction is gateway → registry client, never the reverse.
 - **Confluent wire framing** for JVM serde interop: encode values as
@@ -473,7 +480,7 @@ schema management. Integration is purely additive via the codec seam (§5):
   vice-versa.
 - **Proto additions (later):** `Record` grows
   `oneof { bytes raw; StructuredValue structured }` + a `schema{subject, id,
-  format}` selector; `Inbound` gains a decoded value + schema metadata. Default
+format}` selector; `Inbound` gains a decoded value + schema metadata. Default
   subject strategy = `TopicNameStrategy` (`<topic>-value` / `-key`). Greenfield ⇒
   these can be added freely when the time comes.
 - **Webhook tie-in:** inbound JSON can be validated against a JSON Schema

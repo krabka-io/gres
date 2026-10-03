@@ -10,7 +10,7 @@
 
 **Spec:** [`docs/superpowers/specs/2026-07-06-crabka-polyglot-messaging-sdk-design.md`](../specs/2026-07-06-crabka-polyglot-messaging-sdk-design.md).
 
-**PREREQUISITES (for a *complete* CE round-trip, not for publish):** MSG-1 (SDK CE-*consume*), MSG-3 (manual per-offset ack). MSG-5 v1 ships without them (publish CE is transparent today; subscribe defaults to `auto_commit`).
+**PREREQUISITES (for a _complete_ CE round-trip, not for publish):** MSG-1 (SDK CE-_consume_), MSG-3 (manual per-offset ack). MSG-5 v1 ships without them (publish CE is transparent today; subscribe defaults to `auto_commit`).
 
 ---
 
@@ -46,6 +46,7 @@
 ## Task 1 (Batch A): buf foundation + `sdks/go` scaffold + connect-go stubs
 
 **Files:**
+
 - Create: `buf.yaml`, `buf.gen.yaml`, `sdks/go/go.mod`, `sdks/go/gen/**` (generated)
 
 - [ ] **Step 1: buf config**
@@ -91,6 +92,7 @@ git commit -m "build(sdk): buf config + connect-go stub generation for the gatew
 ## Task 2 (Batch A): Gateway h2c listener
 
 **Files:**
+
 - Modify: `crates/grpc-gateway/src/serve.rs:22-35`
 
 - [ ] **Step 1: Write the failing test**
@@ -142,6 +144,7 @@ git commit -m "feat(gateway): serve h2c on the plaintext listener (unblocks non-
 ## Task 3 (Batch B): Go SDK — `publish` + `publishEvent` (CloudEvents)
 
 **Files:**
+
 - Create: `sdks/go/client.go`, `sdks/go/cloudevents.go`, `sdks/go/cloudevents_test.go`
 
 Depends on Task 1 (stubs).
@@ -264,6 +267,7 @@ git commit -m "feat(sdk-go): publish + publishEvent (CloudEvents binary mode)"
 ## Task 4 (Batch B): Gateway OCI image + compose harness
 
 **Files:**
+
 - Create: `packaging/apko/krabka-gateway.yaml`, `sdks/go/testdata/docker-compose.yml`
 - Modify: `.github/workflows/publish-images.yml` (matrix entry)
 
@@ -281,6 +285,7 @@ git commit -m "build(gateway): OCI image + docker-compose harness for SDK integr
 ## Task 5: Go SDK — `subscribe` + filter + live round-trip
 
 **Files:**
+
 - Create: `sdks/go/subscribe.go`, `sdks/go/integration_test.go`
 
 Depends on Tasks 2 + 3 + 4.
@@ -352,13 +357,14 @@ git commit -m "feat(sdk-go): subscribe with filter over h2c (auto_commit)"
 ## Task 6: CI job + honest README + final gate
 
 **Files:**
+
 - Create: `sdks/go/README.md`; Modify: `.github/workflows/` (a Go SDK job + buf drift check)
 
 - [ ] **Step 1: buf drift + Go SDK CI job**
 
 Add a workflow job (reuse `actions/setup-go@v6`): `buf generate` then `git diff --exit-code sdks/go/gen` (mirror `codegen-check.yml`); then bring up the compose harness (built gateway image) and run `go test -tags integration ./sdks/go/...`. Note in the workflow that TS/Python jobs are blocked pending `setup-node`/`setup-python`.
 
-- [ ] **Step 2: Honest README** — `sdks/go/README.md`: document `publish`/`publishEvent`/`subscribe`+`Equals`; and clearly label as **experimental/unimplemented** with links to the gating work: manual per-offset ack (h2 + MSG-3), share-group consume (net-new gateway RPC), topic auto-provision (net-new `EnsureTopic` RPC), CloudEvents *consume* (MSG-1); note the filter is **EQUALS-only, structured-records-only** and bearer tokens are **dev/test-only** (unsecured JWS).
+- [ ] **Step 2: Honest README** — `sdks/go/README.md`: document `publish`/`publishEvent`/`subscribe`+`Equals`; and clearly label as **experimental/unimplemented** with links to the gating work: manual per-offset ack (h2 + MSG-3), share-group consume (net-new gateway RPC), topic auto-provision (net-new `EnsureTopic` RPC), CloudEvents _consume_ (MSG-1); note the filter is **EQUALS-only, structured-records-only** and bearer tokens are **dev/test-only** (unsecured JWS).
 - [ ] **Step 3: Gate** — `cargo +nightly fmt --check` (serve.rs); `cargo clippy -p krabka-grpc-gateway --all-targets -- -D warnings`; `cd sdks/go && gofmt -l . && go vet ./...`; `buf lint`. Commit.
 
 ```bash
@@ -378,4 +384,4 @@ git commit -m "ci(sdk-go): buf drift + integration job; docs: honest SDK surface
 
 **4. Invariant check:** Connect codegen only (Task 1); `.proto` canonical + drift check (Tasks 1, 6); Subscribe proven over h2c (Tasks 2, 5); honest surface labeling (Task 6 README + experimental in code comments); behavior-tested against a live gateway (Tasks 4, 5); `sdks/` out of the Cargo workspace (Task 1). Each task green before commit.
 
-**5. Prerequisites:** none blocks publish/subscribe v1. MSG-1 (SDK CE-consume) and MSG-3 (manual per-offset ack) are named prerequisites for the *deferred* surface only. Batching: Task 1 ∥ Task 2 → Task 3 ∥ Task 4 → Task 5 → Task 6.
+**5. Prerequisites:** none blocks publish/subscribe v1. MSG-1 (SDK CE-consume) and MSG-3 (manual per-offset ack) are named prerequisites for the _deferred_ surface only. Batching: Task 1 ∥ Task 2 → Task 3 ∥ Task 4 → Task 5 → Task 6.

@@ -67,9 +67,11 @@ CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
 ### Task 1: Make AdminClient honor its DNS timeout
 
 **Files:**
+
 - Modify: `crates/client-admin/src/lib.rs`
 
 **Interfaces:**
+
 - Consumes:
   `krabka_client_core::ClientDnsTimeout`
 - Produces:
@@ -243,9 +245,11 @@ timeout behavior changed.
 ### Task 2: Carry reader/admin DNS policy through Registry
 
 **Files:**
+
 - Modify: `crates/gres-control/src/registry.rs`
 
 **Interfaces:**
+
 - Consumes:
   `AdminClient::connect_with_dns_timeout(&[String], ClientDnsTimeout)`
 - Produces:
@@ -462,6 +466,7 @@ topic creation, and metadata admin paths while producer DNS remains unchanged.
 ### Task 3: Expose every standalone registry surface
 
 **Files:**
+
 - Modify: `crates/gres/src/lib.rs`
 - Modify: `crates/cli/src/gres.rs`
 - Modify: `crates/gres-activator/src/main.rs`
@@ -469,6 +474,7 @@ topic creation, and metadata admin paths while producer DNS remains unchanged.
 - Modify: `crates/gres-loadtest/src/cluster.rs`
 
 **Interfaces:**
+
 - Consumes:
   `RegistryPolicy::with_reader_admin_dns_timeout_ms(u64) -> Result<RegistryPolicy, String>`
 - Produces on all four parsers:
@@ -644,6 +650,7 @@ precedence, zero rejection, and load-test child propagation.
 ### Task 4: Expose Kafka CRD and operator paths
 
 **Files:**
+
 - Modify: `crates/operator/src/crd/kafka.rs`
 - Modify: `crates/operator/src/context.rs`
 - Modify: `crates/operator/src/controller/gres.rs`
@@ -652,6 +659,7 @@ precedence, zero rejection, and load-test child propagation.
 - Modify generated: `deploy/crds/crabka.io_kafkas.yaml`
 
 **Interfaces:**
+
 - Produces:
   `GresRegistrySpec::reader_admin_dns_timeout_ms: Option<u64>`
 - Produces:
@@ -866,9 +874,11 @@ cache behavior, compute and activator rendering, and generated schema.
 ### Task 5: Audit, verify, publish, and continue
 
 **Files:**
+
 - Modify: `docs/configuration-audit.md`
 
 **Interfaces:**
+
 - Consumes:
   reviewed admin boundary, registry policy, standalone surfaces, and operator paths
 - Produces:

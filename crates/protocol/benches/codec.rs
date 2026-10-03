@@ -9,6 +9,7 @@
 //! signal.
 
 use bytes::{Bytes, BytesMut};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use krabka_compression::CompressionType;
 use krabka_protocol::{
     Decode, Encode,
@@ -32,7 +33,6 @@ use krabka_protocol::{
         UnknownTaggedField, UnknownTaggedFields, WriteTaggedFields, tagged_fields_len,
     },
 };
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -22,9 +22,10 @@
 
 ### Task 1: Record headers through `krabka-client-core`
 
-**Files:** Modify `crates/client-core/src/fetch.rs` (and the record-decode layer it calls — locate where `FetchedRecord` is assembled from the decoded batch; the protocol crate's record structs already parse headers off the wire for the broker's benefit — verify, and if the *client-side* decode path skips them, extend it there), tests in the same crate.
+**Files:** Modify `crates/client-core/src/fetch.rs` (and the record-decode layer it calls — locate where `FetchedRecord` is assembled from the decoded batch; the protocol crate's record structs already parse headers off the wire for the broker's benefit — verify, and if the _client-side_ decode path skips them, extend it there), tests in the same crate.
 
 **Interfaces:**
+
 - `FetchedRecord` gains `pub headers: Vec<FetchedHeader>` with `pub struct FetchedHeader { pub key: String, pub value: Option<Bytes> }` (mirror the protocol crate's existing header type if one is public — prefer re-use over a new type; decide by inspection).
 
 Steps: failing test — produce a record with two headers (one null-valued) via `krabka-client-producer` against an in-process broker, `fetch_partition` returns them key/value-exact (whole-struct compare); plus a pure decode unit over a hand-encoded v2 batch fixture (covers varint edge cases: empty headers, null value, multi-byte varint lengths). Implement. Confirm zero behavior change for existing callers (additive field). nextest/clippy/fmt; commit `feat(client-core): surface record headers from fetch`.

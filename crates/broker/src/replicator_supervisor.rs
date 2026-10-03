@@ -19,12 +19,12 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use dashmap::DashMap;
 use krabka_ids::PartitionIndex;
 use krabka_log::{Log, LogConfig};
 use krabka_metadata::MetadataImage;
 use krabka_raft::NodeId;
 use krabka_units::Time;
-use dashmap::DashMap;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;

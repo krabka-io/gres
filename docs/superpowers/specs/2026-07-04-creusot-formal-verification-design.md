@@ -14,7 +14,7 @@ Creusot verifies synchronous, mostly-safe Rust only (no async, no trait objects,
 atomics, limited std). Crabka's broker paths are heavily async, so verification targets
 extracted pure kernels — the deductive counterpart to the existing stateright
 model-checking program: stateright explores concurrent interleavings; Creusot proves
-sequential functional contracts over the *entire* input space.
+sequential functional contracts over the _entire_ input space.
 
 ## Scope
 
@@ -80,7 +80,7 @@ Total; no preconditions. Ensures (⊕ = saturating add, `capped = min(available 
 
 ### `log_is_up_to_date(my_epoch, my_end, cand_epoch, cand_offset) -> bool`
 
-Full functional spec — the ensures clause *is* the KIP-595 rule:
+Full functional spec — the ensures clause _is_ the KIP-595 rule:
 `result == (cand_epoch > my_epoch ∨ (cand_epoch == my_epoch ∧ cand_offset ≥ my_end))`.
 Stated once in logic and once in code so a transposed operator cannot slip through
 either alone.
@@ -98,7 +98,7 @@ Ensures:
 - **(a)** `result ≥ current_hwm` — the HWM never regresses
 - **(b)** `result ≤ log_end`
 - **(c)** `result > current_hwm ⟹ result > epoch_start_offset ∧
-  |{ m ∈ {log_end} ∪ follower_offsets : m ≥ result }| ≥ majority` — the Raft-Fig.8 /
+|{ m ∈ {log_end} ∪ follower_offsets : m ≥ result }| ≥ majority` — the Raft-Fig.8 /
   KIP-595 leader-completeness gate with an explicit majority-replication witness.
 
 ### `offset_index_lookup(entries: &[(u32, u32)], target: u32) -> u32`

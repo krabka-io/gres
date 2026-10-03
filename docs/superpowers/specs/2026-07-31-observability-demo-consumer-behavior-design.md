@@ -5,11 +5,11 @@
 Expose the classic Consumer's three existing behavior choices on the
 observability demo Consume role:
 
-| Setting | Default | Accepted values |
-|---|---|---|
-| auto offset reset | `latest` | `latest`, `earliest`, `none` |
-| isolation level | `read-uncommitted` | `read-uncommitted`, `read-committed` |
-| partition assignor | `range` | `range`, `cooperative-sticky` |
+| Setting            | Default            | Accepted values                      |
+| ------------------ | ------------------ | ------------------------------------ |
+| auto offset reset  | `latest`           | `latest`, `earliest`, `none`         |
+| isolation level    | `read-uncommitted` | `read-uncommitted`, `read-committed` |
+| partition assignor | `range`            | `range`, `cooperative-sticky`        |
 
 Group instance ID and client rack remain outside this slice because they are
 workload identity and topology rather than hardcoded operational defaults.
@@ -18,11 +18,11 @@ workload identity and topology rather than hardcoded operational defaults.
 
 The demo exposes these exact CLI and environment pairs:
 
-| CLI | Environment |
-|---|---|
+| CLI                            | Environment                              |
+| ------------------------------ | ---------------------------------------- |
 | `--consumer-auto-offset-reset` | `KRABKA_DEMO_CONSUMER_AUTO_OFFSET_RESET` |
-| `--consumer-isolation-level` | `KRABKA_DEMO_CONSUMER_ISOLATION_LEVEL` |
-| `--consumer-assignor` | `KRABKA_DEMO_CONSUMER_ASSIGNOR` |
+| `--consumer-isolation-level`   | `KRABKA_DEMO_CONSUMER_ISOLATION_LEVEL`   |
+| `--consumer-assignor`          | `KRABKA_DEMO_CONSUMER_ASSIGNOR`          |
 
 CLI values override environment values. Omitting both preserves the current
 Consumer builder defaults. Explicit values on Produce or Stream roles fail

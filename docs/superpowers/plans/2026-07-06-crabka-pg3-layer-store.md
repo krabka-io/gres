@@ -4,7 +4,7 @@
 
 **Goal:** A new async crate `krabka-page-store`: immutable delta/image layers (one container format, footer + sparse index, byte-range reads) on the object bucket, an open-layer ingest of PG-2's `Sharded` stream with idempotent flush, a `list()`-rebuildable layer map, `get_reconstruct_data(key, lsn)`, and structural L0→L1 compaction — gated by an FPI byte-match test over the PG-2 fixture corpus.
 
-**Architecture:** Single-writer ingest per timeline fills a `BTreeMap` open layer (`Value::Image` for FPIs, `Value::Wal{will_init}` otherwise; `Meta` retained verbatim), flushing L0 delta layers via `ObjectOps::put_from_path`; readers query an `Arc<RwLock<LayerMap>>` and read layers by `get_range`. No redo — reads return a reconstruction *plan*.
+**Architecture:** Single-writer ingest per timeline fills a `BTreeMap` open layer (`Value::Image` for FPIs, `Value::Wal{will_init}` otherwise; `Meta` retained verbatim), flushing L0 delta layers via `ObjectOps::put_from_path`; readers query an `Arc<RwLock<LayerMap>>` and read layers by `get_range`. No redo — reads return a reconstruction _plan_.
 
 **Tech Stack:** Rust 2024 (pinned stable 1.96.0), `tokio`, `bytes`, `thiserror`, `krabka-postgres-wal` (PG-2 types), `krabka-object-store` (`ObjectOps`, `InMemory` for tests), `assert2`/`nextest`, `cargo +nightly fmt`, `clippy::pedantic`.
 
@@ -17,7 +17,7 @@
 ## Invariants
 
 1. **Layers are immutable** — written once, never overwritten; point reads via footer→index→`get_range`, never whole-object downloads.
-2. **Gap-safe history:** `get_reconstruct_data(K, L)` returns the newest base ≤ L (image or `will_init`) and *exactly* the deltas in `(base, L]`, oldest-first — never a delta below the base, never a missing delta.
+2. **Gap-safe history:** `get_reconstruct_data(K, L)` returns the newest base ≤ L (image or `will_init`) and _exactly_ the deltas in `(base, L]`, oldest-first — never a delta below the base, never a missing delta.
 3. **Idempotent ingest:** re-feeding WAL ≤ `disk_consistent_lsn` changes nothing.
 4. **Rebuildable:** the layer map is a pure function of the bucket listing (names encode kind/key-range/LSN-range).
 5. **FPI byte fidelity:** a stored FPI base is byte-identical to the WAL's hole-reconstructed image.
@@ -27,7 +27,7 @@
 ## Scope boundary
 
 - **In scope:** container format (both kinds) + reader/writer; open layer + flush + `disk_consistent_lsn`; layer map + rebuild; `get_reconstruct_data`; meta-lane retention; L0→L1 structural compaction; the fixture-corpus gate.
-- **Deferred:** redo/materialization, image-layer *creation*, GC (PG-4); rmgr interpretation/SLRU (PG-4+); `nblocks` service (PG-5); branching (PG-6); live ingest (PG-1); multi-node sharding.
+- **Deferred:** redo/materialization, image-layer _creation_, GC (PG-4); rmgr interpretation/SLRU (PG-4+); `nblocks` service (PG-5); branching (PG-6); live ingest (PG-1); multi-node sharding.
 
 ---
 
@@ -50,6 +50,7 @@ Tasks 1–2 are foundation; Tasks 3 and 4 both build on 2 and touch disjoint fil
 ## Task 1: Scaffold + core types (`Value`, `LayerName`)
 
 **Files:**
+
 - Create: `crates/page-store/{Cargo.toml, src/lib.rs, src/value.rs, src/name.rs}`
 - Modify: `release-plz.toml`
 
@@ -103,6 +104,7 @@ git commit -m "feat(page-store): scaffold + layer naming and value types"
 ## Task 2: The layer container format (writer + reader)
 
 **Files:**
+
 - Create: `crates/page-store/src/container.rs`
 
 - [ ] **Step 1: Write the failing tests** (over `ObjectStoreConfig::InMemory` via `ObjectOps`)
@@ -148,6 +150,7 @@ git commit -m "feat(page-store): immutable layer container with footer index + r
 ## Task 3 (∥ Task 4): Open layer, flush, `disk_consistent_lsn`, idempotence
 
 **Files:**
+
 - Create: `crates/page-store/src/open_layer.rs`
 
 - [ ] **Step 1: Write the failing tests**
@@ -191,6 +194,7 @@ git commit -m "feat(page-store): open-layer ingest with idempotent flush to L0"
 ## Task 4 (∥ Task 3): Layer map + `get_reconstruct_data` + rebuild
 
 **Files:**
+
 - Create: `crates/page-store/src/layer_map.rs`
 
 - [ ] **Step 1: Write the failing tests** (synthetic layers via Task 2's writer)
@@ -238,6 +242,7 @@ git commit -m "feat(page-store): layer map, get_reconstruct_data, rebuild-from-l
 ## Task 5: The fixture gate — end-to-end FPI byte match
 
 **Files:**
+
 - Create: `crates/page-store/tests/fixture_gate.rs`
 
 Depends on Tasks 3 + 4 (+ PG-2's landed corpus).
@@ -262,6 +267,7 @@ git commit -m "test(page-store): end-to-end fixture gate with FPI byte-match ora
 ## Task 6: Structural compaction (L0 → L1)
 
 **Files:**
+
 - Create: `crates/page-store/src/compact.rs`
 
 - [ ] **Step 1: Write the failing test**

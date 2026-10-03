@@ -32,9 +32,11 @@
 ### Task 1: Pin Role Operations HTTP Behavior
 
 **Files:**
+
 - Modify: `crates/observability/tests/http.rs`
 
 **Interfaces:**
+
 - Consumes: existing public functions `distributor_router`, `loki_router`, `build_service_router`, `QuerierState::new`, `InMemoryWalSink`, `ServiceConfig`, `ServiceDependencies`, `Role`, and `QuerierIndexSource`.
 - Produces: tests named `role_operations_routes_match_existing_behavior` and `role_ring_alias_routes_remain_available`.
 
@@ -250,9 +252,11 @@ git commit -m "test(observability): pin role ops endpoints"
 ### Task 2: Introduce Shared Role Operations Routes
 
 **Files:**
+
 - Modify: `crates/observability/src/lib.rs`
 
 **Interfaces:**
+
 - Consumes: tests from Task 1.
 - Produces:
   - `#[derive(Clone, Copy)] struct RoleOps { target: &'static str, ring_component: &'static str, role_ring_path: Option<&'static str> }`
@@ -553,10 +557,12 @@ git commit -m "refactor(observability): share role ops routes"
 ### Task 3: Full Observability Verification And Cleanup
 
 **Files:**
+
 - Modify: `crates/observability/src/lib.rs` only if Task 2 left unused imports or formatting fallout.
 - Modify: `crates/observability/tests/http.rs` only if Task 1 tests need minor compile adjustments after Task 2.
 
 **Interfaces:**
+
 - Consumes: `with_role_ops_routes`, `RoleOps`, and tests from Tasks 1 and 2.
 - Produces: verified final branch with fewer maintained LOC in `crates/observability/src/lib.rs`.
 

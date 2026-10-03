@@ -2,9 +2,9 @@ mod harness;
 
 use std::{num::NonZeroU64, sync::Arc};
 
+use harness::{SystemHarness, TableAccount, process::ProcessHarness};
 use krabka_gres_ranges::{MemoryTsoHorizon, TsoError, TsoOracle};
 use krabka_pgkv::MemKv;
-use harness::{SystemHarness, TableAccount, process::ProcessHarness};
 
 #[tokio::test]
 async fn jepsen_bank_deterministic_transfers_preserve_total_balance() {

@@ -44,6 +44,7 @@
 ## Task 1: The `Key` enum (the PG-3 amendment)
 
 **Files:**
+
 - Modify: `crates/page-store/src/name.rs` (+ every `PageKey` use site)
 
 - [ ] **Step 1: Write the failing tests**
@@ -80,6 +81,7 @@ git commit -m "feat(page-store): tagged Key enum (Rel/Slru/RelMeta) — the PG-4
 ## Task 2: `shard_meta` — the light interpreter
 
 **Files:**
+
 - Create: `crates/postgres-redo/src/meta.rs`
 
 - [ ] **Step 1: Write the failing tests**
@@ -133,6 +135,7 @@ git commit -m "feat(postgres-redo): shard_meta — clog/multixact/lifecycle key 
 ## Task 3: SLRU + RelMeta redo arms
 
 **Files:**
+
 - Create: `crates/postgres-redo/src/rm_slru.rs`, `src/rm_relmeta.rs`
 
 - [ ] **Step 1: Write the failing tests** — clog folding: commit sets `01`, abort `10`, subcommitted handling, at the exact 2-bit offset for the xid (unit-computed positions); a zeropage arm yields an all-zero 8 KB page; multixact offsets/members writes at computed offsets; RelMeta folding: create(0) → truncate(n) → drop sequence produces `{nblocks, dropped_at}` values at the right LSNs.
@@ -149,6 +152,7 @@ git commit -m "feat(postgres-redo): clog/multixact and RelMeta redo arms"
 ## Task 4: Pageserver wiring — ingest + exact `GetRelSize`
 
 **Files:**
+
 - Modify: `crates/pageserver/src/{live_ingest.rs, service.rs}`
 
 - [ ] **Step 1: Write the failing tests** — ingest a fixture with commits + a `TRUNCATE` + a `DROP TABLE`: `GetRelSize(lsn)` is exact (`exact == true`) and steps down at the truncate LSN; `GetPage` beyond `nblocks` → `BlockBeyondEof`; at ≥ drop LSN → `NotFound`; **below** those LSNs the old tail still serves (versioned reads). Seeded relations report exact sizes at LSN₀ (seed writes `RelMeta` from file sizes — extend Task-1-touched `seed.rs`).
@@ -165,6 +169,7 @@ git commit -m "feat(pageserver): exact GetRelSize + lifecycle-aware page serving
 ## Task 5: Basebackup SLRU segments
 
 **Files:**
+
 - Modify: `crates/pageserver/src/basebackup.rs`
 
 - [ ] **Step 1: Write the failing test** — un-`#[ignore]` PG-5a's SLRU assertions: the tarball's `pg_xact/0000` (and multixact files) at the capture LSN are **byte-identical** to the standby's (extend the fixture capture to copy the standby's `pg_xact`/`pg_multixact` alongside the relation files).
@@ -181,6 +186,7 @@ git commit -m "feat(pageserver): SLRU segment rendering in basebackup (standby b
 ## Task 6: Index arm families I — BRIN + hash
 
 **Files:**
+
 - Modify: `tools/gen-pg-wal-fixtures.sh`; Create: `crates/postgres-redo/src/{rm_brin.rs, rm_hash.rs}`
 
 - [ ] **Step 1: Extend the fixture generator** (one regeneration for Tasks 6–8): per index family, `CREATE INDEX USING <am>` + inserts/updates/deletes/`VACUUM`; plus multixact traffic (two sessions, `SELECT … FOR SHARE`), `TRUNCATE`, `DROP TABLE`, `CREATE DATABASE wal_log_db` — capture the new relations + SLRU files in the standby snapshot. Regenerate + commit the corpus.
@@ -197,6 +203,7 @@ git commit -m "feat(postgres-redo): BRIN and hash redo arms (fixture-gated)"
 ## Task 7: Index arm families II — GiST, SP-GiST, GIN
 
 **Files:**
+
 - Create: `crates/postgres-redo/src/{rm_gist.rs, rm_spgist.rs, rm_gin.rs}`
 
 - [ ] **Step 1–3:** Same per-family discipline, in order (GiST: page-update/split/delete; SP-GiST: add-leaf/move-leafs/add-node/split-tuple/vacuum; GIN last: insert/split/vacuum-page/update-metapage/insert-listpage/delete-listpage — posting trees + pending lists, the densest fixtures). Each family: arms + unit tests + its standby differential green before its own commit (three commits).

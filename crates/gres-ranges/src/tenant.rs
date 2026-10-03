@@ -11,6 +11,7 @@ use std::{
 };
 
 use arc_swap::ArcSwap;
+use futures::future::join_all;
 use krabka_pgcatalog::ShardingStrategy;
 use krabka_pgexec::{
     ExecError, PredicateOp, PredicatePushdown, SqlEngine, foreign::ForeignScanner,
@@ -24,7 +25,6 @@ use krabka_pgwire::{
     error::{PgError, sqlstate},
 };
 use krabka_units::convert::TimeExt as _;
-use futures::future::join_all;
 use tokio::sync::{Mutex, RwLock};
 use tracing::Instrument as _;
 

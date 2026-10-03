@@ -43,6 +43,7 @@ The handler's KIP-345 fence (`classic_ops.rs:88-100`) is a pure pre-check: rejec
 `member_id` than the request's, else proceed to `add_member`.
 
 Subtle coupled-structure orderings the model exercises:
+
 - `add_member` static rejoin during `PreparingRebalance` **repoints** the index and moves the
   member's `joined_this_round` entry from the prior to the new `member_id` (the rename path).
 - `remove_member` clears `static_members[iid]` only if it still equals the removed `member_id`.
@@ -60,6 +61,7 @@ constructs every `last_heartbeat` deterministically as `EPOCH + clock*UNIT` (a f
 epoch), so the fingerprint is stable and finite.
 
 **Actions** (bounded: members `{a,b,c}`, instances `{x,y}`):
+
 - `JoinDynamic(mid)` — `add_member(Member::new(mid, …))` (no instance id).
 - `JoinStatic(iid, mid)` — fence pre-check (`current_member_id_for_instance(iid)` is `Some(other)`,
   `other != mid` ⟹ FENCED, no-op); else `add_member(... .with_instance_id(Some(iid)))`. New members'
@@ -74,6 +76,7 @@ epoch), so the fingerprint is stable and finite.
 `session_timeout` is a small fixed number of `UNIT`s so expiry is reachable within the bounded clock.
 
 **Safety asserts (per-transition + `Property::always`):**
+
 - **index_coherence** (HEADLINE): for every `(iid → mid)` in `static_members`, `members[mid]` exists
   and `members[mid].group_instance_id == Some(iid)`; and every static member in `members` has a
   matching index entry. (Bidirectional faithful mirror; injective by map construction.)
@@ -117,7 +120,7 @@ coherence, single-owner, joined-subset, static-never-expired, empty⟺Empty, gen
   `Duration::from_mins(2)`) and run under the host memory watchdog (kill > 3 GB / > 150 s) while
   bounds are tuned — `[[feedback_bound_model_checkers]]`. `proptest` is bounded sampling.
 - `cargo +nightly fmt` per-crate (`[[reference_windows_fmt_path_length]]`); `cargo clippy
-  --all-targets -- -D warnings` clean.
+--all-targets -- -D warnings` clean.
 
 ## Success criteria
 

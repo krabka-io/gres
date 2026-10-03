@@ -36,6 +36,7 @@
 ### Task 1: Typed runtime input and shared mutation limit
 
 **Files:**
+
 - Modify: `crates/admin-ui/Cargo.toml:27-45`
 - Modify: `crates/admin-ui/src/config.rs:3-120`
 - Modify: `crates/admin-ui/src/main.rs:1-11`
@@ -44,6 +45,7 @@
 - Test: `crates/admin-ui/tests/smoke.rs:367-386`
 
 **Interfaces:**
+
 - Produces: `DEFAULT_MUTATION_JSON_BODY_LIMIT_BYTES: usize`
 - Produces: `MutationJsonBodyLimitBytes::new(usize) -> Result<Self, String>`
 - Produces: `MutationJsonBodyLimitBytes::into_value(self) -> usize`
@@ -346,9 +348,11 @@ git commit -m "feat(admin-ui): expose mutation body limit"
 ### Task 2: Audit evidence and next owner
 
 **Files:**
+
 - Modify: `docs/configuration-audit.md:2894-end`
 
 **Interfaces:**
+
 - Consumes: the committed Task 1 value flow and verification output
 - Produces: exact repository scanner evidence and the next unresolved admin UI owner
 

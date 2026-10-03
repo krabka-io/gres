@@ -80,6 +80,7 @@ true`, further updates come only from the executor's own writes
 (the loader has reached the end of the log).
 
 **`StateTopicLoader`** (`loader.rs`): a single async task that:
+
 1. Opens a consumer on the topic, partition 0, from offset 0.
 2. For each record (newest record per key wins after compaction; we
    only use one key so the last record is the truth):
@@ -99,13 +100,13 @@ partition with `acks=all`.
 
 Created via AdminClient `CreateTopics` on startup if missing.
 
-| Setting | Value | Why |
-|---|---|---|
-| `cleanup.policy` | `compact` | Latest record per key wins; no time-based eviction. |
-| `min.cleanable.dirty.ratio` | `0.01` | Aggressive compaction; topic stays tiny. |
-| `segment.ms` | `60000` | Force segment roll every minute so the active segment can become compactable quickly. |
-| `partitions` | `1` | Single writer, ordered writes. |
-| `replication.factor` | `--state-topic-replication` (default `3`) | Configurable; capped at broker count at create time. |
+| Setting                     | Value                                     | Why                                                                                   |
+| --------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------- |
+| `cleanup.policy`            | `compact`                                 | Latest record per key wins; no time-based eviction.                                   |
+| `min.cleanable.dirty.ratio` | `0.01`                                    | Aggressive compaction; topic stays tiny.                                              |
+| `segment.ms`                | `60000`                                   | Force segment roll every minute so the active segment can become compactable quickly. |
+| `partitions`                | `1`                                       | Single writer, ordered writes.                                                        |
+| `replication.factor`        | `--state-topic-replication` (default `3`) | Configurable; capped at broker count at create time.                                  |
 
 ### Executor integration
 
@@ -125,14 +126,14 @@ Created via AdminClient `CreateTopics` on startup if missing.
 API endpoints check `state_topic.is_loaded()` per the Kafka
 coordinator-load semantics:
 
-| Endpoint | Behavior when not loaded |
-|---|---|
-| `POST /api/v1/proposals/{id}/execute` | `503` with body `{"status":"loading","message":"state topic not yet loaded"}`. Matches Cruise Control's behavior on `LoadMonitor` cold start. |
-| `GET  /api/v1/proposals/{id}` | Returns the in-memory proposal; if the proposal has a persisted-state dependency that isn't loaded yet, status field includes `loading_pending: true`. |
-| `GET  /api/v1/state` | Unaffected — the ingester's cluster snapshot is independent of persisted executor state. |
-| `POST /api/v1/proposals` | Unaffected — compute-only, no persistence. |
-| `GET  /healthz` | Always `200` (process alive). |
-| `GET  /readyz` | `503` until `is_loaded == true`. K8s readiness probe gates Service routing. |
+| Endpoint                              | Behavior when not loaded                                                                                                                               |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `POST /api/v1/proposals/{id}/execute` | `503` with body `{"status":"loading","message":"state topic not yet loaded"}`. Matches Cruise Control's behavior on `LoadMonitor` cold start.          |
+| `GET  /api/v1/proposals/{id}`         | Returns the in-memory proposal; if the proposal has a persisted-state dependency that isn't loaded yet, status field includes `loading_pending: true`. |
+| `GET  /api/v1/state`                  | Unaffected — the ingester's cluster snapshot is independent of persisted executor state.                                                               |
+| `POST /api/v1/proposals`              | Unaffected — compute-only, no persistence.                                                                                                             |
+| `GET  /healthz`                       | Always `200` (process alive).                                                                                                                          |
+| `GET  /readyz`                        | `503` until `is_loaded == true`. K8s readiness probe gates Service routing.                                                                            |
 
 ### Startup flow
 
@@ -156,26 +157,26 @@ self-gate via `is_loaded()`.
 
 New CLI flags / env vars (mirror existing convention):
 
-| Flag | Env | Default | Purpose |
-|---|---|---|---|
-| `--state-topic-name` | `KRABKA_REBALANCER_STATE_TOPIC` | `__krabka_rebalancer_state` | Name override (rarely needed). |
-| `--state-topic-replication` | `KRABKA_REBALANCER_STATE_TOPIC_REPLICATION` | `3` | Replication factor at create time. |
-| `--state-load-timeout-secs` | `KRABKA_REBALANCER_STATE_LOAD_TIMEOUT_SECS` | `60` | Soft deadline: WARN if loading takes longer; `/readyz` stays `503` indefinitely until success. |
+| Flag                        | Env                                         | Default                     | Purpose                                                                                        |
+| --------------------------- | ------------------------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------- |
+| `--state-topic-name`        | `KRABKA_REBALANCER_STATE_TOPIC`             | `__krabka_rebalancer_state` | Name override (rarely needed).                                                                 |
+| `--state-topic-replication` | `KRABKA_REBALANCER_STATE_TOPIC_REPLICATION` | `3`                         | Replication factor at create time.                                                             |
+| `--state-load-timeout-secs` | `KRABKA_REBALANCER_STATE_LOAD_TIMEOUT_SECS` | `60`                        | Soft deadline: WARN if loading takes longer; `/readyz` stays `503` indefinitely until success. |
 
 `--data-dir` stays — anomaly store still uses it. Doc comment
 clarifies it's anomaly-only post-43i.
 
 ## Error handling
 
-| Failure | Surface |
-|---|---|
-| AdminClient cannot create topic (auth, broker unreachable) | Fatal at startup; process exits with non-zero; operator restarts. |
-| Loader cannot connect to broker | Retries with backoff; `/readyz` stays `503` until the consumer connects and completes a tail-read. |
-| Loader receives a record with malformed JSON | `WARN` + skip. If the latest non-tombstone record is malformed, `loaded` stays at the prior valid value or `None`. |
-| Loader exceeds `--state-load-timeout-secs` | `WARN`; loader keeps retrying; `is_loaded` stays `false`. |
-| Producer write fails (executor in mid-phase) | Returned as `PhaseError`; executor surfaces the same way the JSON-file path did. The retry semantics for the operator-facing CRD don't change. |
-| Tombstone delete fails | Same as above; the executor surfaces the failure and the topic retains the prior in-flight record (resume-on-restart still works). |
-| Two records arrive out-of-order on the consumer (shouldn't happen with single producer + single partition) | Last one wins. |
+| Failure                                                                                                    | Surface                                                                                                                                        |
+| ---------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| AdminClient cannot create topic (auth, broker unreachable)                                                 | Fatal at startup; process exits with non-zero; operator restarts.                                                                              |
+| Loader cannot connect to broker                                                                            | Retries with backoff; `/readyz` stays `503` until the consumer connects and completes a tail-read.                                             |
+| Loader receives a record with malformed JSON                                                               | `WARN` + skip. If the latest non-tombstone record is malformed, `loaded` stays at the prior valid value or `None`.                             |
+| Loader exceeds `--state-load-timeout-secs`                                                                 | `WARN`; loader keeps retrying; `is_loaded` stays `false`.                                                                                      |
+| Producer write fails (executor in mid-phase)                                                               | Returned as `PhaseError`; executor surfaces the same way the JSON-file path did. The retry semantics for the operator-facing CRD don't change. |
+| Tombstone delete fails                                                                                     | Same as above; the executor surfaces the failure and the topic retains the prior in-flight record (resume-on-restart still works).             |
+| Two records arrive out-of-order on the consumer (shouldn't happen with single producer + single partition) | Last one wins.                                                                                                                                 |
 
 ## Testing
 

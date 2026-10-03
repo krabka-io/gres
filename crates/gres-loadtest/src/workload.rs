@@ -73,9 +73,9 @@ use std::{
 };
 
 use anyhow::Context as _;
-use krabka_units::{fmt::Human as _, prelude::*};
 use futures::future;
 use hdrhistogram::Histogram;
+use krabka_units::{fmt::Human as _, prelude::*};
 use rand::{RngExt, SeedableRng, rngs::SmallRng};
 use tokio::{sync::watch, time::Instant};
 use tokio_postgres::{Client, NoTls, error::SqlState};

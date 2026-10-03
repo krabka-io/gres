@@ -53,15 +53,15 @@ OTLP turns **on** when any endpoint is set or it is explicitly enabled, and
 is force-**off** by `OTEL_SDK_DISABLED`. Crabka-specific vars take precedence
 over the standard OTel vars so the operator follow-up has a stable surface:
 
-| Setting        | Crabka var                  | Standard OTel fallback                                            | Default |
-|----------------|-----------------------------|------------------------------------------------------------------|---------|
-| Enable         | `KRABKA_OTLP_ENABLED=true`  | (any endpoint var being set)                                      | off     |
-| Endpoint       | `KRABKA_OTLP_ENDPOINT`      | `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` → `OTEL_EXPORTER_OTLP_ENDPOINT` | per-protocol localhost |
-| Protocol       | `KRABKA_OTLP_PROTOCOL`      | `OTEL_EXPORTER_OTLP_PROTOCOL` (`grpc` \| `http/protobuf`)         | `grpc`  |
-| Sample ratio   | `KRABKA_OTLP_SAMPLE_RATIO`  | `OTEL_TRACES_SAMPLER_ARG`                                         | `1.0`   |
-| Service name   | —                           | `OTEL_SERVICE_NAME`                                               | `krabka-broker` |
-| Export timeout | `KRABKA_OTLP_TIMEOUT_SECS`  | `OTEL_EXPORTER_OTLP_TIMEOUT_SECS`                                 | `10`    |
-| Disable        | —                           | `OTEL_SDK_DISABLED=true`                                          | —       |
+| Setting        | Crabka var                 | Standard OTel fallback                                               | Default                |
+| -------------- | -------------------------- | -------------------------------------------------------------------- | ---------------------- |
+| Enable         | `KRABKA_OTLP_ENABLED=true` | (any endpoint var being set)                                         | off                    |
+| Endpoint       | `KRABKA_OTLP_ENDPOINT`     | `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` → `OTEL_EXPORTER_OTLP_ENDPOINT` | per-protocol localhost |
+| Protocol       | `KRABKA_OTLP_PROTOCOL`     | `OTEL_EXPORTER_OTLP_PROTOCOL` (`grpc` \| `http/protobuf`)            | `grpc`                 |
+| Sample ratio   | `KRABKA_OTLP_SAMPLE_RATIO` | `OTEL_TRACES_SAMPLER_ARG`                                            | `1.0`                  |
+| Service name   | —                          | `OTEL_SERVICE_NAME`                                                  | `krabka-broker`        |
+| Export timeout | `KRABKA_OTLP_TIMEOUT_SECS` | `OTEL_EXPORTER_OTLP_TIMEOUT_SECS`                                    | `10`                   |
+| Disable        | —                          | `OTEL_SDK_DISABLED=true`                                             | —                      |
 
 Resource attributes: `service.name`, `service.version` (crate version),
 `service.instance.id` (broker id). Sampler is

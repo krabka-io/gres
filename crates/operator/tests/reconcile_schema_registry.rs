@@ -8,6 +8,7 @@
 use std::sync::Arc;
 
 use assert2::assert;
+use http::Method;
 use krabka_operator::{
     controller::{common::ReconcileError, schema_registry::reconcile},
     crd::{
@@ -16,7 +17,6 @@ use krabka_operator::{
     },
 };
 use krabka_units::{bytes, millis, secs};
-use http::Method;
 
 #[path = "shared/mod.rs"]
 mod shared;

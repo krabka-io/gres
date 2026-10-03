@@ -14,6 +14,7 @@ use std::{
 };
 
 use async_trait::async_trait;
+use futures_util::FutureExt as _;
 use krabka_gres_control::{
     RangeRetirementPhase, Registry, SplitOperationPhase, SplitOperationRecord, TenantName,
     TenantRecord,
@@ -28,7 +29,6 @@ use krabka_operator::{
         gres_tenant::{RangeRetirementAdmin, reconcile_one_retiring_range_wal},
     },
 };
-use futures_util::FutureExt as _;
 use process::ProcessHarness;
 use tokio::sync::Mutex;
 

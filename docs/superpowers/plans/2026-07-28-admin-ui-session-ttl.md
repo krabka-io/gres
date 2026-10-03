@@ -40,6 +40,7 @@
 ### Task 1: Expose the validated session TTL
 
 **Files:**
+
 - Modify: `crates/admin-ui/src/config.rs`
 - Modify: `crates/admin-ui/src/main.rs`
 - Modify: `crates/admin-ui/src/server.rs`
@@ -47,6 +48,7 @@
 - Modify: `crates/admin-ui/tests/server_fns.rs`
 
 **Interfaces:**
+
 - Produces: `pub const DEFAULT_SESSION_TTL_SECONDS: u64`
 - Produces: `pub struct SessionTtlSeconds(u64)`
 - Produces: `SessionTtlSeconds::new(u64) -> Result<SessionTtlSeconds, String>`
@@ -371,9 +373,11 @@ git commit -m "feat(admin-ui): expose session TTL"
 ### Task 2: Close the audit slice
 
 **Files:**
+
 - Modify: `docs/configuration-audit.md`
 
 **Interfaces:**
+
 - Consumes: the implemented `SessionTtlSeconds` configuration flow.
 - Produces: exact audit evidence and the next unresolved admin UI owner.
 

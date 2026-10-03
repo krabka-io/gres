@@ -41,15 +41,17 @@ Compose, Cargo.
 ### Task 1: Add Classic Consumer Fetch Minimum
 
 **Files:**
+
 - Modify: `crates/client-consumer/src/consumer.rs`
 - Modify: `crates/client-consumer/src/poll.rs`
 
 **Interfaces:**
+
 - Consumes: `krabka_client_core::FetchMinBytes`
 - Produces: `Consumer::builder().fetch_min(ByteSize)`
 - Produces internally:
   `build_fetch_request(timeout_ms: i32, isolation_level: IsolationLevel,
-  min: ByteSize, max: ByteSize, topics: Vec<FetchTopic>) -> FetchRequest`
+min: ByteSize, max: ByteSize, topics: Vec<FetchTopic>) -> FetchRequest`
 
 - [x] **Step 1: Write failing propagation and validation tests**
 
@@ -134,6 +136,7 @@ git commit -m "feat(consumer): expose fetch minimum"
 ### Task 2: Expose the Demo Consume-Role Policy
 
 **Files:**
+
 - Modify: `crates/observability-demo-app/src/main.rs`
 - Create:
   `crates/observability-demo-app/tests/consumer_fetch_policy_config.rs`
@@ -142,11 +145,12 @@ git commit -m "feat(consumer): expose fetch minimum"
 - Modify: `demo/observability/docker-compose.yml`
 
 **Interfaces:**
+
 - Consumes: `Consumer::builder().fetch_min`, `.fetch_max`, and
   `.fetch_partition_max`
 - Produces:
   `effective_consumer_fetch_policy(&Cli) ->
-  std::io::Result<(ByteSize, ByteSize, ByteSize)>`
+std::io::Result<(ByteSize, ByteSize, ByteSize)>`
 
 - [x] **Step 1: Write failing CLI, role, and Compose tests**
 
@@ -220,11 +224,13 @@ git commit -m "feat(demo): expose consumer fetch policy"
 ### Task 3: Audit and Close the Slice
 
 **Files:**
+
 - Modify: `docs/configuration-audit.md`
 - Modify:
   `docs/superpowers/plans/2026-07-31-client-consumer-fetch-policy.md`
 
 **Interfaces:**
+
 - Proves the classic fetch minimum is no longer hardcoded and records that the
   repository-wide audit remains active
 

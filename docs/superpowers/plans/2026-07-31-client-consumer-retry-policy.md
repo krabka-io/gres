@@ -43,16 +43,18 @@ Docker Compose, Cargo.
 ### Task 1: Add the Validated Policy and Startup Timing
 
 **Files:**
+
 - Modify: `crates/client-consumer/src/consumer.rs`
 - Modify: `crates/client-consumer/src/lib.rs`
 
 **Interfaces:**
+
 - Produces:
   `ConsumerRetryPolicy::new(startup_attempt_timeout: Time,
-  startup_deadline: Time, startup_initial_backoff: Time,
-  startup_max_backoff: Time, coordinator_retry_timeout: Time,
-  coordinator_initial_backoff: Time, coordinator_max_backoff: Time)
-  -> Result<Self, String>`
+startup_deadline: Time, startup_initial_backoff: Time,
+startup_max_backoff: Time, coordinator_retry_timeout: Time,
+coordinator_initial_backoff: Time, coordinator_max_backoff: Time)
+-> Result<Self, String>`
 - Produces: named `Time` getters for all seven fields and `Default`
 - Produces:
   `Consumer::builder().retry_policy(ConsumerRetryPolicy::new(...).unwrap())`
@@ -131,15 +133,17 @@ git commit -m "feat(consumer): expose retry policy"
 ### Task 2: Propagate Coordinator Retry Timing
 
 **Files:**
+
 - Modify: `crates/client-consumer/src/consumer.rs`
 - Modify: `crates/client-consumer/src/coordinator.rs`
 - Modify: `crates/client-consumer/src/commit.rs`
 
 **Interfaces:**
+
 - Consumes: `ConsumerRetryPolicy` and its three coordinator getters
 - Produces:
   `CoordinatorRetryPolicy { timeout: Duration, initial_backoff: Duration,
-  max_backoff: Duration }`
+max_backoff: Duration }`
 - Produces coordinator helpers that receive `CoordinatorRetryPolicy` instead
   of reading constants
 
@@ -210,11 +214,13 @@ git commit -m "fix(consumer): propagate coordinator retry policy"
 ### Task 3: Expose the Demo Consume-Role Surface
 
 **Files:**
+
 - Modify: `crates/observability-demo-app/src/main.rs`
 - Modify: `crates/observability-demo-app/tests/observability_demo_config.rs`
 - Modify: `demo/observability/docker-compose.yml`
 
 **Interfaces:**
+
 - Consumes: `ConsumerRetryPolicy::new`
 - Produces the seven CLI/environment pairs specified in the approved design
 - Produces:
@@ -302,10 +308,12 @@ git commit -m "feat(demo): expose consumer retry policy"
 ### Task 4: Audit and Verify the Slice
 
 **Files:**
+
 - Modify: `docs/configuration-audit.md`
 - Modify: `docs/superpowers/plans/2026-07-31-client-consumer-retry-policy.md`
 
 **Interfaces:**
+
 - Proves every old production constant is replaced by the typed policy and
   records that the broader repository audit remains active
 

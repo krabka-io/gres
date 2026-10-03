@@ -9,10 +9,6 @@
 
 use std::{collections::BTreeMap, fmt::Debug, future::Future, pin::Pin, sync::Arc};
 
-use krabka_units::{
-    Time,
-    convert::{StdDurationExt as _, TimeExt as _},
-};
 use k8s_openapi::{
     ByteString,
     api::{
@@ -20,6 +16,10 @@ use k8s_openapi::{
         core::v1::{ConfigMap, Secret, Service},
     },
     apimachinery::pkg::apis::meta::v1::{ObjectMeta, OwnerReference},
+};
+use krabka_units::{
+    Time,
+    convert::{StdDurationExt as _, TimeExt as _},
 };
 use kube::{
     Resource,

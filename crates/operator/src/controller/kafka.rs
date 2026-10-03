@@ -19,7 +19,6 @@ use std::{
     sync::Arc,
 };
 
-use krabka_units::{Time, secs};
 use futures::StreamExt as _;
 use k8s_openapi::{
     ByteString,
@@ -30,6 +29,7 @@ use k8s_openapi::{
     },
     apimachinery::pkg::apis::meta::v1::ObjectMeta,
 };
+use krabka_units::{Time, secs};
 use kube::{
     Resource, ResourceExt as _,
     api::{Api, ListParams, Patch, PatchParams},

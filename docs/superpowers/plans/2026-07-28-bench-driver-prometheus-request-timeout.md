@@ -75,7 +75,7 @@ existing shell `envsubst` path to pass the setting into benchmark Jobs.
 - Produces: `FromStr`, `Display`, and `Default`
 - Produces:
   `DriverConfig::prometheus_request_timeout_seconds:
-  PrometheusRequestTimeoutSeconds`
+PrometheusRequestTimeoutSeconds`
 - Changes:
   `PromClient::new(base_url, PrometheusRequestTimeoutSeconds) -> Result<Self>`
 - Consumes: `refined_type::rule::GreaterU64<0>`

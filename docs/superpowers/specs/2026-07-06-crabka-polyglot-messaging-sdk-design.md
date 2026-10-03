@@ -33,7 +33,7 @@ Connect requires **HTTP/2 for streaming** RPCs (`connectrpc-axum` `handler.rs:54
 - **`SendStream`** (bidi batch produce) — unary `Send` covers v1 publish; the full-duplex batch path is deferred with manual ack.
 - **`EnsureTopic`/Admin gateway RPC** — topic auto-provision (only Kafka-wire `AdminClient::create_topics` exists; the gateway proto has no Admin RPC).
 - **Share-group Subscribe mode on the gateway** — the KIP-932 queue wedge lives only in the native `client-consumer/src/share/`; `Subscribe` uses classic `ConsumeSession`. Surfacing it is net-new gateway proto+handler work.
-- **SDK-side CloudEvents *consume*** — blocked on MSG-1 (`Inbound.headers` is a hardcoded empty map, `streaming.rs:153`); `publishEvent` (send) works today (transparent), receiving `ce_*` does not.
+- **SDK-side CloudEvents _consume_** — blocked on MSG-1 (`Inbound.headers` is a hardcoded empty map, `streaming.rs:153`); `publishEvent` (send) works today (transparent), receiving `ce_*` does not.
 - **Full SQL filter** — `FieldPredicate` is JSONPath **EQUALS-only** and matches only decoded structured records (`streaming.rs:89-103`); the SDK filter builder must not imply SQL.
 
 ## Architecture Overview
@@ -65,7 +65,7 @@ The wire is the Connect protocol; SDKs generate stubs with **buf** (`buf.gen.yam
 
 ### Go first
 
-Over the conventional TS-first instinct, for three grounded reasons: (1) CI already installs Go (`actions/setup-go@v6` in 5 workflows) so a Go SDK job needs no new toolchain, whereas there is **no** `setup-node`/`setup-python` anywhere; (2) connect-go is the reference Connect implementation and the gateway's own compatibility target (`lib.rs:56-59`); (3) a Go h1 client handles unary `Send` + server-streaming `Subscribe` cleanly — exactly the h1-safe surface. TS (Connect-ES) is the highest-DX follow-up but browser Connect can't do server-streaming over h1 without care and there is no gRPC-Web proxy — a browser SDK may need a separate path. Python is third. **Rust is not a target** — the native crates already *are* the Rust client (and speak Kafka-wire, not Connect). One `gateway.proto` is the single source of truth; do not fork per language.
+Over the conventional TS-first instinct, for three grounded reasons: (1) CI already installs Go (`actions/setup-go@v6` in 5 workflows) so a Go SDK job needs no new toolchain, whereas there is **no** `setup-node`/`setup-python` anywhere; (2) connect-go is the reference Connect implementation and the gateway's own compatibility target (`lib.rs:56-59`); (3) a Go h1 client handles unary `Send` + server-streaming `Subscribe` cleanly — exactly the h1-safe surface. TS (Connect-ES) is the highest-DX follow-up but browser Connect can't do server-streaming over h1 without care and there is no gRPC-Web proxy — a browser SDK may need a separate path. Python is third. **Rust is not a target** — the native crates already _are_ the Rust client (and speak Kafka-wire, not Connect). One `gateway.proto` is the single source of truth; do not fork per language.
 
 ### The ergonomic surface maps 4 verbs onto the h1-safe RPCs
 

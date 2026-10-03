@@ -8,7 +8,7 @@
 
 Make a slow gres query explain itself.
 
-Before this change no gres crate participated in tracing at all: `krabka-gres` installed a bare `tracing_subscriber::fmt()`, there was not a single span across `pgwire`, `pgexec`, `pgparser`, `pgkv`, `pgmvcc`, `gres-ranges` or `gres-substrate`, and `EXPLAIN ANALYZE` reported row counts with no timings. When a statement was slow there was no way to say *which step* was slow — parse, timestamp grant, routing, the cross-node RPC hop, the MVCC scan, a row-lock wait, the 2PC round, or the WAL append — and no way to connect a slow application request to the query behind it.
+Before this change no gres crate participated in tracing at all: `krabka-gres` installed a bare `tracing_subscriber::fmt()`, there was not a single span across `pgwire`, `pgexec`, `pgparser`, `pgkv`, `pgmvcc`, `gres-ranges` or `gres-substrate`, and `EXPLAIN ANALYZE` reported row counts with no timings. When a statement was slow there was no way to say _which step_ was slow — parse, timestamp grant, routing, the cross-node RPC hop, the MVCC scan, a row-lock wait, the 2PC round, or the WAL append — and no way to connect a slow application request to the query behind it.
 
 The outcome is that an application request carrying a W3C `traceparent` produces **one** trace that descends through the pgwire session, the statement, routing, every cross-node RPC hop, the timestamp round, the executor's scans and the durable WAL append, viewable as a waterfall in Grafana against Crabka's own traces backend.
 
@@ -118,7 +118,7 @@ The extended protocol needs its own answer, because `Bind` and `Execute` carry n
 
 The ingress policy is `IngressTracePolicy = Off | Link | Resample { ratio } | Trust`, defaulting to `Resample`.
 
-The problem it solves: the SDK sampler is `ParentBased(TraceIdRatioBased(ratio))`, and a *sampled* remote parent makes `ParentBased` return `RecordAndSample` unconditionally. A client that appends `-01` to every statement therefore forces 100% export of every gres span on every range owner it touches — from an unprivileged SQL connection.
+The problem it solves: the SDK sampler is `ParentBased(TraceIdRatioBased(ratio))`, and a _sampled_ remote parent makes `ParentBased` return `RecordAndSample` unconditionally. A client that appends `-01` to every statement therefore forces 100% export of every gres span on every range owner it touches — from an unprivileged SQL connection.
 
 The obvious fix, clearing the sampled bit and letting gres decide, is wrong, and wrong in a way that only shows up in production. **`ParentBased` with a non-sampled parent returns `Drop`. It does not fall through to the root sampler.** Clearing the bit would drop exactly the statements the client took the trouble to instrument, and the trace would end at the application tier.
 
@@ -147,7 +147,7 @@ One correctness consequence had to be fixed alongside: `JoinRangeReq::fits_trans
 
 The producer injects `traceparent` into WAL record headers, hoisted out of the per-frame loop. Consumers attach it as an OpenTelemetry **link** on one span per apply batch, never as a parent. Three independent reasons, any one of which would be sufficient:
 
-A replay at recovery may run hours after the commit, and parenting would stretch the trace's wall-clock width to the WAL retention period. One commit fans out to every follower, every checkpoint service and every future replay, so the child set is unbounded. And `ParentBased` would force export of *every apply of every sampled write, forever*, on the hottest loop in the system.
+A replay at recovery may run hours after the commit, and parenting would stretch the trace's wall-clock width to the WAL retention period. One commit fans out to every follower, every checkpoint service and every future replay, so the child set is unbounded. And `ParentBased` would force export of _every apply of every sampled write, forever_, on the hottest loop in the system.
 
 The context could not travel through `ReplayItem` — that is a pure decode-and-apply type with ~10 construction sites, and threading telemetry through it would be the wrong kind of coupling. It travels instead via a defaulted `CommittedWalReader::committed_from_traced` returning `TracedWalRecords { items, links }`; readers that decode no headers inherit the default and honestly report zero links. Links are capped at 8 distinct trace-ids per batch.
 
@@ -165,13 +165,13 @@ Text and summary are recorded only on `gres.statement` and `db.statement`, never
 
 Five targets, each named for the crate that owns it so an `EnvFilter` directive reads as the subsystem it selects:
 
-| Target | Level | Spans |
-|---|---|---|
-| `krabka_pgwire::session` | `DEBUG` | `gres.session`, `gres.statement`, `gres.parse`/`bind`/`describe` |
-| `krabka_pgexec::statement` | `DEBUG` | `pg.parse.sql`, `db.statement`, `pg.select`, `pg.write`, `pg.ddl` |
-| `krabka_pgexec::exec` | `DEBUG`/`TRACE` | `gres.exec_read`, `pg.execute_write`, `pg.read_context` at `DEBUG`; `pg.scan`, `pg.lock.row`, `pg.blocking_worker` at `TRACE` |
-| `krabka_gres_ranges::route` | `DEBUG`/`TRACE` | `gres.range_rpc`, `gres.range_serve`, the 2PC rounds, `tso.grant`, `range.barrier` at `DEBUG`; `pg.route` at `TRACE` |
-| `krabka_gres_substrate::wal` | `DEBUG`/`TRACE` | `pg.commit`, `gres.wal_append`, `gres.wal_apply` at `DEBUG`; `wal.chunk` at `TRACE` |
+| Target                       | Level           | Spans                                                                                                                         |
+| ---------------------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `krabka_pgwire::session`     | `DEBUG`         | `gres.session`, `gres.statement`, `gres.parse`/`bind`/`describe`                                                              |
+| `krabka_pgexec::statement`   | `DEBUG`         | `pg.parse.sql`, `db.statement`, `pg.select`, `pg.write`, `pg.ddl`                                                             |
+| `krabka_pgexec::exec`        | `DEBUG`/`TRACE` | `gres.exec_read`, `pg.execute_write`, `pg.read_context` at `DEBUG`; `pg.scan`, `pg.lock.row`, `pg.blocking_worker` at `TRACE` |
+| `krabka_gres_ranges::route`  | `DEBUG`/`TRACE` | `gres.range_rpc`, `gres.range_serve`, the 2PC rounds, `tso.grant`, `range.barrier` at `DEBUG`; `pg.route` at `TRACE`          |
+| `krabka_gres_substrate::wal` | `DEBUG`/`TRACE` | `pg.commit`, `gres.wal_append`, `gres.wal_apply` at `DEBUG`; `wal.chunk` at `TRACE`                                           |
 
 The three recipes an operator actually chooses between, documented in full in `krabka_gres::telemetry`:
 
@@ -191,7 +191,7 @@ The stdout `fmt` filter names none of the five, exactly as the broker's does. Na
 
 None of these are in the OpenTelemetry documentation. Each was found by a failing test or a silently-wrong export.
 
-**`tracing-opentelemetry` 0.33 recognises `otel.status_description`, not `otel.status_message`.** The wrong name exports as an ordinary attribute and yields `Error { description: "" }` — the status is right, the message is silently gone. **And the order of recording matters:** set `otel.status_code` *first*, then the description. The layer treats setting the code as setting a status with an empty description, so recording the description first erases it. A test that asserts only "status is `Error`" passes either way; pin the description text.
+**`tracing-opentelemetry` 0.33 recognises `otel.status_description`, not `otel.status_message`.** The wrong name exports as an ordinary attribute and yields `Error { description: "" }` — the status is right, the message is silently gone. **And the order of recording matters:** set `otel.status_code` _first_, then the description. The layer treats setting the code as setting a status with an empty description, so recording the description first erases it. A test that asserts only "status is `Error`" passes either way; pin the description text.
 
 **`u64` and `usize` fields export as OTLP strings.** OTLP has no unsigned integer type, so `tracing-opentelemetry` stringifies them. Recorded naively, `pg.rows_affected`, `pg.participants`, `pg.read_ts`, xids, table ids and every count arrive as strings, and Tempo and Grafana cannot compare, sort or range-filter them — `pg.participants > 2` silently matches nothing. Every numeric attribute goes through a saturating `TryInto<i64>` helper declared in each crate's telemetry module. Deliberately-textual fields such as `pg.participant_ranges` (a comma-joined list) stay strings. Assert the exported attribute is `Value::I64(_)`, not merely that it exists.
 
@@ -201,7 +201,7 @@ None of these are in the OpenTelemetry documentation. Each was found by a failin
 
 **In-process context loss has exactly two shapes, and they need different fixes.** A `tracing::Span` carries its own `Dispatch` and `tracing-opentelemetry` keys the OTel context off the registry by span id, not off a thread-local — so a cloned `Span` handle reconstitutes full context on any thread in any runtime, and none of this needs `opentelemetry::Context::attach`. For the five `spawn_blocking` sites the payload is a synchronous closure, so capture the span before the move and `let _g = span.enter();` as the outermost wrapper (bind the guard to a name; `let _ = …entered()` drops instantly and does nothing). For `thread::scope` plus a fresh current-thread runtime the payload is a future, so `block_on(fut.instrument(span))` is right — `Instrumented` re-enters on every poll, which an `enter()` guard across `block_on` only appears to do until something spawns.
 
-**`std::future::pending()` after an error hand-off loses the span.** Two WAL writer paths hand an error to a channel and then await `pending()` forever. The span status must be recorded *before* the `pending()`, or the span never closes, never exports, and the one span you needed is the one you lose.
+**`std::future::pending()` after an error hand-off loses the span.** Two WAL writer paths hand an error to a channel and then await `pending()` forever. The span status must be recorded _before_ the `pending()`, or the span never closes, never exports, and the one span you needed is the one you lose.
 
 ## Integration
 
@@ -222,9 +222,9 @@ No Kafka wire-protocol surface changes. The WAL carrier uses ordinary Kafka **re
 Five layers, each pinning values rather than presence — "a traceparent exists" survives a mutant that injects a constant, while `value.contains(&trace_id) && value.ends_with("-01")` does not.
 
 1. **Unit** (`krabka-trace-context`) — table-driven sqlcommenter cases: trailing and leading comment, traceparent plus tracestate, nested `/* /* */ */`, `--` line comment, absent (which asserts the fast path), malformed, oversized tracestate, and `SELECT '/*traceparent=…*/'` which must **not** extract. Plus a behavioural parser check that `parse(with_comment)` equals `parse(without)` over the whole `Vec<Statement>`.
-2. **pgwire ingress** — drives `run_session` over `tokio::io::duplex` against a stub engine that reports the current span's `SpanContext`, for both protocols, including that a *named* statement reused after a `Sync` does not inherit the stale `Parse`-time trace.
+2. **pgwire ingress** — drives `run_session` over `tokio::io::duplex` against a stub engine that reports the current span's `SpanContext`, for both protocols, including that a _named_ statement reused after a `Sync` does not inherit the stale `Parse`-time trace.
 3. **Real TLS hop** — `gateway_local.rs` with an `InMemorySpanExporter`, asserting the `gres.range_serve` span's `parent_span_id` equals the `gres.range_rpc` span's `span_id` across one trace-id.
-4. **WAL links** — asserts the polled record headers carry `traceparent`, that `gres.wal_apply` has a link with that trace-id, and — explicitly — that its `parent_span_id` is *not* the remote one. That last assertion is what stops someone later "fixing" links back into `set_remote_parent`.
+4. **WAL links** — asserts the polled record headers carry `traceparent`, that `gres.wal_apply` has a link with that trace-id, and — explicitly — that its `parent_span_id` is _not_ the remote one. That last assertion is what stops someone later "fixing" links back into `set_remote_parent`.
 5. **Cross-process** (`crates/gres-loadtest/tests/cross_process_tracing.rs`) — the only layer that can falsify the propagation claim, because every other layer runs in one process where a cloned span handle would satisfy it whether or not the wire carried anything. It stands up an in-test OTLP/gRPC collector, launches a real two-node broker-backed cluster of `krabka-gres` binaries pointed at it, and runs one sqlcommenter-tagged SELECT against a table whose range the gateway does not host. It then asserts that the statement span's parent is the span-id the client wrote into the tag, that the trace spans both named processes, and that a `SERVER`-kind range RPC span is the child of a `CLIENT`-kind one **emitted by a different process**. It skips cleanly when the binaries have not been built.
 
 Manual: `docker compose -f demo/observability/docker-compose.yml up`, `psql` with a tagged query, and confirm the waterfall in Grafana.
@@ -243,7 +243,7 @@ These are real and deliberate; none is a reason to hold the feature.
 
 **Checkpoint restore-tail apply spans carry zero links.** The headers are gone by the time the tail is restored, so those spans honestly report no links rather than pretending.
 
-**The 2PC-round spans did not fire on a real two-range transaction.** On a 2-node/2-range `LogicalTso` cluster, `BEGIN; INSERT t0; INSERT t1000000; COMMIT;` produced no `pg.timestamp_scatter`, `pg.prewrite`, `pg.resolve` or `pg.commit_global` — the participants committed through per-range `Session` RPCs and the gateway's `COMMIT` routed locally with `pg.statement_kind = local`. Either this topology legitimately takes a path those spans do not sit on, or the gateway is not escalating a genuinely cross-range transaction to two-phase commit — which would be an atomicity problem, not a tracing one. Unresolved, and tracked separately. The in-process scatter test in `crates/gres-ranges/tests/gateway_tracing.rs` *does* exercise `pg.timestamp_scatter`, so comparing the two paths is the place to start.
+**The 2PC-round spans did not fire on a real two-range transaction.** On a 2-node/2-range `LogicalTso` cluster, `BEGIN; INSERT t0; INSERT t1000000; COMMIT;` produced no `pg.timestamp_scatter`, `pg.prewrite`, `pg.resolve` or `pg.commit_global` — the participants committed through per-range `Session` RPCs and the gateway's `COMMIT` routed locally with `pg.statement_kind = local`. Either this topology legitimately takes a path those spans do not sit on, or the gateway is not escalating a genuinely cross-range transaction to two-phase commit — which would be an atomicity problem, not a tracing one. Unresolved, and tracked separately. The in-process scatter test in `crates/gres-ranges/tests/gateway_tracing.rs` _does_ exercise `pg.timestamp_scatter`, so comparing the two paths is the place to start.
 
 **gres has no Prometheus metrics and no admin port.** No gres crate uses `prometheus_client` and there is nothing to scrape. Spans give per-step latency out of band, but they are sampled and are not a substitute for counters. A real gap, and a separate change.
 

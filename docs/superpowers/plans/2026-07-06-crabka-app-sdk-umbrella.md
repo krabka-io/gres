@@ -44,6 +44,7 @@
 ## Task 1: The adapter protocol + mock-adapter self-test
 
 **Files:**
+
 - Create: `crates/sdk-conformance/{Cargo.toml, src/lib.rs, src/protocol.rs, src/mock_adapter.rs}`
 - Modify: `release-plz.toml`
 
@@ -89,6 +90,7 @@ git commit -m "feat(sdk-conformance): adapter protocol + mock-adapter self-test"
 ## Task 2: The harness — in-process substrate + subprocess adapters
 
 **Files:**
+
 - Create: `crates/sdk-conformance/src/harness.rs`, `src/bin/conformance.rs`, `tests/self_test.rs`
 
 - [ ] **Step 1: Write the failing test** (`tests/self_test.rs`)
@@ -113,6 +115,7 @@ git commit -m "feat(sdk-conformance): harness with in-process substrate + subpro
 ## Task 3: Vectors v1
 
 **Files:**
+
 - Create: `crates/sdk-conformance/vectors/v1/*.json`
 
 - [ ] **Step 1: Author the vectors** (each: id, setup, adapter commands, expected responses/effects):
@@ -133,6 +136,7 @@ git commit -m "feat(sdk-conformance): contract vectors v1 (mock-validated)"
 ## Task 4 (∥ 1–3, after MSG-5's Go core): Go module layout + taxonomy + stubs
 
 **Files:**
+
 - Create: `sdks/go/crabka/{client.go, errors.go, queues.go, database.go, auth.go, blob.go}`
 
 - [ ] **Step 1: Write the failing Go unit tests**
@@ -166,10 +170,11 @@ git commit -m "feat(sdk-go): app-SDK module layout, error taxonomy, gated stubs"
 ## Task 5: The Go adapter + suite green
 
 **Files:**
+
 - Create: `sdks/go/cmd/conformance-adapter/main.go`
 
 - [ ] **Step 1:** Implement the adapter: JSON-lines stdio loop translating `Command`s onto the Go SDK (`Hello` reports `contract_major: 1, language: "go"`; `Subscribe`/`NextMessage` bridge the stream to pull semantics with a buffered channel; every SDK error maps to the wire taxonomy).
-- [ ] **Step 2:** Run the real suite: `cargo run -p krabka-sdk-conformance --bin conformance -- --adapter sdks/go/bin/conformance-adapter --vectors crates/sdk-conformance/vectors/v1` → **all vectors PASS**. Any mismatch: fix the SDK (or a genuinely ambiguous vector — then fix the vector *and* re-run the mock).
+- [ ] **Step 2:** Run the real suite: `cargo run -p krabka-sdk-conformance --bin conformance -- --adapter sdks/go/bin/conformance-adapter --vectors crates/sdk-conformance/vectors/v1` → **all vectors PASS**. Any mismatch: fix the SDK (or a genuinely ambiguous vector — then fix the vector _and_ re-run the mock).
 - [ ] **Step 3: Commit**
 
 ```bash

@@ -46,6 +46,7 @@
 ## Task 1: The `share_group_backlog` gauge
 
 **Files:**
+
 - Modify: `crates/broker/src/metrics.rs` (`:53-57` label template, `:144` field template, `:358` init template, `:554-559` register template)
 
 - [ ] **Step 1: Write the failing test**
@@ -121,6 +122,7 @@ git commit -m "feat(broker): share_group_backlog gauge family"
 ## Task 2: The `effective_backlog` kernel
 
 **Files:**
+
 - Create: `crates/broker/src/share_partition/backlog_poller.rs` (+ `mod backlog_poller;` in `share_partition/mod.rs`)
 
 - [ ] **Step 1: Write the failing tests**
@@ -183,6 +185,7 @@ git commit -m "feat(broker): effective_backlog kernel (never -1) for share-group
 ## Task 3: Coordinator poll loop (local HWM) + spawn
 
 **Files:**
+
 - Modify: `crates/broker/src/share_partition/backlog_poller.rs` (`spawn_backlog_poller`)
 - Modify: `crates/broker/src/coordinator/unified/mod.rs` (enumeration seam visibility + topic-id→name resolver)
 - Modify: `crates/broker/src/broker.rs:2464-2473` (spawn)
@@ -291,6 +294,7 @@ git commit -m "feat(broker): coordinator-hosted share-group backlog poll loop (l
 ## Task 4: Remote-HWM read for non-co-led data partitions
 
 **Files:**
+
 - Modify: `crates/broker/src/share_partition/backlog_poller.rs` (peer-HWM helper + wire the remote branch)
 - Test: `crates/broker/tests/sharegroup_backlog.rs` (multi-broker case)
 
@@ -334,6 +338,7 @@ git commit -m "feat(broker): remote-HWM read (peer ListOffsets) for fleet-comple
 ## Task 5: Coordinator self-gate + stale-series hygiene
 
 **Files:**
+
 - Modify: `crates/broker/src/share_partition/backlog_poller.rs`
 - Test: `crates/broker/tests/sharegroup_backlog.rs`
 
@@ -379,6 +384,7 @@ git commit -m "feat(broker): coordinator self-gate + stale-series hygiene for ba
 ## Task 6: Poll-interval config (optional)
 
 **Files:**
+
 - Modify: `crates/broker/src/config.rs`, `crates/broker/src/broker.rs`
 
 - [ ] **Step 1:** Add `backlog_poll_interval_secs` to the `ShareGroupConfig` (mirror `partition_disk_scan_interval_secs`), default `15`; short in `for_tests`. Thread it into the `spawn_backlog_poller` call, replacing the hardcoded `Duration::from_secs(15)`.
@@ -394,6 +400,7 @@ git commit -m "feat(broker): configurable share-group backlog poll interval"
 ## Task 7: KEDA ScaledObject example + operator docs
 
 **Files:**
+
 - Create: `docs/examples/keda-sharegroup-scaledobject.yaml`
 
 - [ ] **Step 1:** Write the `ScaledObject` from the spec (stock `prometheus` scaler, `query: sum(krabka_broker_share_group_backlog{group_id="my-group"})`, `threshold`, `activationThreshold: 1`, `minReplicaCount: 0`) with comments explaining: fleet aggregation via `sum()`, why scale-to-zero is safe (complete emission, never `-1`), that consumer-group workloads use the stock `kafka` scaler instead, and the KEDA-version `metricName` caveat. No Crabka code.

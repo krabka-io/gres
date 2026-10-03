@@ -16,7 +16,7 @@ cache, and forwards a single deduplicated `Change` per key only when the entry
 is **evicted** (LRU under memory pressure) or **flushed** (on commit). Reads and
 interactive queries see cached (not-yet-flushed) writes — read-your-writes.
 
-This is the last large Kafka Streams *runtime* feature absent from the client
+This is the last large Kafka Streams _runtime_ feature absent from the client
 (the DSL-parity surface is otherwise complete). It is explicitly deferred in the
 KGroupedTable design (§"Out of scope: Caching / record-cache suppression").
 
@@ -42,13 +42,13 @@ In scope (one slice):
 
 Out of scope (YAGNI):
 
-- **Changelog / store byte format** — unchanged. The cache alters *when and how
-  many* downstream emits happen; it never changes changelog records or the
+- **Changelog / store byte format** — unchanged. The cache alters _when and how
+  many_ downstream emits happen; it never changes changelog records or the
   bytes written to the underlying store. This is the fidelity anchor.
 - **Record-cache metrics** — hit-ratio / `cache-size-bytes` sensors (KIP-444).
 - **`cache.max.bytes.buffering` legacy alias** — greenfield; only the
   KIP-1024 name `statestore.cache.max.bytes` exists.
-- **Named-cache eviction *ordering* across stores under contention** beyond what
+- **Named-cache eviction _ordering_ across stores under contention** beyond what
   the ported `ThreadCacheTest` covers (single-thread, deterministic).
 
 ## 3. Semantics (ground truth)
@@ -69,7 +69,7 @@ commit     → flush: old = underlying.get(k); underlying.put(k, v2);
                     forward Change{old, new: v2}   ← exactly ONE emit
 ```
 
-This is *record-cache suppression* — distinct from `suppress()` (KIP-328): the
+This is _record-cache suppression_ — distinct from `suppress()` (KIP-328): the
 cache is keyed by store, bounded by **bytes** (not records/time), forwards on
 **eviction or commit** (not window-close/time-limit), and is a transparent store
 wrapper rather than a DSL operator.
@@ -88,7 +88,7 @@ A `put` that pushes `ThreadCache` total bytes over budget triggers
 `maybe_evict`: evict LRU-head entries (across all named caches, oldest first)
 until under budget; a dirty evicted entry is flushed first (write-through +
 forward). Entry byte size uses Kafka's `LRUCacheEntry` formula exactly so the
-eviction *threshold* matches: `key.len + value.len + record-context overhead +
+eviction _threshold_ matches: `key.len + value.len + record-context overhead +
 per-node overhead` (constants ported from `NamedCache`/`LRUCacheEntry`).
 
 ### 3.4 Disabled (size 0)
@@ -109,6 +109,7 @@ value: Option<Vec<u8>>          // None = tombstone
 dirty: bool
 context: RecordContext          // offset, timestamp, partition, topic, headers
 ```
+
 `size_bytes()` ports Kafka's formula (drives eviction parity).
 
 ### 4.2 `NamedCache` (`cache/named.rs`)
@@ -152,7 +153,7 @@ handle (see §4.5):
 ### 4.5 Forward-suppression seam (`TupleForwarder`) + typed flush listener
 
 Crabka's downstream **forward is processor-driven** (`ctx.forward(Change)` inside
-`process()`), not store-driven as in JVM. So caching must intercept the *forward*,
+`process()`), not store-driven as in JVM. So caching must intercept the _forward_,
 not just the byte write. This mirrors JVM's `TimestampedTupleForwarder`: when a
 store is cached, the processor's immediate forward is **suppressed** and the
 cache's flush listener forwards the deduped `Change` later; when uncached, the
@@ -259,6 +260,7 @@ every current emit-on-update golden green (the disabled-path invariant, §3.4).
 ## 7. Files touched
 
 New:
+
 - `crates/client-streams/src/store/cache/mod.rs`
 - `crates/client-streams/src/store/cache/entry.rs`
 - `crates/client-streams/src/store/cache/named.rs`
@@ -272,6 +274,7 @@ New:
 - `crates/client-streams/tests/record_cache_golden.rs`
 
 Modified:
+
 - `crates/client-streams/src/store/mod.rs` (module export)
 - `crates/client-streams/src/store/registry.rs` (wrap on materialize when enabled)
 - `crates/client-streams/src/dsl/config.rs` (`Materialized::caching` + `with_caching`)

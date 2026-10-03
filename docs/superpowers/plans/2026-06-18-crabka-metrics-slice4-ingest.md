@@ -37,6 +37,7 @@ OTLP /otlp/v1/metrics┘                                        (HA-tracker topi
 ## Dependency & slice roadmap
 
 **Depends on (consume exactly — do not re-implement):**
+
 - **`krabka-metrics` Slice 1** — `NativeHistogram { schema:i8, is_float:bool, reset_hint:ResetHint, zero_threshold:f64, zero_count:f64, count:f64, sum:f64, positive_spans:Vec<BucketSpan>, positive_counts:Vec<f64> (absolute), negative_spans, negative_counts, custom_values:Option<Vec<f64>>, start_timestamp_ms:Option<i64> }`, `BucketSpan { offset:i32, length:u32 }`, `ResetHint { Unknown, Yes, No, Gauge }` (`as_i8`/`from_i8`), `SymbolTable` (`from_symbols`/`resolve_label_refs`/`new`/`intern`/`resolve`/`symbols`), `encode_native_histograms`/`decode_native_histograms`, `encode_float_samples`/`decode_float_samples`, schema builders.
 - **`krabka-blockstore`** — `BlockStore`, `BlockWriter::write_block(tenant:&str, object_key:&str, schema:SchemaRef, batches:&[RecordBatch]) -> Result<BlockMeta>`, `Index::{add_series, add_block, save}`, `BlockMeta`, `Labels` (`new`/`insert`/`fingerprint`/`iter`), `SeriesFingerprint` (= `u64`).
 - **`krabka-client-producer`** — `Producer::builder().bootstrap(..).build().await? -> Result<Producer, ProducerError>`; `Producer::send(ProducerRecord) -> oneshot::Receiver<Result<RecordMetadata, ProducerError>>` (`.await.await??` for ack); `ProducerRecord { topic:String, partition:Option<i32>, key:Option<Bytes>, value:Option<Bytes>, headers:Vec<Header>, timestamp_ms:Option<i64> }`; `Producer::flush()`. **The producer hashes `key` with MurmurHash2 to choose a partition** — so set `key` = our partition key and leave `partition: None`. (Verify signatures against `crates/client-producer/src/{builder,record,producer}.rs`.)
@@ -46,34 +47,36 @@ OTLP /otlp/v1/metrics┘                                        (HA-tracker topi
 **THIS slice defines (Slices 5/6/7 consume):** `WalRecord` (Task 5) — the WAL topic record. `WAL_TOPIC = "__krabka_metrics_wal"`. Partition key = `(tenant, series_fingerprint)`.
 
 **The 8 metrics slices** (this plan = Slice 4):
-1. Data layer (DONE). 2. `krabka-promql` core. 3. Query completeness. **4. Ingest service *(this plan)*.** 5. Querier + Prometheus HTTP API. 6. Query-frontend. 7. Ruler. 8. Hardening.
+
+1. Data layer (DONE). 2. `krabka-promql` core. 3. Query completeness. **4. Ingest service _(this plan)_.** 5. Querier + Prometheus HTTP API. 6. Query-frontend. 7. Ruler. 8. Hardening.
 
 ---
 
 ## File structure (`crates/metrics/`)
 
-| File | Responsibility |
-|---|---|
-| `Cargo.toml` | add ingest deps + `prost`/`opentelemetry-proto` + `[build-dependencies] prost-build` |
-| `build.rs` | prost-codegen the vendored remote_write v1/v2 protos → `OUT_DIR` |
-| `proto/prometheus/remote.proto` | vendored remote_write **v1** (`prometheus.WriteRequest`) |
-| `proto/io/prometheus/write/v2/types.proto` | vendored remote_write **v2** (`io.prometheus.write.v2.Request`) |
-| `src/wire/mod.rs` | `pb` (generated include), content negotiation, snappy block decode, status codes |
-| `src/wire/v1.rs` | v1 `WriteRequest` → `Vec<DecodedSeries>` (labels + float samples + wire histograms) |
-| `src/wire/v2.rs` | v2 `Request` → `Vec<DecodedSeries>` via `SymbolTable`; written-counts response struct |
-| `src/wire/histogram.rs` | wire `Histogram` (int delta-decode / float absolute / NHCB) → `NativeHistogram` |
-| `src/otlp.rs` | OTLP `MetricsData` → `Vec<DecodedSeries>`; `ExponentialHistogram` → `NativeHistogram`; `TranslationStrategy` |
-| `src/wal.rs` | `WalRecord`, `SamplePayload`, `WalExemplar` + `encode`/`decode` + partition key |
-| `src/distributor/mod.rs` | axum router (`/api/v1/push`, `/otlp/v1/metrics`), serve, limits |
-| `src/distributor/ha.rs` | `HaTracker` — elected `__replica__` per `(tenant, cluster)`; dedup decision |
-| `src/compactor.rs` | consumer-group loop → group/sort → blocks → index → commit |
-| `src/bin/krabka-metrics.rs` | `clap` role-selectable entrypoint (`--target`) |
+| File                                       | Responsibility                                                                                               |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| `Cargo.toml`                               | add ingest deps + `prost`/`opentelemetry-proto` + `[build-dependencies] prost-build`                         |
+| `build.rs`                                 | prost-codegen the vendored remote_write v1/v2 protos → `OUT_DIR`                                             |
+| `proto/prometheus/remote.proto`            | vendored remote_write **v1** (`prometheus.WriteRequest`)                                                     |
+| `proto/io/prometheus/write/v2/types.proto` | vendored remote_write **v2** (`io.prometheus.write.v2.Request`)                                              |
+| `src/wire/mod.rs`                          | `pb` (generated include), content negotiation, snappy block decode, status codes                             |
+| `src/wire/v1.rs`                           | v1 `WriteRequest` → `Vec<DecodedSeries>` (labels + float samples + wire histograms)                          |
+| `src/wire/v2.rs`                           | v2 `Request` → `Vec<DecodedSeries>` via `SymbolTable`; written-counts response struct                        |
+| `src/wire/histogram.rs`                    | wire `Histogram` (int delta-decode / float absolute / NHCB) → `NativeHistogram`                              |
+| `src/otlp.rs`                              | OTLP `MetricsData` → `Vec<DecodedSeries>`; `ExponentialHistogram` → `NativeHistogram`; `TranslationStrategy` |
+| `src/wal.rs`                               | `WalRecord`, `SamplePayload`, `WalExemplar` + `encode`/`decode` + partition key                              |
+| `src/distributor/mod.rs`                   | axum router (`/api/v1/push`, `/otlp/v1/metrics`), serve, limits                                              |
+| `src/distributor/ha.rs`                    | `HaTracker` — elected `__replica__` per `(tenant, cluster)`; dedup decision                                  |
+| `src/compactor.rs`                         | consumer-group loop → group/sort → blocks → index → commit                                                   |
+| `src/bin/krabka-metrics.rs`                | `clap` role-selectable entrypoint (`--target`)                                                               |
 
 ---
 
 ### Task 1: Ingest-deps wiring + vendored protos + prost build
 
 **Files:**
+
 - Modify: `crates/metrics/Cargo.toml`
 - Create: `crates/metrics/build.rs`
 - Create: `crates/metrics/proto/prometheus/remote.proto`
@@ -83,6 +86,7 @@ OTLP /otlp/v1/metrics┘                                        (HA-tracker topi
 - Modify: root `Cargo.toml` (add `prost-build` to `[workspace.dependencies]`)
 
 **Interfaces:**
+
 - Produces: generated prost types reachable as `crate::wire::pb::v1::WriteRequest`, `crate::wire::pb::v1::{TimeSeries,Label,Sample,Histogram,...}`, `crate::wire::pb::v2::Request`, `crate::wire::pb::v2::{TimeSeries,Sample,Histogram,Exemplar,Metadata,...}`.
 
 - [ ] **Step 1: Add `prost-build` to the workspace deps**
@@ -358,10 +362,12 @@ git commit -m "feat(metrics): vendor remote_write v1/v2 protos + prost codegen"
 ### Task 2: `DecodedSeries` + snappy block decode + content negotiation
 
 **Files:**
+
 - Create: `crates/metrics/src/wire/decoded.rs` (the shared decode target)
 - Modify: `crates/metrics/src/wire/mod.rs` (snappy + content-type dispatch + status helpers)
 
 **Interfaces:**
+
 - Produces:
   - `struct DecodedSeries { pub labels: krabka_blockstore::Labels, pub samples: Vec<(i64, f64)>, pub histograms: Vec<(i64, krabka_metrics::NativeHistogram)>, pub exemplars: Vec<DecodedExemplar> }` (`Debug`, `PartialEq`)
   - `struct DecodedExemplar { pub labels: Vec<(String, String)>, pub value: f64, pub timestamp_ms: i64 }`
@@ -561,10 +567,12 @@ git commit -m "feat(metrics): DecodedSeries + content negotiation + snappy block
 ### Task 3: wire `Histogram` → `NativeHistogram` (delta-decode)
 
 **Files:**
+
 - Create: `crates/metrics/src/wire/histogram.rs`
 - Modify: `crates/metrics/src/wire/mod.rs`
 
 **Interfaces:**
+
 - Consumes: `pb::v1::Histogram`, `pb::v2::Histogram`, Slice-1 `NativeHistogram`/`BucketSpan`/`ResetHint`.
 - Produces:
   - `fn v1_histogram_to_native(h: &pb::v1::Histogram) -> Result<NativeHistogram, WireError>`
@@ -853,11 +861,13 @@ git commit -m "feat(metrics): wire Histogram to NativeHistogram (integer delta-d
 ### Task 4: v1 + v2 request decoders → `Vec<DecodedSeries>`
 
 **Files:**
+
 - Create: `crates/metrics/src/wire/v1.rs`
 - Create: `crates/metrics/src/wire/v2.rs`
 - Modify: `crates/metrics/src/wire/mod.rs`
 
 **Interfaces:**
+
 - Produces:
   - `fn decode_v1(body: &[u8], max_decompressed: usize) -> Result<Vec<DecodedSeries>, WireError>` — snappy-decompress → prost-decode `WriteRequest` → per-`TimeSeries` `DecodedSeries`.
   - `fn decode_v2(body: &[u8], max_decompressed: usize) -> Result<(Vec<DecodedSeries>, WrittenCounts), WireError>` — uses `SymbolTable::from_symbols` + `resolve_label_refs`; counts samples/histograms/exemplars for the v2 response headers.
@@ -1093,10 +1103,12 @@ git commit -m "feat(metrics): remote_write v1/v2 request decoders to DecodedSeri
 ### Task 5: `WalRecord` — the WAL topic record (Slices 5/6/7 consume this)
 
 **Files:**
+
 - Create: `crates/metrics/src/wal.rs`
 - Modify: `crates/metrics/src/lib.rs`
 
 **Interfaces:**
+
 - Produces (the SHARED CONTRACT this slice owns):
   - `const WAL_TOPIC: &str = "__krabka_metrics_wal"`
   - `struct WalRecord { pub tenant: String, pub labels: Vec<(String, String)>, pub payload: SamplePayload, pub exemplars: Vec<WalExemplar> }` (`serde`, `Clone`, `Debug`, `PartialEq`)
@@ -1317,10 +1329,12 @@ git commit -m "feat(metrics): WalRecord WAL topic record + serde-wincode codec (
 ### Task 6: OTLP decode extension — full type mapping + ExponentialHistogram
 
 **Files:**
+
 - Create: `crates/metrics/src/otlp.rs`
 - Modify: `crates/metrics/src/lib.rs`
 
 **Interfaces:**
+
 - Consumes: `opentelemetry_proto::tonic::metrics::v1::{MetricsData, metric::Data, ExponentialHistogramDataPoint, exponential_histogram_data_point::Buckets, NumberDataPoint, ...}`, Slice-1 `NativeHistogram`.
 - Produces:
   - `enum TranslationStrategy { UnderscoreEscapingWithSuffixes, NoTranslation }` (`Default` = `UnderscoreEscapingWithSuffixes`)
@@ -1328,7 +1342,7 @@ git commit -m "feat(metrics): WalRecord WAL topic record + serde-wincode codec (
   - `fn exponential_histogram_to_native(dp: &ExponentialHistogramDataPoint) -> Result<NativeHistogram, OtlpError>` — the scale↔schema clamp + boundary off-by-one fix.
   - `fn normalize_name(name: &str, strategy: TranslationStrategy) -> String`
 
-> **Scope guard:** delta→cumulative accumulation and `target_info` need cross-datapoint state. Implement the **pure** per-datapoint mappings (Gauge, monotonic/non-monotonic Sum, Histogram→classic float series, ExponentialHistogram→native, name/label normalization) fully and tested. Delta accumulation + `target_info` resource-attr promotion are stubbed behind explicit `// TODO(slice4-otlp-state)` markers with a focused test asserting the *cumulative* path works; wire the delta accumulator as the final step of this task (Step 7). Do not silently drop delta points — return `OtlpError::DeltaUnsupported` until Step 7 lands the accumulator, then make the test pass.
+> **Scope guard:** delta→cumulative accumulation and `target_info` need cross-datapoint state. Implement the **pure** per-datapoint mappings (Gauge, monotonic/non-monotonic Sum, Histogram→classic float series, ExponentialHistogram→native, name/label normalization) fully and tested. Delta accumulation + `target_info` resource-attr promotion are stubbed behind explicit `// TODO(slice4-otlp-state)` markers with a focused test asserting the _cumulative_ path works; wire the delta accumulator as the final step of this task (Step 7). Do not silently drop delta points — return `OtlpError::DeltaUnsupported` until Step 7 lands the accumulator, then make the test pass.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1736,7 +1750,7 @@ fn number_series(name: &str, dp: &NumberDataPoint, strategy: TranslationStrategy
 }
 ```
 
-> **Verify against the broker's `otlp.rs` + the generated `opentelemetry-proto` types** (`crates/broker/src/client_metrics/otlp.rs` shows `MetricsData::decode`; the exact field names — `bucket_counts`, `offset`, `scale`, `zero_threshold`, `start_time_unix_nano` — are confirmed in `opentelemetry.proto.metrics.v1.rs`). `Buckets::default()` exists (prost derives `Default`). The index-merge downscale + boundary fix are the correctness traps; the three exponential-histogram tests pin them (including the odd-offset case that distinguishes the real Prometheus INDEX-merge from a naive array-pair-merge). The merge MUST follow `prometheusremotewrite/histograms.go::convertBucketsLayout` (shift each source bucket's index by `scale_down`, coalesce equal shifted indices) — do not merge by array position. If the boundary `+1` convention proves wrong against a real Prometheus/Mimir comparison (Slice 8 differential), adjust *with a failing test first*.
+> **Verify against the broker's `otlp.rs` + the generated `opentelemetry-proto` types** (`crates/broker/src/client_metrics/otlp.rs` shows `MetricsData::decode`; the exact field names — `bucket_counts`, `offset`, `scale`, `zero_threshold`, `start_time_unix_nano` — are confirmed in `opentelemetry.proto.metrics.v1.rs`). `Buckets::default()` exists (prost derives `Default`). The index-merge downscale + boundary fix are the correctness traps; the three exponential-histogram tests pin them (including the odd-offset case that distinguishes the real Prometheus INDEX-merge from a naive array-pair-merge). The merge MUST follow `prometheusremotewrite/histograms.go::convertBucketsLayout` (shift each source bucket's index by `scale_down`, coalesce equal shifted indices) — do not merge by array position. If the boundary `+1` convention proves wrong against a real Prometheus/Mimir comparison (Slice 8 differential), adjust _with a failing test first_.
 
 - [ ] **Step 4: Declare + run the pure tests**
 
@@ -1756,7 +1770,7 @@ git commit -m "feat(metrics): OTLP decode — Sum/Gauge/ExponentialHistogram wit
 
 - [ ] **Step 6: Write the failing delta-accumulation test**
 
-Append to the `tests` module a test that feeds two consecutive **delta** `Sum` datapoints for the same series and asserts the emitted samples are *cumulative* (running total), keyed by a `DeltaAccumulator` state struct:
+Append to the `tests` module a test that feeds two consecutive **delta** `Sum` datapoints for the same series and asserts the emitted samples are _cumulative_ (running total), keyed by a `DeltaAccumulator` state struct:
 
 ```rust
     #[test]
@@ -1803,11 +1817,13 @@ git commit -m "feat(metrics): OTLP delta-to-cumulative accumulator"
 ### Task 7: HA tracker — elected `__replica__` per `(tenant, cluster)`
 
 **Files:**
+
 - Create: `crates/metrics/src/distributor/ha.rs`
 - Create: `crates/metrics/src/distributor/mod.rs` (module shell; router lands in Task 8)
 - Modify: `crates/metrics/src/lib.rs`
 
 **Interfaces:**
+
 - Produces:
   - `struct HaTracker { elected: Mutex<HashMap<(String, String), String>> }` (in-memory view of the compacted HA-tracker topic; interior `Mutex` so first-seen election is atomic behind `&self`)
   - `const HA_TRACKER_TOPIC: &str = "__krabka_metrics_ha"`
@@ -1818,7 +1834,7 @@ git commit -m "feat(metrics): OTLP delta-to-cumulative accumulator"
   - `fn ha_decision(tracker: &HaTracker, tenant: &str, series: &[DecodedSeries]) -> HaDecision` — inspect the **first** series' `cluster` + `__replica__` labels; if there is no `__replica__` label, `Accept` (HA disabled for this stream); else `elect_or_get` the `(tenant, cluster)` pair and `Accept` iff this replica is the elected one (first-seen wins; others Drop — no fail-open double-write).
   - `fn strip_replica_label(series: &mut [DecodedSeries])` — remove `__replica__` from every series before WAL write.
 
-> HA-tracker leader election (lease acquisition / failover via the compacted topic) is a write-coordination concern. This task models the **read path** (consult elected replica) + the in-memory tracker fed from the compacted topic, AND a minimal **in-process first-seen election** (`elect_or_get`) so an unseen `(tenant, cluster)` does not fail open — the first replica we see is elected atomically and all others Drop, exactly the Mimir dedup behavior. **Persisting/replaying** that election to the compacted HA topic (so it survives restart and spans distributor replicas) is the focused follow-on noted with `// TODO(slice4-ha-election)`. The dedup *decision* + label stripping — the spec's HTTP-202 behavior — is fully implemented and tested here, with no double-write for unseen clusters.
+> HA-tracker leader election (lease acquisition / failover via the compacted topic) is a write-coordination concern. This task models the **read path** (consult elected replica) + the in-memory tracker fed from the compacted topic, AND a minimal **in-process first-seen election** (`elect_or_get`) so an unseen `(tenant, cluster)` does not fail open — the first replica we see is elected atomically and all others Drop, exactly the Mimir dedup behavior. **Persisting/replaying** that election to the compacted HA topic (so it survives restart and spans distributor replicas) is the focused follow-on noted with `// TODO(slice4-ha-election)`. The dedup _decision_ + label stripping — the spec's HTTP-202 behavior — is fully implemented and tested here, with no double-write for unseen clusters.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -2025,9 +2041,11 @@ git commit -m "feat(metrics): HA dedup decision + replica-label strip"
 ### Task 8: Distributor axum server — routes, limits, produce
 
 **Files:**
+
 - Modify: `crates/metrics/src/distributor/mod.rs` (router + handlers + serve)
 
 **Interfaces:**
+
 - Produces:
   - `struct TenantLimits { pub max_label_value_len: usize, pub max_series_per_request: usize }` (`Default`)
   - `struct DistributorState { producer, tracker, limits, max_decompressed }` (the axum `State`)
@@ -2137,6 +2155,7 @@ Expected: FAIL — `cannot find function router`.
 - [ ] **Step 3: Implement `distributor/mod.rs`**
 
 Implement:
+
 - `WalSink` trait (`async fn append(&self, WalRecord) -> Result<(), ProduceError>`), a `KafkaSink` wrapping `krabka_client_producer::Producer` (in `produce_series`, build a `ProducerRecord { topic: WAL_TOPIC.into(), key: Some(partition_key(tenant, fp)), value: Some(Bytes::from(rec.encode()?)), partition: None, .. }` and `producer.send(record).await.await??`), and `DistributorState { sink: Arc<dyn WalSink>, tracker: HaTracker, limits: TenantLimits, max_decompressed: usize }`.
 - `router()`: `Router::new().route("/api/v1/push", post(push)).route("/otlp/v1/metrics", post(otlp_push)).with_state(state)`.
 - `push` handler: read `X-Scope-OrgID` (400 if missing under multi-tenant), `Content-Type` → `negotiate()`; on `RemoteWriteV1` call `decode_v1`, on `RemoteWriteV2` call `decode_v2`; `validate(&series, &limits)`; `ha_decision` → `Drop` returns `202 Accepted`; else `strip_replica_label`, append each as a `WalRecord` (one record per (series, sample) — fan float samples and histograms into separate `SamplePayload`s), return `204` (v2: with the three `X-Prometheus-Remote-Write-*-Written` headers from `WrittenCounts`). Map `WireError::status_code()` to the response.
@@ -2144,7 +2163,7 @@ Implement:
 - `validate`: enforce `max_series_per_request` and `max_label_value_len`; over-limit → `WireError::Invalid` (→ 400) or a dedicated 429 for rate (rate-limiting integration with Crabka quotas is `// TODO(slice4-quota)`; the structural cap is enforced now).
 - `serve()`: mirror `crates/broker/src/metrics_server.rs::run` — bind `TcpListener`, `axum::serve(listener, router(state)).with_graceful_shutdown(...)`, return the bound `SocketAddr`. (TLS is the `grpc-gateway/serve.rs` pattern; defer TLS to hardening — plaintext serve here, note `// TODO(slice4-tls)`.)
 
-Body extraction: axum `body::Bytes` extractor gives the raw bytes (`Content-Encoding: snappy` is decoded by *us* via `snappy_block_decode`, not axum — do not enable any axum decompression layer).
+Body extraction: axum `body::Bytes` extractor gives the raw bytes (`Content-Encoding: snappy` is decoded by _us_ via `snappy_block_decode`, not axum — do not enable any axum decompression layer).
 
 > **Verify the producer `.send` ack pattern** (`producer.send(rec).await.await??` — outer await resolves partition, inner await the oneshot for broker ack) against `crates/client-producer/src/lib.rs`. For throughput, the distributor may `send` without awaiting each inner oneshot and `flush()` at end-of-request; for correctness of the test, await acks. Keep it simple: await per record in this slice.
 
@@ -2167,10 +2186,12 @@ git commit -m "feat(metrics): distributor axum server — push/otlp routes, limi
 ### Task 9: Compactor — WAL consumer-group → blocks → index
 
 **Files:**
+
 - Create: `crates/metrics/src/compactor.rs`
 - Modify: `crates/metrics/src/lib.rs`
 
 **Interfaces:**
+
 - Produces:
   - `fn object_key(tenant: &str, partition: i32, min_offset: i64, max_offset: i64, min_ts: i64, max_ts: i64) -> String` — deterministic idempotent key.
   - `fn group_and_sort(records: &[WalRecord]) -> BTreeMap<(String, u64), Vec<&WalRecord>>` — group by `(tenant, fingerprint)`, each group sorted by timestamp.
@@ -2251,6 +2272,7 @@ Expected: FAIL — `cannot find function object_key`.
 - [ ] **Step 3: Implement `compactor.rs`**
 
 Implement:
+
 - `object_key`: `format!("blocks/{tenant}/{partition:05}/{min_offset:020}-{max_offset:020}-{min_ts}-{max_ts}.parquet")` (deterministic from inputs; same WAL offset range + window ⇒ same key ⇒ idempotent overwrite via blockstore's `write_block`).
 - `group_and_sort`: `BTreeMap<(String, u64), Vec<&WalRecord>>`, push by `(tenant, fingerprint())`, then `sort_by_key(|r| r.payload.timestamp_ms())` each group.
 - `build_batches`: separate float groups from histogram groups; collect `(fp, ts, value)` rows → `encode_float_samples`; `(fp, ts, NativeHistogram)` rows → `encode_native_histograms`. Returns the float batch (schema `float_sample_schema()`) and native batch (`native_histogram_schema()`) separately, since they go to different blocks/schemas. (Exemplar sidecar block is `// TODO(slice4-exemplar-block)` — the exemplar wire-decode already lands in `WalRecord`; writing the sidecar block mirrors the float path against `exemplar_schema()` and is a focused follow-on.)
@@ -2286,10 +2308,12 @@ git commit -m "feat(metrics): compactor — WAL group/sort to blockstore blocks 
 ### Task 10: Role-selectable binary
 
 **Files:**
+
 - Create: `crates/metrics/src/bin/krabka-metrics.rs`
 - Modify: `crates/metrics/Cargo.toml` (`[[bin]]` if needed; clap already a dep)
 
 **Interfaces:**
+
 - Produces: a binary with `--target distributor|compactor` (other targets stubbed with a "not yet implemented in this slice" message). Distributor wires a real `Producer` + `serve`; compactor wires a `Consumer` + `BlockStore` + `run`.
 
 - [ ] **Step 1: Write the failing test (arg parsing)**
@@ -2324,6 +2348,7 @@ Expected: FAIL — `cannot find type Cli`.
 - [ ] **Step 3: Implement the binary**
 
 `main`: parse `Cli`; `tracing_subscriber` init; build a `CancellationToken` wired to `tokio::signal::ctrl_c`; match `target`:
+
 - `Distributor` → `Producer::builder().bootstrap(&cli.bootstrap).build().await?`, wrap in `KafkaSink`, build `DistributorState`, `distributor::serve(cli.listen.parse()?, state, shutdown).await?`.
 - `Compactor` → `Consumer::builder().bootstrap(&cli.bootstrap).group_id("krabka-metrics-compactor").subscribe([WAL_TOPIC.to_string()]).auto_offset_reset(AutoOffsetReset::Earliest).build().await?`, build a `BlockStore` over the configured object store (memory for now; real object store config is `// TODO(slice4-objstore-config)`), `compactor::run(consumer, blockstore, "index/metrics.json", shutdown).await?`.
 - `Querier | QueryFrontend | Ruler` → `eprintln!` + `std::process::exit(2)` with "target not implemented until slice {N}".
@@ -2349,9 +2374,11 @@ git commit -m "feat(metrics): role-selectable krabka-metrics binary (distributor
 ### Task 11: End-to-end broker round-trip (Docker/in-process gated)
 
 **Files:**
+
 - Create: `crates/metrics/tests/ingest_roundtrip.rs`
 
 **Interfaces:**
+
 - Consumes the public API: `distributor::router`/`serve`, `Producer`, `Consumer`, `compactor::run`, `WalRecord`, `WAL_TOPIC`, blockstore.
 
 This is the one test that needs a real broker. Use the in-process broker test-support (`crates/broker/tests/support`) — it starts a broker without Docker (`support::start()`), so it can run in CI. Mark Docker-only paths `#[ignore]`.
@@ -2359,6 +2386,7 @@ This is the one test that needs a real broker. Use the in-process broker test-su
 - [ ] **Step 1: Decide the harness**
 
 The in-process `support::start()` (from `crates/broker/tests/support/mod.rs`) returns a broker + client + tempdir without Docker. **However** `tests/support/mod.rs` is path-included by the broker crate's own tests; `krabka-metrics` cannot `use` it directly. Two options — pick the cheaper:
+
 - **(A)** Add a small `dev-dependency` path include: copy the minimal `start()` helper into `crates/metrics/tests/support/mod.rs` (the memory note "broker test-support is path-included" — replicate the few lines: `BrokerConfig::for_tests(tempdir)`, `Broker::start(config).await`, `broker.listen_addr()`), with `krabka-broker` as a `dev-dependency`.
 - **(B)** Mark the whole round-trip `#[ignore = "requires Docker"]` and use `testcontainers` cp-kafka like `crates/client-core/tests/integration.rs`.
 
@@ -2410,6 +2438,7 @@ git commit -m "test(metrics): end-to-end remote_write -> WAL -> compactor -> blo
 ## Self-review
 
 **Spec coverage (against §5 ingest + §3 architecture + §11 Slice 4):**
+
 - remote_write v1 + v2 decode, snappy-block, content negotiation, status codes → Tasks 2, 4, 8.
 - v2 symbol table (`symbols[0]==""`, even-length refs) → Task 4 (reuses Slice-1 `SymbolTable`).
 - v2 `X-Prometheus-Remote-Write-*-Written` headers on 204 → Tasks 4 (`WrittenCounts`), 8 (header emission).
@@ -2422,8 +2451,9 @@ git commit -m "test(metrics): end-to-end remote_write -> WAL -> compactor -> blo
 - broker round-trip test → Task 11.
 
 **Deviations flagged (deferred with explicit TODO markers, not silently dropped):**
-- HA *election persistence* (producing election records to `HA_TRACKER_TOPIC` so the in-process election survives restart / spans replicas) — Task 7 `// TODO(slice4-ha-election)`; the dedup decision (first-seen in-process election, no fail-open) + 202 + strip are fully implemented/tested.
-- Exemplar *sidecar block* write — Task 9 `// TODO(slice4-exemplar-block)`; exemplar wire-decode already lands in `WalRecord` (Tasks 4/5).
+
+- HA _election persistence_ (producing election records to `HA_TRACKER_TOPIC` so the in-process election survives restart / spans replicas) — Task 7 `// TODO(slice4-ha-election)`; the dedup decision (first-seen in-process election, no fail-open) + 202 + strip are fully implemented/tested.
+- Exemplar _sidecar block_ write — Task 9 `// TODO(slice4-exemplar-block)`; exemplar wire-decode already lands in `WalRecord` (Tasks 4/5).
 - Classic OTLP `Histogram`/`Summary` → float series — Task 6 `// TODO(slice4-otlp-classic)`; the harder `ExponentialHistogram` path is done+tested.
 - TLS on the distributor + per-tenant rate-limit (429 via Crabka quotas) — `// TODO(slice4-tls)`/`// TODO(slice4-quota)`; structural caps (415/400) are enforced.
 - `target_info` resource-attr gauge — `// TODO`; resource-attr → label is straightforward and follows the cumulative path.
@@ -2433,6 +2463,7 @@ git commit -m "test(metrics): end-to-end remote_write -> WAL -> compactor -> blo
 **Type consistency:** `DecodedSeries`/`DecodedExemplar` (Task 2) consumed unchanged by v1/v2/OTLP decoders (Tasks 4, 6) and the distributor (Tasks 7, 8). `WalRecord`/`SamplePayload`/`partition_key` (Task 5) consumed by the distributor produce path (Task 8) and the compactor (Task 9). `WireError::status_code()` is the single ingest status mapping (Task 2), used by the distributor (Task 8). `NativeHistogram` field set matches Slice 1 across Tasks 3/5/6/9. The blockstore API (`BlockStore::new`/`writer`/`index_mut`/`write_block`/`add_series`/`add_block`/`save`) matches the blockstore plan exactly (Task 9).
 
 **Known risks (flagged, not hidden):**
+
 - **prost codegen + protoc in CI** — Task 1 build.rs needs `protoc`; mirror `grpc-gateway/build.rs`'s fallback if CI lacks it. Pinned by the two prost round-trip tests so a codegen break is a compile error, not silent.
 - **remote_write v2 is `2.0-rc.4`/experimental** — the vendored proto is pinned with a tag comment; expect churn. Contained to `proto/` + `wire/v2.rs`.
 - **The exponential-histogram boundary `+1`** is the single subtlest correctness claim; it is asserted by a focused test now and will be cross-checked against real Prometheus/Mimir in Slice 8's differential harness — adjust there with a failing test if it diverges.

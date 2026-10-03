@@ -14,12 +14,12 @@ mod support;
 use std::time::{Duration, Instant};
 
 use bytes::Bytes;
+use futures_util::StreamExt;
 use krabka_broker::{Broker, BrokerConfig, BrokerHandle};
 use krabka_remote_storage_topic::{
     kafka_log::{KafkaMetadataEventLog, KafkaMetadataLogConfig},
     log::{MetadataEventLog, PartitionStart},
 };
-use futures_util::StreamExt;
 use tempfile::TempDir;
 
 /// Boot a bare loopback broker with the pinned-port pattern from

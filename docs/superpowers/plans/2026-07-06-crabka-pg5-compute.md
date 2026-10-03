@@ -45,6 +45,7 @@
 ## Task 1 (5a): Timeline seeding
 
 **Files:**
+
 - Create: `crates/pageserver/src/seed.rs`
 
 - [ ] **Step 1: Write the failing test** (integration profile; obtain an `initdb` data dir from a `postgres:17` container — run `initdb` to a bind-mounted temp dir, the workspace testcontainers pattern):
@@ -80,6 +81,7 @@ git commit -m "feat(pageserver): timeline seeding from an initdb data directory"
 ## Task 2 (5a, ∥ Task 3): Live topic ingest
 
 **Files:**
+
 - Create: `crates/pageserver/src/live_ingest.rs`
 
 - [ ] **Step 1: Write the failing test** — in-process broker; produce the PG-2 fixture corpus as `PGW1` frames (the PG-1 frame codec's layout, re-stated locally in the test) onto `__pg_wal.test`; run `spawn_live_ingest(consumer, ingest)`; assert `last_ingested_lsn` reaches the corpus end and a probe `get_page` equals the PG-3 direct-ingest result for the same corpus.
@@ -96,6 +98,7 @@ git commit -m "feat(pageserver): live WAL-topic ingest with contiguity checks"
 ## Task 3 (5a, ∥ Task 2): LSN-wait on the page service
 
 **Files:**
+
 - Modify: `crates/pageserver/src/service.rs`
 
 - [ ] **Step 1: Write the failing test** — with `last_ingested_lsn = 100`: `GetPage(lsn=200)` blocks; advancing the watch to 200 releases it with the right page; a request past `wait_timeout` returns a `deadline_exceeded`-mapped error naming both LSNs.
@@ -112,6 +115,7 @@ git commit -m "feat(pageserver): bounded LSN-wait before page materialization"
 ## Task 4 (5a): The `Basebackup` RPC
 
 **Files:**
+
 - Create: `crates/pageserver/src/basebackup.rs`; Modify: `proto/…/pageserver.proto` (+ `rpc Basebackup(BasebackupRequest) returns (BasebackupResponse)` — `bytes tar = 1` v1)
 
 - [ ] **Step 1: Write the failing test** — request a basebackup at `capture_lsn`; untar; assert: `PG_VERSION` + seeded non-rel files present; `global/pg_control` **validates under `pg_controldata`** (run in the PG-17 container — the oracle) with its checkpoint/redo fields at `capture_lsn`; SLRU dirs present (content asserted only once PG-4b lands — the assertion is written now and `#[ignore]`d with a PG-4b reference).
@@ -128,6 +132,7 @@ git commit -m "feat(pageserver): Basebackup RPC (pg_control patching, pg_control
 ## Task 5 (5b, ∥ Tasks 1–4): `krabka-compute-client` — the cdylib + the one unsafe boundary
 
 **Files:**
+
 - Create: `crates/compute-client/{Cargo.toml, build.rs, src/lib.rs, src/client.rs, src/ffi.rs, cbindgen.toml}`
 - Modify: `release-plz.toml`, `docs/style_guides/code_style_guide.md`
 
@@ -166,11 +171,12 @@ git commit -m "feat(compute-client): blocking Connect cdylib with the sanctioned
 ## Task 6 (5b): The patch, the extension, the image
 
 **Files:**
+
 - Create: `compute/patches/pg17/0001-smgr-hook.patch`, `compute/extension/{crabka.c, Makefile}`, `compute/image/build.sh`, a patch-apply CI check
 
 - [ ] **Step 1: The core patch** — against pinned `postgres-17.x` sources: add a registration hook (`typedef const f_smgr *(*smgr_hook_type)(...); extern PGDLLIMPORT smgr_hook_type smgr_hook;`) consulted in the smgr-open dispatch so an extension can substitute the relation smgr table for non-temp relations (~50-line diff, the Neon/TDE fork shape). Vendor the reviewed diff; add the CI check: fetch-pin → `git apply --check`.
 - [ ] **Step 2: The extension** — `crabka.c`: `_PG_init` reads GUCs (`crabka.pageserver_endpoint`, `crabka.tenant/timeline`), `ck_connect`s, installs the hook; the `f_smgr` table: `read → ck_get_page(…, lsn = GetFlushRecPtr())`, `nblocks → ck_get_rel_size` (+ a per-relation size cache updated by `extend`/`truncate`), `write/extend → data no-op + cache`, `exists → ck_get_rel_size ≥ 0`, `unlink → no-op`. Client errors → `ereport(ERROR, …)` naming the pageserver cause. Builds via PGXS against the patched tree.
-- [ ] **Step 3: The image** — `build.sh` (packaging idiom): fetch pinned sources → apply patches → build PG → build the cdylib (`cargo build -p krabka-compute-client --release`) → build the extension → assemble the OCI image (entrypoint: basebackup-fetch into `$PGDATA` if empty, then `postgres`). Verify: the image builds; `postgres --version` runs; the extension loads (`shared_preload_libraries=crabka` against a mock endpoint fails *gracefully* with the documented error).
+- [ ] **Step 3: The image** — `build.sh` (packaging idiom): fetch pinned sources → apply patches → build PG → build the cdylib (`cargo build -p krabka-compute-client --release`) → build the extension → assemble the OCI image (entrypoint: basebackup-fetch into `$PGDATA` if empty, then `postgres`). Verify: the image builds; `postgres --version` runs; the extension loads (`shared_preload_libraries=crabka` against a mock endpoint fails _gracefully_ with the documented error).
 - [ ] **Step 4: Commit**
 
 ```bash

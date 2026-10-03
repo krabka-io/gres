@@ -26,7 +26,7 @@ versioned tables.
 - **KIP-914 — DSL Processor Semantics for Versioned Stores.** The DSL behavior
   versioned stores unlock: `builder.table(...)` stops letting an older-timestamp
   record overwrite the latest, and **stream–table joins become temporally
-  correct** (look up the table value valid *as of* the stream record's
+  correct** (look up the table value valid _as of_ the stream record's
   timestamp).
 - **KIP-960 / 968 — IQv2 versioned queries.** Point-in-time `VersionedKeyQuery`
   and `MultiVersionedKeyQuery` over a time range.
@@ -44,15 +44,15 @@ adds versioned tables as a new triplet member.
 The whole versioned-tables program decomposes into three independently-shippable
 slices, each its own spec → plan → PR:
 
-| Slice | Scope | KIP | Observable payoff |
-|------|-------|-----|-------------------|
+| Slice             | Scope                                                                                                                                     | KIP                     | Observable payoff                                                                      |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- | -------------------------------------------------------------------------------------- |
 | **1 (this spec)** | `VersionedKeyValueStore` + `builder.table` materializing versioned + the KIP-914 table-update rule + changelog/restore + IQ store surface | 889 + table half of 914 | A table whose out-of-order records don't clobber the latest; as-of(ts) reads available |
-| **2** | Stream–table & table–table joins consume **as-of-timestamp** lookups; join grace | 914 (join half) | Temporally-correct joins |
-| **3** | IQv2-style `VersionedKeyQuery` / `MultiVersionedKeyQuery` over the IQ surface | 960 / 968 | Point-in-time & version-range IQ |
+| **2**             | Stream–table & table–table joins consume **as-of-timestamp** lookups; join grace                                                          | 914 (join half)         | Temporally-correct joins                                                               |
+| **3**             | IQv2-style `VersionedKeyQuery` / `MultiVersionedKeyQuery` over the IQ surface                                                             | 960 / 968               | Point-in-time & version-range IQ                                                       |
 
 Slice 1 builds the **complete** store (out-of-order insertion + as-of reads +
 retention expiry) so it is pinned by a golden exactly once; slices 2–3 are pure
-*consumers* of that store and add no new store semantics.
+_consumers_ of that store and add no new store semantics.
 
 ## 3. Goal and non-goals
 
@@ -106,7 +106,7 @@ Modified:
 - **`src/store/mod.rs`** — module decls.
 - **`src/dsl/processors/table.rs`** — add `VersionedKTableSourceProcessor`.
 - **`src/dsl/config.rs`** — `Materialized` gains a `versioned:
-  Option<VersionedConfig>` field + `Materialized::as_versioned(...)`; a
+Option<VersionedConfig>` field + `Materialized::as_versioned(...)`; a
   `Stores::persistent_versioned_kv(name, history_retention_ms)` supplier.
 - **`src/dsl/builder.rs`** — `table_explicit` / `table` take the versioned
   lowering branch when `versioned` is set.
@@ -143,7 +143,7 @@ Internal representation (non-observable, chosen for simplicity — approach A1):
 Semantics (KIP-889; pinned by the behavioral golden, §8):
 
 - **`get(k)`** → the version with the greatest `valid_from`; its `valid_to =
-  None` (∞). A tombstone latest → `None`.
+None` (∞). A tombstone latest → `None`.
 - **`get_as_of(k, t)`** → version with greatest `valid_from ≤ t`; `valid_to` =
   the next version's `valid_from` (or `None`). If that version is a tombstone, or
   `t` predates the oldest retained version, → `None`.
@@ -152,11 +152,11 @@ Semantics (KIP-889; pinned by the behavioral golden, §8):
 - **History expiry** — the store tracks observed stream-time (the max `ts` seen).
   A `put` whose `ts < observedStreamTime − history_retention` is **dropped** (and
   counted, matching JVM); versions whose `valid_to < observedStreamTime −
-  history_retention` are evicted. `segment_interval` only affects JVM eviction
+history_retention` are evicted. `segment_interval` only affects JVM eviction
   granularity (non-observable); the API accepts it but the in-memory store evicts
   per-version — no functional difference.
 - **Changelog** — every `put` / `delete` appends `(rawKey, ValueAndTimestamp(ts ‖
-  value))` or a tombstone entry; restore unpacks the ts and rebuilds the chain
+value))` or a tombstone entry; restore unpacks the ts and rebuilds the chain
   via the same `put` path with logging off.
 
 ## 6. DSL surface & the KIP-914 table-update processor
@@ -180,18 +180,18 @@ timestamp-aware, porting JVM `KTableSource` versioned behavior (KIP-914), pinned
 by the behavioral golden:
 
 - Reads `r.timestamp` as the version timestamp; calls `store.put(key, r.value,
-  ts)` (a `None` value is a tombstone version).
+ts)` (a `None` value is a tombstone version).
 - **Grace / late drop**: a record older than `observedStreamTime −
-  history_retention` is dropped (not stored, not forwarded) — KIP-914's
+history_retention` is dropped (not stored, not forwarded) — KIP-914's
   "out-of-bounds" rule.
-- **`Change` emission**: `old` = the value previously valid *at this record's
-  timestamp* (`get_as_of(key, ts)` taken before the put), `new` = incoming value.
+- **`Change` emission**: `old` = the value previously valid _at this record's
+  timestamp_ (`get_as_of(key, ts)` taken before the put), `new` = incoming value.
   An out-of-order record that lands strictly before the latest still emits its
   local change but does **not** move the latest pointer.
 
 The exact branch structure is ported from apache/kafka 4.1 and pinned by the
-behavioral golden (§8); the design commits to *behavioral equivalence with the
-JVM*, not to a paraphrase of the branches here.
+behavioral golden (§8); the design commits to _behavioral equivalence with the
+JVM_, not to a paraphrase of the branches here.
 
 ## 7. Changelog / restore / IQ
 
@@ -227,7 +227,7 @@ JVM*, not to a paraphrase of the branches here.
    `testdata/golden/dsl/behavioral/versioned_changelog.json`; assert Crabka's
    drained changelog matches byte-for-byte. **This decides ts-packed-value vs
    record-ts-field** (KIP-889 defers the choice; the window-store precedent says
-   ts-packed). If the golden shows the timestamp is *only* in the record-ts
+   ts-packed). If the golden shows the timestamp is _only_ in the record-ts
    field, the fallback is a localized optional-timestamp on the changelog produce
    path (the slice's main risk — §9).
 
@@ -266,6 +266,7 @@ compile errors). `cargo fmt --check` and `cargo clippy --workspace --all-targets
 ## 10. Files touched
 
 New:
+
 - `crates/client-streams/src/store/versioned.rs`
 - `crates/client-streams/src/store/versioned_schema.rs`
 - `crates/client-streams/tests/testdata/golden/dsl/versioned_table.topology.json`
@@ -273,11 +274,12 @@ New:
 - `crates/client-streams/tests/testdata/golden/dsl/behavioral/versioned_changelog.json`
 
 Modified:
+
 - `src/store/registry.rs`, `src/store/iq.rs`, `src/store/mod.rs`
 - `src/dsl/processors/table.rs`
 - `src/dsl/config.rs`, `src/dsl/builder.rs`
 - `src/topology/builder.rs`
 - `src/dsl/mod.rs`, `src/lib.rs` (re-exports + module doc)
 - `tests/jvm-capture/{src/main/java/crabka/capture/Capture.java, run.sh,
-  build.gradle}` (structural fixture + behavioral/changelog runner)
+build.gradle}` (structural fixture + behavioral/changelog runner)
 - `tests/dsl_golden_frame.rs`, `tests/dsl_execution.rs` (assertions)

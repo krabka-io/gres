@@ -35,10 +35,12 @@
 ### Task 1: `krabka-gres-substrate` crate — GRW1 framing + merge-rule apply (+ pgkv prefix helpers)
 
 **Files:**
+
 - Create: `crates/gres-substrate/Cargo.toml`, `src/lib.rs`, `src/error.rs`, `src/frame.rs`, `src/apply.rs`, `README.md`
 - Modify: `crates/pgkv/src/key.rs` (only if the prefix helpers below are missing), `release-plz.toml`, `.cargo/mutants.toml` is NOT touched (new G-2 code IS mutation-tested)
 
 **Interfaces:**
+
 - Consumes: `krabka_pgkv::{Kv, WriteOp, KvError, key}`, `krabka_pgmvcc::clog`.
 - Produces: `WalFrame { journal_seq: u64, ops: Vec<WriteOp> }` with `encode() -> Vec<u8>` / `decode(&[u8]) -> Result<WalFrame, SubstrateError>`; `apply_frame(kv: &dyn Kv, ops: &[WriteOp]) -> Result<(), KvError>`; `SubstrateError` (thiserror). Tasks 3–5 consume all three.
 
@@ -507,9 +509,11 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 Fixes the verified donor bypass: `CREATE/DROP FOREIGN DATA WRAPPER / SERVER / USER MAPPING / FOREIGN TABLE` currently write the kv store directly from the catalog, skipping replication in every mode.
 
 **Files:**
+
 - Modify: `crates/pgcatalog/src/lib.rs` (ops-returning variants), `crates/pgexec/src/exec.rs` (FDW DDL arms return ops), `crates/pgexec/tests/` (new test file `fdw_ddl_seam.rs`)
 
 **Interfaces:**
+
 - Consumes: existing `create_fdw/create_server/create_user_mapping/create_foreign_table` + drop functions in `krabka-pgcatalog`, and the executor's DDL path (`run_ddl` commits whatever ops `execute_ddl` returns).
 - Produces: `krabka_pgcatalog::{create_fdw_ops, create_server_ops, create_user_mapping_ops, create_foreign_table_ops, drop_fdw_ops, drop_server_ops, drop_user_mapping_ops, drop_foreign_table_ops}` — same validation and encoding as the direct functions, returning `Vec<WriteOp>` instead of writing. Task 4's replay makes these durable on the substrate.
 
@@ -599,10 +603,12 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ### Task 3: WAL writer task, `SubstrateCommitter`, `SubstrateLinearizer`, topic-ensure, recovery
 
 **Files:**
+
 - Create: `crates/gres-substrate/src/writer.rs`, `src/committer.rs`, `src/topic.rs`, `src/recover.rs`
 - Modify: `crates/gres-substrate/src/lib.rs` (module list + re-exports), `src/error.rs` (if new variants needed)
 
 **Interfaces:**
+
 - Consumes: Task 1's `WalFrame`/`apply_frame`; producer/client APIs per Global Constraints.
 - Produces (consumed by Task 4's binary wiring and Task 5's tests):
   - `topic::wal_topic(tenant: &str) -> String` (= `__gres_wal.<tenant>`) and `topic::ensure_wal_topic(admin: &mut AdminClient, tenant: &str, replicas: i32) -> Result<(), SubstrateError>` (1 partition, `cleanup.policy=delete`, `retention.ms=-1`, tolerate `TOPIC_ALREADY_EXISTS`).
@@ -771,8 +777,9 @@ fn chunk_ops(ops: &[WriteOp], cap: usize) -> Vec<Vec<WriteOp>> { /* sizes via Wa
 (`todo_impl!()` is plan shorthand — implement the greedy accumulator inline; ~15 lines. `MAX_RECORD_BYTES: usize = 1 << 20` as a module constant, overridable via writer config.)
 
 **Two adaptations the implementer makes concretely (not placeholders — the decision is made, only names vary):**
+
 1. `store.apply_or_panic` is pseudocode for: `apply_frame(store.as_ref(), &req.ops).expect("local apply after durable commit")` — a local-store failure after durable EndTxn is unrecoverable state divergence; crash loudly (the successor replays cleanly).
-2. Error classification (the load-bearing part, per the panel review): `SubstrateError` needs `Clone` on the variants used here (or wrap in `Arc<SubstrateError>` for acks); `ProducerError::FencedProducer` → `SubstrateError::Fenced`. **A send/produce error before `EndTxn`** → abort the transaction via the guard (`Transaction::abort(self)` — note the producer has NO abort-on-drop, and a producer left `InTransaction` rejects every future `begin_transaction` with `InvalidTransactionState`, wedging the writer permanently); abort success → `GroupFailure::Aborted`. **An `EndTxn(commit)` error** → classify against `EndTransactionError`'s shape (check `crates/client-producer/src/transactional.rs`): only an error that *proves* the broker rejected the commit (e.g. fenced 47 before any commit could land) may abort-and-continue; anything ambiguous — timeout, connection loss, an error carrying the returned guard after the request may have reached the broker — is `GroupFailure::Indeterminate`. **An abort failure** is always `Indeterminate`. Never construct `Aborted` on a path that didn't complete a successful abort.
+2. Error classification (the load-bearing part, per the panel review): `SubstrateError` needs `Clone` on the variants used here (or wrap in `Arc<SubstrateError>` for acks); `ProducerError::FencedProducer` → `SubstrateError::Fenced`. **A send/produce error before `EndTxn`** → abort the transaction via the guard (`Transaction::abort(self)` — note the producer has NO abort-on-drop, and a producer left `InTransaction` rejects every future `begin_transaction` with `InvalidTransactionState`, wedging the writer permanently); abort success → `GroupFailure::Aborted`. **An `EndTxn(commit)` error** → classify against `EndTransactionError`'s shape (check `crates/client-producer/src/transactional.rs`): only an error that _proves_ the broker rejected the commit (e.g. fenced 47 before any commit could land) may abort-and-continue; anything ambiguous — timeout, connection loss, an error carrying the returned guard after the request may have reached the broker — is `GroupFailure::Indeterminate`. **An abort failure** is always `Indeterminate`. Never construct `Aborted` on a path that didn't complete a successful abort.
 
 - [ ] **Step 3: The seams** — `src/committer.rs`:
 
@@ -862,11 +869,12 @@ impl Linearizer for SubstrateLinearizer {
 ```
 
 Logic (complete; client-call shapes per Global Constraints and the `crates/gres-fdw/src/source.rs` precedents for metadata/fetch). **Replay terminates at the compute's own barrier record — do NOT use ListOffsets as the target (Crabka's handler ignores `isolation_level` and returns LEO; amended per the G-3 design):**
+
 1. `ensure_wal_topic(...)`.
 2. Build the transactional producer (`transactional_id = format!("__gres.{tenant}")`, `acks(Acks::All)`), `producer.init_transactions().await` — the fence.
 3. **Produce the barrier:** peek the last committed frame's `journal_seq` is unknown until replay, so the barrier carries `journal_seq = BARRIER_SEQ` (`u64::MAX`, reserved — `WalFrame` with `ops: vec![]`); produce it in its own Kafka transaction (`begin_transaction` → `send` → `commit`). Record nothing else in the txn. (Reserve `u64::MAX` in `frame.rs` with a doc comment and a unit test that ordinary writers never reach it.)
 4. Resolve topic id via `AdminClient::metadata`; open a `client_core::Connection` to the partition leader (the fdw's `source.rs` shows the exact connect + metadata idiom).
-5. Replay loop: from `offset = 0`, `fetch_partition_with_isolation(&conn, topic, topic_id, 0, offset, max_wait_ms, max_bytes, 1)`; for each record: `WalFrame::decode`; if `journal_seq == BARRIER_SEQ`: this is a barrier — if it is OURS (track: count barriers produced by this recovery = 1; ours is the first barrier encountered *after* the fence, i.e. simply the first barrier whose offset is ≥ the offset our own produce ack reported — capture `RecordMetadata.offset` from step 3) then replay is complete, break; a FOREIGN barrier (an older generation's) is skipped and replay continues. Otherwise: assert `journal_seq == expected` else return `SubstrateError::SequenceGap { .. }`; `apply_frame(store, &frame.ops)?`; `expected += 1`. Advance `offset = last.offset + 1`. Empty fetch before our barrier's known offset retries (bounded attempts, then `Unavailable`).
+5. Replay loop: from `offset = 0`, `fetch_partition_with_isolation(&conn, topic, topic_id, 0, offset, max_wait_ms, max_bytes, 1)`; for each record: `WalFrame::decode`; if `journal_seq == BARRIER_SEQ`: this is a barrier — if it is OURS (track: count barriers produced by this recovery = 1; ours is the first barrier encountered _after_ the fence, i.e. simply the first barrier whose offset is ≥ the offset our own produce ack reported — capture `RecordMetadata.offset` from step 3) then replay is complete, break; a FOREIGN barrier (an older generation's) is skipped and replay continues. Otherwise: assert `journal_seq == expected` else return `SubstrateError::SequenceGap { .. }`; `apply_frame(store, &frame.ops)?`; `expected += 1`. Advance `offset = last.offset + 1`. Empty fetch before our barrier's known offset retries (bounded attempts, then `Unavailable`).
 6. Return `Recovered { producer, next_journal_seq: expected }`. (`expected` starts at 0 and counts only non-barrier frames; barriers never consume engine sequence numbers, so cross-generation continuity asserts stay exact.)
 
 - [ ] **Step 5: Wire the lib** — add `pub mod committer; pub mod recover; pub mod topic; pub mod writer;` + re-export `SubstrateCommitter`, `SubstrateLinearizer`, `spawn_wal_writer`, `recover::{recover, Recovered}`, `topic::{ensure_wal_topic, wal_topic}` from `lib.rs`; extend the crate rustdoc's Key Types list.
@@ -892,9 +900,11 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ### Task 4: `krabka-gres --substrate` mode
 
 **Files:**
+
 - Modify: `crates/gres/Cargo.toml` (add `krabka-gres-substrate = { path = "../gres-substrate" }` dependency), `crates/gres/src/main.rs`, `crates/gres/README.md`
 
 **Interfaces:**
+
 - Consumes: Task 3's `recover`, `spawn_wal_writer`, `SubstrateCommitter`, `SubstrateLinearizer`; `SqlEngine::replicated`; `engine.reseed_counters()`.
 - Produces: CLI flags `--substrate-bootstrap <ADDR>` and `--tenant <NAME>` (both required together, conflicting with `--data-dir`); `--cache-dir <PATH>` (optional; fjall read model on ephemeral disk, else `MemKv`).
 
@@ -971,10 +981,12 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ### Task 5: Disposability + fencing integration suite
 
 **Files:**
+
 - Create: `crates/gres-substrate/tests/harness/mod.rs` (single-node in-process broker helper — lift the minimal broker-start portion of `crates/gres-fdw/tests/harness/mod.rs`), `crates/gres-substrate/tests/disposability.rs`, `crates/gres-substrate/tests/fencing.rs`
 - Modify: `.config/nextest.toml` (test group capping `krabka-gres-substrate` integration tests, mirroring the gres-fdw group)
 
 **Interfaces:**
+
 - Consumes: everything from Tasks 1–4; `krabka-broker`'s `Broker::start(BrokerConfig::for_tests(..))` in-process harness idiom.
 - Produces: the G-2 gate evidence.
 
@@ -1021,7 +1033,7 @@ async fn stale_compute_is_fenced_and_journal_has_no_interleaving() {
 }
 ```
 
-Write it fully using the harness. Additionally: (a) an **oversized-batch case** in the disposability suite — one statement writing a row large enough to force chunking (> `MAX_RECORD_BYTES`); kill; recover; the row survives intact (pins chunk-group atomicity through replay); (b) a **coordinator≠leader fencing variant** — the single-broker harness co-locates the transaction coordinator with the partition leader, which is exactly the configuration where the produce-path epoch check fires; the corrected G-2 spec notes fencing falls back to `EndTxn` when they differ, so add a multi-broker variant using the in-process multi-node fixture from `crates/integration-tests` (if standing that fixture up here is disproportionate, land the single-broker suite and file the multi-broker variant as an explicit TODO test referencing the spec's fencing-locality paragraph — do not silently skip it); (c) *(panel amendment C2)* a **transient-failure recovery case** — inject one produce failure (drop the broker connection mid-group or use a fault seam on the writer) and assert: the affected group's waiters get errors, the transaction is aborted, and the **next** group commits successfully (the wedge regression — a writer left `InTransaction` would fail here forever); (d) an **indeterminate-outcome case** — force an ambiguous `EndTxn` (kill the broker between request and response) and assert the writer terminates *without answering waiters* (no error responses observed on the client side, only connection drop), and a successor's replay yields a store consistent with whatever the log actually holds — present-or-absent atomically, never a reported-failed-but-durable group.
+Write it fully using the harness. Additionally: (a) an **oversized-batch case** in the disposability suite — one statement writing a row large enough to force chunking (> `MAX_RECORD_BYTES`); kill; recover; the row survives intact (pins chunk-group atomicity through replay); (b) a **coordinator≠leader fencing variant** — the single-broker harness co-locates the transaction coordinator with the partition leader, which is exactly the configuration where the produce-path epoch check fires; the corrected G-2 spec notes fencing falls back to `EndTxn` when they differ, so add a multi-broker variant using the in-process multi-node fixture from `crates/integration-tests` (if standing that fixture up here is disproportionate, land the single-broker suite and file the multi-broker variant as an explicit TODO test referencing the spec's fencing-locality paragraph — do not silently skip it); (c) _(panel amendment C2)_ a **transient-failure recovery case** — inject one produce failure (drop the broker connection mid-group or use a fault seam on the writer) and assert: the affected group's waiters get errors, the transaction is aborted, and the **next** group commits successfully (the wedge regression — a writer left `InTransaction` would fail here forever); (d) an **indeterminate-outcome case** — force an ambiguous `EndTxn` (kill the broker between request and response) and assert the writer terminates _without answering waiters_ (no error responses observed on the client side, only connection drop), and a successor's replay yields a store consistent with whatever the log actually holds — present-or-absent atomically, never a reported-failed-but-durable group.
 
 - [ ] **Step 4: nextest group.** In `.config/nextest.toml` `[test-groups]` add `gres-substrate = { max-threads = 2 }` (broker-heavy, same rationale as `gres-fdw`) plus the matching `[[profile.default.overrides]]` block with `filter = 'package(krabka-gres-substrate) & kind(test)'`.
 
@@ -1051,9 +1063,11 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ### Task 6: CI legs — substrate conformance + integration coverage
 
 **Files:**
+
 - Modify: `.github/workflows/ci.yml` (extend `gres-conformance` with a substrate leg; add `krabka-gres-substrate` to `gres-integration`'s package list; extend the `changes.gres` filter with `crates/gres-substrate/**`)
 
 **Interfaces:**
+
 - Consumes: the G-1 CI jobs; the parity baseline at `crates/gres-conformance/baseline.json` (unchanged — the substrate must match it exactly).
 - Produces: the CI-enforced G-2 gate.
 
@@ -1062,31 +1076,31 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 - [ ] **Step 2: Substrate conformance leg.** Append to the `gres-conformance` job, after the existing baseline harness step (a second subject; same oracle service is NOT reusable across corpus runs — start a second oracle container or, simpler, a second database on the same service: the corpus creates tables, so use `dbname=oracle2` after creating it — matching the YAML below):
 
 ```yaml
-      - name: Create a fresh oracle database for the substrate leg
-        run: psql "host=127.0.0.1 port=54320 user=postgres dbname=postgres" -c "CREATE DATABASE oracle2"
-        # (the harness invocation below uses dbname=oracle2 — keep them in sync)
-      - name: Start a standalone broker
-        run: |
-          cargo build --locked -p krabka-cli -p krabka-broker
-          export KRABKA_CLUSTER_ID=00000000-0000-0000-0000-000000000001
-          ./target/debug/crabka format --log-dir /tmp/gres-ci-data --cluster-id "$KRABKA_CLUSTER_ID" --standalone --node-id 1 --controller-listener 127.0.0.1:9093
-          ./target/debug/krabka-broker --log-dir /tmp/gres-ci-data --cluster-id "$KRABKA_CLUSTER_ID" --broker-id 1 --listen-addr 127.0.0.1:9092 &
-      - name: Conformance against the substrate-backed engine
-        run: |
-          ./target/debug/krabka-gres --listen 127.0.0.1:54334 --substrate-bootstrap 127.0.0.1:9092 --tenant conformance &
-          for _ in $(seq 60); do
-            if psql "host=127.0.0.1 port=54334 user=crab dbname=crab sslmode=prefer" -tAc 'SELECT 1' >/dev/null 2>&1; then break; fi
-            sleep 0.5
-          done
-          ./target/debug/krabka-gres-conformance \
-            --oracle-url "host=127.0.0.1 port=54320 user=postgres dbname=oracle2" \
-            --subject-url "host=127.0.0.1 port=54334 user=crab dbname=crab" \
-            --corpus crates/gres-conformance/corpus \
-            --baseline crates/gres-conformance/baseline.json \
-            --out parity-substrate.json --summary parity-substrate.md
-      - name: Publish substrate parity summary
-        if: ${{ !cancelled() }}
-        run: cat parity-substrate.md >> "$GITHUB_STEP_SUMMARY"
+- name: Create a fresh oracle database for the substrate leg
+  run: psql "host=127.0.0.1 port=54320 user=postgres dbname=postgres" -c "CREATE DATABASE oracle2"
+  # (the harness invocation below uses dbname=oracle2 — keep them in sync)
+- name: Start a standalone broker
+  run: |
+    cargo build --locked -p krabka-cli -p krabka-broker
+    export KRABKA_CLUSTER_ID=00000000-0000-0000-0000-000000000001
+    ./target/debug/crabka format --log-dir /tmp/gres-ci-data --cluster-id "$KRABKA_CLUSTER_ID" --standalone --node-id 1 --controller-listener 127.0.0.1:9093
+    ./target/debug/krabka-broker --log-dir /tmp/gres-ci-data --cluster-id "$KRABKA_CLUSTER_ID" --broker-id 1 --listen-addr 127.0.0.1:9092 &
+- name: Conformance against the substrate-backed engine
+  run: |
+    ./target/debug/krabka-gres --listen 127.0.0.1:54334 --substrate-bootstrap 127.0.0.1:9092 --tenant conformance &
+    for _ in $(seq 60); do
+      if psql "host=127.0.0.1 port=54334 user=crab dbname=crab sslmode=prefer" -tAc 'SELECT 1' >/dev/null 2>&1; then break; fi
+      sleep 0.5
+    done
+    ./target/debug/krabka-gres-conformance \
+      --oracle-url "host=127.0.0.1 port=54320 user=postgres dbname=oracle2" \
+      --subject-url "host=127.0.0.1 port=54334 user=crab dbname=crab" \
+      --corpus crates/gres-conformance/corpus \
+      --baseline crates/gres-conformance/baseline.json \
+      --out parity-substrate.json --summary parity-substrate.md
+- name: Publish substrate parity summary
+  if: ${{ !cancelled() }}
+  run: cat parity-substrate.md >> "$GITHUB_STEP_SUMMARY"
 ```
 
 Add `parity-substrate.json` / `parity-substrate.md` to the artifact upload paths. (Verify the format/broker CLI flags against the root README quick-start at execution time; readiness waits are bounded condition loops.)

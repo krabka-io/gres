@@ -21,11 +21,11 @@
 use std::{collections::HashSet, sync::Arc};
 
 use bytes::Bytes;
+use dashmap::DashMap;
 use krabka_ids::PartitionIndex;
 use krabka_log::Offset;
 use krabka_metadata::MetadataImage;
 use krabka_protocol::records::{Record, RecordBatch};
-use dashmap::DashMap;
 use tokio::sync::{Mutex, RwLock};
 use tracing::{info, warn};
 

@@ -29,7 +29,7 @@ Each crate README is the **entry point for someone who sees the crate for the fi
 
 ### Library Crates
 
-```markdown
+````markdown
 # krabka-<name>
 
 [![Crates.io](https://img.shields.io/crates/v/krabka-<name>.svg)](https://crates.io/crates/krabka-<name>)
@@ -55,6 +55,7 @@ standard(s) / KIP(s) it implements, and its relationship to other Crabka crates.
 ```rust
 // Minimal example showing the primary API
 ```
+````
 
 ## Documentation
 
@@ -66,7 +67,8 @@ standard(s) / KIP(s) it implements, and its relationship to other Crabka crates.
 ## License
 
 Apache-2.0. Derivative work of [Apache Kafka](https://kafka.apache.org); see [NOTICE](../../NOTICE).
-```
+
+````
 
 ### Server / Binary Crates
 
@@ -96,7 +98,7 @@ Configuration is read from TOML files and environment variables
 
 ```bash
 docker pull ghcr.io/robot-head/krabka-<name>:latest
-```
+````
 
 ## Documentation
 
@@ -107,7 +109,8 @@ docker pull ghcr.io/robot-head/krabka-<name>:latest
 ## License
 
 Apache-2.0. Derivative work of [Apache Kafka](https://kafka.apache.org); see [NOTICE](../../NOTICE).
-```
+
+````
 
 ### Small / Internal Library Crates
 
@@ -124,7 +127,7 @@ Part of [Crabka](https://github.com/robot-head/crabka), a Rust implementation of
 ## License
 
 Apache-2.0. Derivative work of [Apache Kafka](https://kafka.apache.org); see [NOTICE](../../NOTICE).
-```
+````
 
 ## Writing Style
 

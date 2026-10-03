@@ -2,10 +2,10 @@ mod harness;
 
 use std::{collections::BTreeMap, num::NonZeroU64, sync::Arc};
 
+use harness::{SystemHarness, process::ProcessHarness, row_count, run};
 use krabka_gres_ranges::{MemoryTsoHorizon, RangeId, TsoError, TsoOracle};
 use krabka_pgkv::MemKv;
 use krabka_pgwire::engine::Engine;
-use harness::{SystemHarness, process::ProcessHarness, row_count, run};
 use stateright::semantics::{ConsistencyTester, LinearizabilityTester, SequentialSpec};
 use tokio::sync::Mutex;
 

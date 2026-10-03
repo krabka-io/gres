@@ -47,6 +47,7 @@
 ## Task 1: The `try_diskless_read` cold path + dispatch
 
 **Files:**
+
 - Modify: `crates/broker/src/remote_reader.rs`, `crates/broker/src/broker.rs`, `crates/broker/src/handlers/fetch.rs`
 - Create: `crates/broker/src/diskless/read.rs`
 
@@ -198,6 +199,7 @@ git commit -m "feat(broker): diskless cold fetch-from-object (try_diskless_read)
 ## Task 2: `ListOffsets EARLIEST` diskless min-branch
 
 **Files:**
+
 - Modify: `crates/broker/src/diskless/wal_index.rs`, `crates/broker/src/handlers/list_offsets.rs`
 
 - [ ] **Step 1: Add `WalIndexCache::earliest_covered` (failing test)**
@@ -266,6 +268,7 @@ git commit -m "feat(broker): ListOffsets EARLIEST anchors at diskless object-cov
 ## Task 3: Reject transactional produce for diskless topics
 
 **Files:**
+
 - Modify: `crates/broker/src/handlers/produce.rs`
 
 - [ ] **Step 1: Write the failing test**
@@ -295,6 +298,7 @@ git commit -m "feat(broker): reject transactional produce to diskless topics (Sl
 ## Task 4: Enable trim (flip the gate, tighten to index-projected offsets)
 
 **Files:**
+
 - Modify: `crates/broker/src/diskless/flusher.rs`
 
 - [ ] **Step 1: Write the failing trimmed-then-fetched test**
@@ -304,6 +308,7 @@ An end-to-end test: produce offsets 0..20 to a diskless partition; run flushes; 
 - [ ] **Step 2: Run to verify it fails; implement**
 
 Run → FAIL (trim disabled or coverage hole). Implement in `crates/broker/src/diskless/flusher.rs`:
+
 - Change the default `FlushConfig.trim_safety_lag` to `Some(DEFAULT_TRIM_SAFETY_LAG)` (a real value, e.g. keeping a live local tail), OR make it broker-config-driven defaulting to enabled — but **tighten the gate**: `trim_target = min(index_projected_frontier, hw − lag)`, where `index_projected_frontier` is `WalIndexCache.flushed_frontier(tp)` (only offsets whose index entry is already projected — index durability, not merely object PUT). Never trim past that. Keep the existing `WriterMessage::TrimToOffset` send (`partition.rs:329`).
 
 - [ ] **Step 3: Run to verify + commit**
@@ -320,6 +325,7 @@ git commit -m "feat(broker): enable diskless local-WAL trim (gated on index-proj
 ## Task 5: Cross-cutting proof tests
 
 **Files:**
+
 - Modify: `crates/broker/src/diskless/` (a `tests`/read test module)
 
 - [ ] **Step 1: Union coverage — no gap, no overlap**

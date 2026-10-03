@@ -84,7 +84,7 @@ Four new handles mirror the existing windowed-kgrouped triplet style:
 
 - `CogroupedKStream<K, VOut>` — built by `KGroupedStream::cogroup(aggregator)`,
   chained via `.cogroup(other_grouped, aggregator2)`; terminal `.aggregate(init,
-  store_name)` / `.aggregate_explicit(init, Materialized)` → `KTable<K, VOut>`.
+store_name)` / `.aggregate_explicit(init, Materialized)` → `KTable<K, VOut>`.
 - `TimeWindowedCogroupedKStream<K, VOut>` — via
   `CogroupedKStream::windowed_by(TimeWindows)`; `.aggregate(...)` →
   `KTable<Windowed<K>, VOut>`.
@@ -198,7 +198,7 @@ Each consumes the Batch 0 shared-store + merge helper and adds its
 ## 5. Testing (the gate)
 
 - **JVM ground truth:** new `tests/jvm-capture/src/main/java/crabka/capture/
-  CogroupBehavior.java`, cross-validated byte-for-byte vs a live
+CogroupBehavior.java`, cross-validated byte-for-byte vs a live
   mirror.gcr.io/apache/kafka:4.1.0 broker, emitting behavioral goldens + topology JSON for all
   four variants, each with single-input and 2-input cogroups (and at least one
   key-changing input to exercise the repartition path).

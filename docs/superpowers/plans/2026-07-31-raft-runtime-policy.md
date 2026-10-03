@@ -28,6 +28,7 @@
 ### Task 1: Raft-owned policy types and engine behavior
 
 **Files:**
+
 - Modify: `crates/raft/Cargo.toml`
 - Modify: `crates/raft/src/lib.rs`
 - Modify: `crates/raft/src/config.rs`
@@ -35,6 +36,7 @@
 - Modify: `crates/raft/src/kraft/controller.rs`
 
 **Interfaces:**
+
 - Produces: `ControllerFetchMissLimit`, `MetadataRaftCommandQueueCapacity`, and `MetadataRaftFetchMax`.
 - `ControllerConfig::heartbeat_interval`: `Option<Time>`.
 - `ControllerConfig` and `KraftConfig` carry all three validated policy types.
@@ -398,6 +400,7 @@ git commit -m "feat(raft): expose runtime policy"
 ### Task 2: Broker CLI, environment, and runtime TOML ownership
 
 **Files:**
+
 - Modify: `crates/broker/src/config.rs`
 - Modify: `crates/broker/src/file_config.rs`
 - Modify: `crates/broker/src/bin/broker.rs`
@@ -405,6 +408,7 @@ git commit -m "feat(raft): expose runtime policy"
 - Modify: broker configuration tests in those files
 
 **Interfaces:**
+
 - Consumes: the three validated Raft types from Task 1.
 - Produces: four broker runtime keys and exact explicit-heartbeat tracking.
 - `BrokerConfig::controller_heartbeat_interval_explicit: bool` distinguishes omission from an explicit default-valued input.
@@ -594,11 +598,13 @@ git commit -m "feat(broker): expose raft runtime policy"
 ### Task 3: Kafka CRD propagation
 
 **Files:**
+
 - Modify: `crates/operator/src/crd/kafka.rs`
 - Modify: operator CRD/rendering tests
 - Modify generated: `deploy/crds/crabka.io_kafkas.yaml`
 
 **Interfaces:**
+
 - Consumes: broker runtime TOML keys from Task 2.
 - Produces: optional `Kafka.spec.brokerTuning` fields `controllerFetchMissLimit`, `metadataRaftCommandQueueCapacity`, and `metadataRaftFetchMax`.
 
@@ -693,10 +699,12 @@ git commit -m "feat(operator): expose raft runtime policy"
 ### Task 4: Audit and close the slice
 
 **Files:**
+
 - Modify: `docs/configuration-audit.md`
 - Modify: `docs/superpowers/plans/2026-07-31-raft-runtime-policy.md`
 
 **Interfaces:**
+
 - Consumes: verified implementation and exact test counts from Tasks 1-3.
 - Produces: completed plan and permanent audit record.
 

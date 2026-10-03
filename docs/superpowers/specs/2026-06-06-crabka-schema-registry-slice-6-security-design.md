@@ -57,23 +57,23 @@ request → [auth_layer]  resolve Principal (mTLS|Bearer|Basic|Anonymous) → ex
 
 **(method, path) → (ResourceType, name, AclOperation) map** (the pure core, unit-tested):
 
-| Route | Resource | Op |
-|---|---|---|
-| `GET /` | — (health, unauthenticated) | — |
-| `GET /schemas/types` | Cluster `kafka-cluster` | Describe |
-| `GET /schemas`, `/schemas/ids/{id}`, `/schemas/ids/{id}/versions` | Cluster `kafka-cluster` | Read |
-| `GET /subjects` | Cluster `kafka-cluster` | Describe |
-| `POST /subjects/{s}` (lookup) | Topic `{s}` | Read |
-| `DELETE /subjects/{s}` | Topic `{s}` | Delete |
-| `GET /subjects/{s}/versions` | Topic `{s}` | Read |
-| `POST /subjects/{s}/versions` (register) | Topic `{s}` | Write |
-| `GET /subjects/{s}/versions/{v}` (+ `/schema`, `/referencedby`) | Topic `{s}` | Read |
-| `DELETE /subjects/{s}/versions/{v}` | Topic `{s}` | Delete |
-| `GET /config`, `/mode` | Cluster `kafka-cluster` | Describe |
-| `PUT /config`, `/mode` | Cluster `kafka-cluster` | Alter |
-| `GET /config/{s}`, `/mode/{s}` | Topic `{s}` | Describe |
-| `PUT /config/{s}`, `/mode/{s}`, `DELETE /mode/{s}` | Topic `{s}` | Alter |
-| `POST /compatibility/subjects/{s}/versions/{v}` | Topic `{s}` | Read |
+| Route                                                             | Resource                    | Op       |
+| ----------------------------------------------------------------- | --------------------------- | -------- |
+| `GET /`                                                           | — (health, unauthenticated) | —        |
+| `GET /schemas/types`                                              | Cluster `kafka-cluster`     | Describe |
+| `GET /schemas`, `/schemas/ids/{id}`, `/schemas/ids/{id}/versions` | Cluster `kafka-cluster`     | Read     |
+| `GET /subjects`                                                   | Cluster `kafka-cluster`     | Describe |
+| `POST /subjects/{s}` (lookup)                                     | Topic `{s}`                 | Read     |
+| `DELETE /subjects/{s}`                                            | Topic `{s}`                 | Delete   |
+| `GET /subjects/{s}/versions`                                      | Topic `{s}`                 | Read     |
+| `POST /subjects/{s}/versions` (register)                          | Topic `{s}`                 | Write    |
+| `GET /subjects/{s}/versions/{v}` (+ `/schema`, `/referencedby`)   | Topic `{s}`                 | Read     |
+| `DELETE /subjects/{s}/versions/{v}`                               | Topic `{s}`                 | Delete   |
+| `GET /config`, `/mode`                                            | Cluster `kafka-cluster`     | Describe |
+| `PUT /config`, `/mode`                                            | Cluster `kafka-cluster`     | Alter    |
+| `GET /config/{s}`, `/mode/{s}`                                    | Topic `{s}`                 | Describe |
+| `PUT /config/{s}`, `/mode/{s}`, `DELETE /mode/{s}`                | Topic `{s}`                 | Alter    |
+| `POST /compatibility/subjects/{s}/versions/{v}`                   | Topic `{s}`                 | Read     |
 
 `AclOperation` implication (Read→Describe etc.) is handled inside `SimpleAclAuthorizer` — we request the most specific op. Subject parsing reuses axum's matched-path/`Path` extraction inside the middleware (a pure `fn authz_target(method, path) -> Option<(ResourceType, String, AclOperation)>` so it is unit-tested independent of axum).
 
@@ -125,11 +125,11 @@ OSS `cp-schema-registry` security = HTTPS + `BASIC` auth + Kafka-client security
 
 ## Out of scope / deferred
 
-- Confluent-commercial RBAC (role bindings, MDS), SR ACL management *via the REST API* (`/acls`), and resource patterns beyond Literal/Prefixed.
+- Confluent-commercial RBAC (role bindings, MDS), SR ACL management _via the REST API_ (`/acls`), and resource patterns beyond Literal/Prefixed.
 - A dedicated `ResourceType::Subject` (we reuse `Topic` per the approved decision).
 - Forwarding the original client identity to the primary for re-authorization (we authorize at ingress + trust the inter-node link).
 - Audit logging of authz decisions (the gateway has it; defer unless trivial to reuse).
-- OAuth token *acquisition* by the SR client to the broker (SASL OAUTHBEARER outbound) — the client supports PLAIN/SCRAM/GSSAPI now; OAUTHBEARER-outbound is deferred.
+- OAuth token _acquisition_ by the SR client to the broker (SASL OAUTHBEARER outbound) — the client supports PLAIN/SCRAM/GSSAPI now; OAUTHBEARER-outbound is deferred.
 
 ## File structure
 

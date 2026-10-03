@@ -4,7 +4,7 @@
 **Status:** Approved, ready for implementation plan.
 
 **Goal:** Give operators a Strimzi-shaped way to declare the Kafka
-*metadata version* (the KRaft analog of `inter.broker.protocol.version`),
+_metadata version_ (the KRaft analog of `inter.broker.protocol.version`),
 have the operator validate version/metadata-version compatibility, render
 the resolved metadata version into broker config, and roll the cluster one
 node at a time on a version change. Closes the Phase-3 "Version upgrades"
@@ -68,14 +68,14 @@ we model **`metadata.version` only** — there is no
   `metadata.version = "<X.Y>"` inside the per-broker TOML
   `[server_properties]` table (broker-inert today).
 - An **explicit** `spec.metadataVersion` pin participates in the slice-21
-  config hash, so changing the pin rolls the cluster. A *defaulted*
+  config hash, so changing the pin rolls the cluster. A _defaulted_
   metadata version does not enter the hash (a binary bump already rolls via
   the pod-template image change), preserving the slice-24 empty-hash
   collapse.
 - **Ordered, one-node-at-a-time rollout** across pools. The Kafka
   reconciler already lists every sibling pool (with status) and patches
   each pool's `crabka.io/config-hash` label; slice 28 changes only the
-  *value* written per pool so an established cluster advances one pool at a
+  _value_ written per pool so an established cluster advances one pool at a
   time, gated on the previous pool reaching Ready. No new API requests.
 - `KafkaStatus` gains `kafkaVersion` (echo of the spec) and
   `metadataVersion` (the operator-finalized value), so the finalized
@@ -84,13 +84,13 @@ we model **`metadata.version` only** — there is no
 
 ### Out (deferred)
 
-| Concern | Why |
-|---|---|
-| Broker actually enforcing `metadata.version` (feature levels, `UpdateFeatures` handler) | A large Crabka-core slice; the roadmap classifies slice 28 as pure operator. |
-| `inter.broker.protocol.version` / `log.message.format.version` | ZK-era only; Crabka is KRaft-only. |
-| A version → image-tag mapping in the operator | Image resolution stays `pool.spec.image > operator default > built-in`; CI/operators set version-tagged images. `kafkaVersion` remains the declared label + the metadata-version default source. |
-| Cross-pool ISR-aware ordering / draining each node via `ControlledShutdown` before roll | Slice 22's `controlled_shutdown` is broker-side; wiring it into the rollout gate is a follow-up. The gate here orders by node id and waits for Ready. |
-| Multi-replica pools | Slice-20 single-replica invariant stands. |
+| Concern                                                                                 | Why                                                                                                                                                                                              |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Broker actually enforcing `metadata.version` (feature levels, `UpdateFeatures` handler) | A large Crabka-core slice; the roadmap classifies slice 28 as pure operator.                                                                                                                     |
+| `inter.broker.protocol.version` / `log.message.format.version`                          | ZK-era only; Crabka is KRaft-only.                                                                                                                                                               |
+| A version → image-tag mapping in the operator                                           | Image resolution stays `pool.spec.image > operator default > built-in`; CI/operators set version-tagged images. `kafkaVersion` remains the declared label + the metadata-version default source. |
+| Cross-pool ISR-aware ordering / draining each node via `ControlledShutdown` before roll | Slice 22's `controlled_shutdown` is broker-side; wiring it into the rollout gate is a follow-up. The gate here orders by node id and waits for Ready.                                            |
+| Multi-replica pools                                                                     | Slice-20 single-replica invariant stands.                                                                                                                                                        |
 
 ### Constraints
 
@@ -99,7 +99,7 @@ we model **`metadata.version` only** — there is no
   metadata version must not change the hash).
 - Initial cluster bring-up must **not** be gated one-at-a-time: a KRaft
   controller quorum needs every controller node up together to form, so
-  ordered gating engages only for an *established, uniform* cluster
+  ordered gating engages only for an _established, uniform_ cluster
   transitioning to a new hash.
 
 ---
@@ -227,13 +227,13 @@ pub(crate) fn plan_rollout(
 Decision:
 
 - If any pool has no current hash, or there is more than one distinct
-  *non-desired* hash among pools → **bring-up / recovery**: every pool gets
+  _non-desired_ hash among pools → **bring-up / recovery**: every pool gets
   `desired` (parallel — lets a KRaft quorum form). This is also the
   single-pool first-reconcile path.
 - If every pool already carries `desired` → no-op (all `desired`).
 - Otherwise (established cluster, current hashes ⊆ `{old, desired}`,
   transitioning) → **ordered roll**: walk pools in order; a pool is
-  *converged* when it already carries `desired` AND is Ready. Advance the
+  _converged_ when it already carries `desired` AND is Ready. Advance the
   first non-converged pool to `desired`; every later pool keeps its current
   hash until the earlier pools converge.
 
@@ -265,6 +265,7 @@ table, which the broker parses and ignores.
 ## 8. Testing
 
 ### Unit (`version.rs`)
+
 - parse: `3.7`, `3.7.1`, `3.7-IV2`, bare `3`, junk → error.
 - `evaluate`: default-tracks-binary; explicit pin ≤ binary ok; pin > binary
   → `MetadataVersionTooHigh`; metadata below finalized → `MetadataVersionDowngrade`;
@@ -272,6 +273,7 @@ table, which the broker parses and ignores.
   unparseable → `InvalidVersion`.
 
 ### Unit (`controller::kafka` / `common`)
+
 - `plan_rollout`: bring-up (None hashes) → all desired; single pool roll;
   established multi-pool advances one at a time; gated pool not-ready holds
   later pools; converged prefix continues; all-desired no-op; messy
@@ -280,16 +282,18 @@ table, which the broker parses and ignores.
   4th arg) preserves the slice-24 collapse.
 
 ### Integration (`tests/reconcile_kafka.rs`)
+
 - ConfigMap PATCH carries `metadata.version` in a broker TOML when a valid
   spec is applied (default + explicit pin).
 - `metadataVersion` greater than `kafkaVersion` → `KafkaVersionValid=False,
-  reason=MetadataVersionTooHigh`; ConfigMap omits the key; status
+reason=MetadataVersionTooHigh`; ConfigMap omits the key; status
   `metadataVersion` not advanced.
 - status PATCH carries `kafkaVersion` + `metadataVersion`.
 
 ### E2E (`operator-e2e.yml`)
+
 - A probe in the existing rolling-restart job: apply `spec.metadataVersion:
-  "0.1"`, wait Ready; bump to a higher pin, observe the pod roll and the
+"0.1"`, wait Ready; bump to a higher pin, observe the pod roll and the
   rendered ConfigMap carry the new `metadata.version`; apply an invalid
   (too-high) pin and assert `KafkaVersionValid=False` with the pod **not**
   rolled.

@@ -51,6 +51,7 @@
 ### Task 1: Add Validated Library Cadence Types
 
 **Files:**
+
 - Modify: `crates/client-streams/Cargo.toml`
 - Modify: `crates/client-streams/src/runtime/app.rs`
 - Modify: `crates/client-streams/src/runtime/mod.rs`
@@ -58,6 +59,7 @@
 - Modify: `crates/client-streams/src/streams_app.rs`
 
 **Interfaces:**
+
 - Produces:
   ```rust
   pub const DEFAULT_STREAMS_POLL_INTERVAL: Duration = Duration::from_millis(200);
@@ -460,12 +462,14 @@ git commit -m "feat(streams): validate runtime cadence"
 ### Task 2: Expose the Demo Stream-Role Boundary
 
 **Files:**
+
 - Modify: `crates/observability-demo-app/src/main.rs`
 - Create: `crates/observability-demo-app/tests/streams_cadence_config.rs`
 - Modify: `crates/observability-demo-app/tests/observability_demo_config.rs`
 - Modify: `demo/observability/docker-compose.yml`
 
 **Interfaces:**
+
 - Consumes:
   ```rust
   krabka_client_streams::{
@@ -476,6 +480,7 @@ git commit -m "feat(streams): validate runtime cadence"
       .commit_interval(StreamsCommitInterval)
   ```
 - Produces:
+
   ```text
   --streams-poll-interval-ms
   KRABKA_DEMO_STREAMS_POLL_INTERVAL_MS
@@ -842,9 +847,11 @@ git commit -m "feat(demo): expose Streams cadence"
 ### Task 3: Audit Evidence, Whole-Slice Review, and Publication
 
 **Files:**
+
 - Modify: `docs/configuration-audit.md`
 
 **Interfaces:**
+
 - Consumes: Tasks 1-2 complete high-level and demo flow.
 - Produces: an auditable closure record for Client Streams runtime cadence and
   the next unresolved owner; it does not close the repository-wide goal.

@@ -5,6 +5,7 @@
 **Goal:** Implement KIP-455 `AlterPartitionReassignments` (api_key 45) and `ListPartitionReassignments` (api_key 46) with a two-phase URP-aware state machine, cancellation, and leader handoff. JVM `kafka-reassign-partitions.sh --execute|--verify` works end-to-end. Builds on slice 14's metadata image, ControllerHandle, and authorization plumbing.
 
 **Out of scope (deferred to slice 15b):**
+
 - KIP-73 throttled replication (`leader.replication.throttled.replicas`, `follower.replication.throttled.replicas` configs + byte-rate enforcement on inter-broker Fetch)
 - Log-dir reassignment (KIP-113 `--replica-alteration`)
 
@@ -36,11 +37,13 @@
 ### Wire types — confirmed shapes
 
 `AlterPartitionReassignmentsRequest` (v0–1, flex from v0):
+
 - `timeout_ms: i32`
 - `allow_replication_factor_change: bool` (v1+)
 - `topics: Vec<ReassignableTopic { name: String, partitions: Vec<ReassignablePartition { partition_index: i32, replicas: Option<Vec<i32>> }> }>`
 
 `AlterPartitionReassignmentsResponse`:
+
 - Top-level `throttle_time_ms`, `error_code`, `error_message`
 - `responses: Vec<ReassignableTopicResponse { name, partitions: Vec<ReassignablePartitionResponse { partition_index, error_code, error_message }> }>`
 
@@ -80,6 +83,7 @@ Add these as plain new fields. No `#[serde(default)]`, no backwards-compat shim 
 For each `(topic, partition, target_opt)`:
 
 **Case A — Start new reassignment (`target_opt = Some(target)`):**
+
 1. Validate target: non-empty, no duplicates, every node id is a known broker; RF-change permitted if v1 flag false → must equal `len(current_target)`.
 2. Compute `current_target = replicas \ removing_replicas`, `old = current_target \ target`, `new = target \ current_target`.
 3. If both empty → return `error_code = 0` (no-op).
@@ -87,6 +91,7 @@ For each `(topic, partition, target_opt)`:
 5. Submit `PartitionRecord` with `replicas = current_target ∪ target`, `adding_replicas = new`, `removing_replicas = old`; `leader, isr, leader_epoch` unchanged.
 
 **Case B — Cancellation (`target_opt = None`):**
+
 1. If no reassignment in flight → return `NO_REASSIGNMENT_IN_PROGRESS (85)`.
 2. Submit `PartitionRecord` with:
    - `replicas = replicas \ adding_replicas` (revert to pre-reassignment set)
@@ -116,17 +121,17 @@ For each partition where `adding ≠ [] ∨ removing ≠ []`:
 
 ### Error code mapping
 
-| Condition | Wire code |
-|---|---|
-| Unknown topic/partition | `UNKNOWN_TOPIC_OR_PARTITION (3)` |
-| Cancellation but no reassignment in progress | `NO_REASSIGNMENT_IN_PROGRESS (85)` |
-| Duplicate replica id in target | `INVALID_REPLICA_ASSIGNMENT (39)` |
-| Unknown broker id in target | `INVALID_REPLICA_ASSIGNMENT (39)` |
-| Empty target | `INVALID_REPLICA_ASSIGNMENT (39)` |
-| RF change when `allow_replication_factor_change=false` | `INVALID_REPLICA_ASSIGNMENT (39)` |
-| Cancel where leader was adding and no eligible new leader | `ELIGIBLE_LEADERS_NOT_AVAILABLE (81)` |
-| Submit failed (raft timeout / not leader) | `COORDINATOR_NOT_AVAILABLE (15)` |
-| Non-super user, no ACL | `CLUSTER_AUTHORIZATION_FAILED (31)` (whole-request) |
+| Condition                                                 | Wire code                                           |
+| --------------------------------------------------------- | --------------------------------------------------- |
+| Unknown topic/partition                                   | `UNKNOWN_TOPIC_OR_PARTITION (3)`                    |
+| Cancellation but no reassignment in progress              | `NO_REASSIGNMENT_IN_PROGRESS (85)`                  |
+| Duplicate replica id in target                            | `INVALID_REPLICA_ASSIGNMENT (39)`                   |
+| Unknown broker id in target                               | `INVALID_REPLICA_ASSIGNMENT (39)`                   |
+| Empty target                                              | `INVALID_REPLICA_ASSIGNMENT (39)`                   |
+| RF change when `allow_replication_factor_change=false`    | `INVALID_REPLICA_ASSIGNMENT (39)`                   |
+| Cancel where leader was adding and no eligible new leader | `ELIGIBLE_LEADERS_NOT_AVAILABLE (81)`               |
+| Submit failed (raft timeout / not leader)                 | `COORDINATOR_NOT_AVAILABLE (15)`                    |
+| Non-super user, no ACL                                    | `CLUSTER_AUTHORIZATION_FAILED (31)` (whole-request) |
 
 ---
 
@@ -241,12 +246,14 @@ pub const NO_REASSIGNMENT_IN_PROGRESS: i16 = 85;
 Same inline-intercept pattern as slice 13 ACLs + slice 14 ElectLeaders. Both handlers need `&Principal` + `&SocketAddr`, so they can't ride the static `HandlerTable`.
 
 `handlers/api_versions.rs::supported_apis` appends:
+
 ```rust
 v!(alter_partition_reassignments_request),
 v!(list_partition_reassignments_request),
 ```
 
 `network/dispatch.rs::handler_body_flexible` appends:
+
 ```rust
 45 => version >= krabka_protocol::owned::alter_partition_reassignments_request::FLEXIBLE_MIN,
 46 => version >= krabka_protocol::owned::list_partition_reassignments_request::FLEXIBLE_MIN,
@@ -261,6 +268,7 @@ Plus per-connection intercept arms with `handle_alter_partition_reassignments_fr
 ### Unit tests (~14 tests)
 
 **`reassignment.rs` — completion-task pure logic (~8 tests):**
+
 - `start_new_reassignment_writes_union_replicas`
 - `cancel_clears_adding_and_removing`
 - `cancel_when_no_reassignment_returns_error`
@@ -271,6 +279,7 @@ Plus per-connection intercept arms with `handle_alter_partition_reassignments_fr
 - `validate_rejects_unknown_brokers`
 
 **`alter_partition_reassignments.rs` — `process_one_partition` (~6 tests):**
+
 - `noop_when_already_at_target`
 - `replaces_existing_in_flight_reassignment`
 - `rf_change_rejected_when_disabled`

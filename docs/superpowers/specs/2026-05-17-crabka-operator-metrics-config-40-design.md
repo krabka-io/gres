@@ -28,17 +28,17 @@
 
 ### Out (deferred)
 
-| Concern | Slice / why |
-|---|---|
-| OpenTelemetry / OTLP metrics export | Phase 6 follow-up to slice 42 (OTLP tracing) |
-| Per-pool `metricsConfig` override (cluster-wide today) | future |
-| Operator-managed Prometheus / Alertmanager / Grafana stack | out — `metricsConfig` only generates `monitoring.coreos.com/v1` resources |
-| Per-broker label on emitted metrics (the broker exporter does not yet add `broker_id`) | slice-39 follow-up; not blocking |
-| `metricsConfig.type=jmxPrometheusExporter` Strimzi compatibility (no JVM, no JMX) | rejected at the schema level via the `MetricsType` enum |
-| TLS-protected `/metrics` endpoint | future; broker exposes plaintext today |
-| Authentication on the `/metrics` endpoint | future (Kafka convention is unauth; relies on K8s network policy) |
-| Histograms / per-API-key request counters | slice-39 follow-up |
-| Operator-self metrics already shipped via slice 17 — unchanged | n/a |
+| Concern                                                                                | Slice / why                                                               |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| OpenTelemetry / OTLP metrics export                                                    | Phase 6 follow-up to slice 42 (OTLP tracing)                              |
+| Per-pool `metricsConfig` override (cluster-wide today)                                 | future                                                                    |
+| Operator-managed Prometheus / Alertmanager / Grafana stack                             | out — `metricsConfig` only generates `monitoring.coreos.com/v1` resources |
+| Per-broker label on emitted metrics (the broker exporter does not yet add `broker_id`) | slice-39 follow-up; not blocking                                          |
+| `metricsConfig.type=jmxPrometheusExporter` Strimzi compatibility (no JVM, no JMX)      | rejected at the schema level via the `MetricsType` enum                   |
+| TLS-protected `/metrics` endpoint                                                      | future; broker exposes plaintext today                                    |
+| Authentication on the `/metrics` endpoint                                              | future (Kafka convention is unauth; relies on K8s network policy)         |
+| Histograms / per-API-key request counters                                              | slice-39 follow-up                                                        |
+| Operator-self metrics already shipped via slice 17 — unchanged                         | n/a                                                                       |
 
 ### Constraints inherited
 
@@ -137,12 +137,12 @@ pub use metrics::{MetricsConfig, MetricsType, PodMonitorSpec, ServiceMonitorSpec
 
 ### Validation rules (status condition `MetricsReady`)
 
-| Condition | Reason | Resources rendered? |
-|---|---|---|
-| `metrics_config` unset | `Disabled` | none — pod template unchanged |
-| `pod_monitor` and `service_monitor` both set | `MutuallyExclusive` | none — existing resources untouched |
-| Apply on `monitoring.coreos.com/v1` returns 404 (group not served) | `PrometheusOperatorCrdsMissing` | none — requeue with backoff |
-| Otherwise | `Available` | as requested |
+| Condition                                                          | Reason                          | Resources rendered?                 |
+| ------------------------------------------------------------------ | ------------------------------- | ----------------------------------- |
+| `metrics_config` unset                                             | `Disabled`                      | none — pod template unchanged       |
+| `pod_monitor` and `service_monitor` both set                       | `MutuallyExclusive`             | none — existing resources untouched |
+| Apply on `monitoring.coreos.com/v1` returns 404 (group not served) | `PrometheusOperatorCrdsMissing` | none — requeue with backoff         |
+| Otherwise                                                          | `Available`                     | as requested                        |
 
 `Disabled` is intentionally surfaced as `MetricsReady=False reason=Disabled`, not as the condition's absence — this lets `kubectl wait --for=condition=MetricsReady` distinguish "not configured" from "configuring" without polling forever on an unconfigured cluster. Operators that want a healthy-or-disabled gate look at `MetricsReady ∈ {True, False reason=Disabled}`.
 
@@ -473,9 +473,9 @@ When `metrics_config` itself becomes `None`, we delete both names. To avoid a on
 `charts/krabka-operator/templates/clusterrole.yaml` gains:
 
 ```yaml
-  - apiGroups: ["monitoring.coreos.com"]
-    resources: ["podmonitors", "servicemonitors"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["monitoring.coreos.com"]
+  resources: ["podmonitors", "servicemonitors"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 ```
 
 No `values.yaml` change. The chart-level `serviceMonitor.enabled` already controls a `ServiceMonitor` for the OPERATOR's own `/metrics` endpoint — that's unrelated to this slice's broker-pod scraping.
@@ -581,20 +581,20 @@ deploy/crds/
 
 ## 9. Conflict analysis (for parallel batching)
 
-| File | Tasks touching it |
-|---|---|
-| `crd/metrics.rs` | T1 (create) |
-| `crd/kafka.rs` | T1 (add field + test) |
-| `crd/mod.rs` | T1 (re-export) |
-| `controller/metrics.rs` | T2 (create renderer + reconcile_metrics) |
-| `controller/kafka.rs` | T3 (wire into reconcile) |
-| `controller/kafka_node_pool.rs` | T4 (pod-template changes) |
-| `controller/common.rs` | T2 (one error variant) |
-| `controller/mod.rs` | T2 (mod declaration) |
-| `tests/reconcile_kafka.rs` | T3 (new test cases) |
-| `charts/krabka-operator/templates/clusterrole.yaml` | T5 |
-| `deploy/crds/crabka.io_kafkas.yaml` | T6 (regen) |
-| `.github/workflows/operator-e2e.yml` | T7 |
+| File                                                | Tasks touching it                        |
+| --------------------------------------------------- | ---------------------------------------- |
+| `crd/metrics.rs`                                    | T1 (create)                              |
+| `crd/kafka.rs`                                      | T1 (add field + test)                    |
+| `crd/mod.rs`                                        | T1 (re-export)                           |
+| `controller/metrics.rs`                             | T2 (create renderer + reconcile_metrics) |
+| `controller/kafka.rs`                               | T3 (wire into reconcile)                 |
+| `controller/kafka_node_pool.rs`                     | T4 (pod-template changes)                |
+| `controller/common.rs`                              | T2 (one error variant)                   |
+| `controller/mod.rs`                                 | T2 (mod declaration)                     |
+| `tests/reconcile_kafka.rs`                          | T3 (new test cases)                      |
+| `charts/krabka-operator/templates/clusterrole.yaml` | T5                                       |
+| `deploy/crds/crabka.io_kafkas.yaml`                 | T6 (regen)                               |
+| `.github/workflows/operator-e2e.yml`                | T7                                       |
 
 Parallel batches:
 

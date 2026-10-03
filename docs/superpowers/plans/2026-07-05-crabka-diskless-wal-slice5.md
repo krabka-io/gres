@@ -45,6 +45,7 @@
 `recover_active_tail` truncates a torn trailing batch (`segment.rs:266-269`), but `Log::open` never truncates the leader-epoch checkpoint to match (`log.rs:265`) — a torn batch that introduced a new epoch leaves an entry dangling past `log_end_offset`, corrupting epoch→offset lookups. Fix it (an unconditional correctness fix; also latent for classic topics).
 
 **Files:**
+
 - Modify: `crates/log/src/log.rs`
 
 - [ ] **Step 1: Write the failing test**
@@ -91,9 +92,10 @@ git commit -m "fix(log): truncate leader-epoch checkpoint to recovered LEO on op
 
 ## Task 2: Rebuild idempotent-producer sequence dedup from the recovered WAL
 
-`ProducerState` is always built empty (`ProducerState::new()`, `producer_state.rs:103`); on crash-restart the fsync'd log has the *records* but not the dedup map, so an idempotent retry would duplicate. Rebuild it broker-side by scanning the recovered tail (keeps the log/broker crate boundary clean).
+`ProducerState` is always built empty (`ProducerState::new()`, `producer_state.rs:103`); on crash-restart the fsync'd log has the _records_ but not the dedup map, so an idempotent retry would duplicate. Rebuild it broker-side by scanning the recovered tail (keeps the log/broker crate boundary clean).
 
 **Files:**
+
 - Modify: the broker's diskless partition-open path (where the `Log` is opened + `ProducerState` is created — `partition.rs:679` and the partition-registry open site); add a rebuild helper.
 
 - [ ] **Step 1: Write the failing test**
@@ -157,6 +159,7 @@ git commit -m "feat(broker): rebuild idempotent-producer dedup from recovered WA
 After restart, `log_end_offset() < KRaft next-offset` (the `[B,B+N)` window). Slice-2's `base == log_end_offset()` guard would fail `OffsetMismatch` on every subsequent produce. Reconcile to the KRaft authority.
 
 **Files:**
+
 - Modify: Slice-2's `append_verbatim_at` (guard); the diskless-open reconciliation.
 
 - [ ] **Step 1: Write the failing test**
@@ -192,6 +195,7 @@ git commit -m "feat(broker): re-anchor diskless append cursor to KRaft frontier 
 Slice 4 gated trim on the in-memory `flushed_frontier`. Slice 5 requires the index entry to be **durably committed** to `__diskless_wal_index` before trim removes the local copy — else `[below-floor ∧ cache-miss]` loses acked data on restart.
 
 **Files:**
+
 - Modify: `crates/broker/src/diskless/flusher.rs` (Slice 4 trim gate)
 
 - [ ] **Step 1: Write the failing test**
@@ -218,6 +222,7 @@ git commit -m "feat(broker): gate diskless trim on committed-index durability (S
 A new, tighter diskless-only model proving no `wal_acked` loss across crash-restart.
 
 **Files:**
+
 - Create: `crates/broker/src/diskless_crash_model.rs`; Modify: `crates/broker/src/lib.rs`
 
 - [ ] **Step 1: Build the model (small bounds)**

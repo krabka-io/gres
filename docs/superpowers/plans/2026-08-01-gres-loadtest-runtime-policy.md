@@ -27,7 +27,7 @@ dimensioned value and `refined_type`-validated newtypes for positive counts.
 ### Task 3: Workload and fault runtime
 
 - [x] Thread retry, connection, operation, startup, shutdown, reconnect,
-  histogram, pacing, read-slice, and seed-batch policy through the workload.
+      histogram, pacing, read-slice, and seed-batch policy through the workload.
 - [x] Thread the minimum flap period through fault validation/execution.
 - [x] Preserve scenario semantics and existing defaults.
 - [x] Run focused workload/fault tests and strict Clippy; commit.

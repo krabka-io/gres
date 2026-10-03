@@ -27,6 +27,7 @@
 ### Task 1: Inject distributor policies through existing library paths
 
 **Files:**
+
 - Modify: `crates/metrics/src/distributor/ha.rs`
 - Modify: `crates/metrics/src/distributor/mod.rs`
 - Modify: `crates/metrics/src/limits/enforce.rs`
@@ -34,6 +35,7 @@
 - Modify: `crates/metrics/src/lib.rs`
 
 **Interfaces:**
+
 - Produces: public `DEFAULT_MAX_RATE_BUCKETS: usize`.
 - Produces: public `DEFAULT_DISTRIBUTOR_MAX_DECOMPRESSED: ByteSize`.
 - Produces: `DistributorState::with_ha_failover_timeout(self, Time) -> Self`.
@@ -235,11 +237,13 @@ git commit -m "feat(metrics): inject distributor policy"
 ### Task 2: Add CLI and environment configuration
 
 **Files:**
+
 - Modify: `Cargo.lock`
 - Modify: `crates/metrics/Cargo.toml`
 - Modify: `crates/metrics/src/bin/krabka-metrics.rs`
 
 **Interfaces:**
+
 - Consumes: `DEFAULT_HA_FAILOVER_TIMEOUT`, `DEFAULT_MAX_RATE_BUCKETS`, and `DEFAULT_DISTRIBUTOR_MAX_DECOMPRESSED`.
 - Consumes: `DistributorState::with_ha_failover_timeout`, `DistributorState::with_max_rate_buckets`, and `DistributorState::with_max_decompressed`.
 - Produces: CLI/environment options named in the approved design.
@@ -464,10 +468,12 @@ git commit -m "feat(metrics): configure distributor policy"
 ### Task 3: Close the audit slice and verify
 
 **Files:**
+
 - Modify: `docs/configuration-audit.md`
 - Modify: `docs/superpowers/plans/2026-07-31-metrics-distributor-policy.md`
 
 **Interfaces:**
+
 - Consumes: the completed library and binary configuration surface.
 - Produces: audit evidence that the three distributor policies are no longer pending.
 

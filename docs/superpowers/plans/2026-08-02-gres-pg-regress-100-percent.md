@@ -20,7 +20,7 @@ and 4 files gain a combined 22 lines.
 Those 4 — `timestamptz` +12, `horology` +6, `alter_table` +2, `timestamp` +2 —
 are all one benign category: a caret correctly attached to an error Gres should
 not be raising at all. `insert into child values (12, 13, 'testing')` and
-`'Jan 01 00:00:00 1000 LMT'::timestamptz` both *succeed* in PostgreSQL under the
+`'Jan 01 00:00:00 1000 LMT'::timestamptz` both _succeed_ in PostgreSQL under the
 schedule's settings, so Gres's pre-existing wrong error now carries two more
 correct lines. Fixing the underlying rejection removes the error and its caret
 together; no over-attachment remains. (Beware isolated re-checks of the `LMT`
@@ -189,7 +189,7 @@ and their certified artifact describe current conformance.
       rather than always saying `integer`.
 - [x] Attach PostgreSQL's source position to type-input failures generally,
       replacing the `bool`-only attacher. A rejected value is positioned when
-      exactly one string literal in the statement carries it *and* any type the
+      exactly one string literal in the statement carries it _and_ any type the
       source states next to that literal is the type that rejected it, so
       `int2 '34.5'`, `'34.5'::int2`, `CAST('zz' AS int4)`, and a `VALUES` item
       coerced to its column all get a caret, while a value coerced through an
@@ -203,18 +203,18 @@ and their certified artifact describe current conformance.
       arrays, and floats confirming Gres never positions an error PostgreSQL
       leaves bare.
 - [x] Position type-input failures raised by the datetime family (SQLSTATE
-      22007), and exclude *function arguments* from positioning entirely. A
+      22007), and exclude _function arguments_ from positioning entirely. A
       literal passed to a function reaches it as an already-typed value and the
       function raises its own error at execution time —
       `to_timestamp('97/Feb/16', 'YYMonDD')` is `invalid value "/Feb/16" for
-      "Mon"` with no position — so the attacher walks back to the parenthesis
+    "Mon"` with no position — so the attacher walks back to the parenthesis
       opening the literal's enclosing argument list and declines when it follows
       an identifier. A `VALUES` row is not a call: its parenthesis follows the
       `VALUES` keyword, and PostgreSQL does position each item's coercion to its
       target column. A cast written on an argument still binds tighter than the
       call, so `length(upper('zz'::interval::text))` keeps its caret — and the
       `CAST('x' AS type)` spelling is recognised only when the literal sits
-      directly inside `CAST(`, because otherwise the *column alias* in
+      directly inside `CAST(`, because otherwise the _column alias_ in
       `SELECT bool 'test' AS error` reads as a target type named `error` and
       suppresses a caret PostgreSQL does emit.
       The complete schedule is what exposed both halves, and neither showed up
@@ -226,7 +226,7 @@ and their certified artifact describe current conformance.
       `GRANT`/`REVOKE`, so a bare relation name after `ON` names a table. 334
       statements across 34 upstream files use that spelling, which was
       previously a syntax error. `SCHEMA` still requires its keyword.
-- [x] Report `float8` text input overflow *and* underflow as 22003
+- [x] Report `float8` text input overflow _and_ underflow as 22003
       `"…" is out of range for type double precision`, matching the existing
       `float4` handling; overflow previously surfaced as the bare arithmetic
       `integer out of range` and underflow silently returned zero.
@@ -259,7 +259,7 @@ and their certified artifact describe current conformance.
       Note what it exposed rather than caused: `geometry` +9 because its
       queries now run and reach `operator does not exist: point <-> line`
       instead of stopping at a missing relation, and `psql` +11 because
-      `line_tbl` joins a `\d` listing that *already* diverges — expected
+      `line_tbl` joins a `\d` listing that _already_ diverges — expected
       `psql.out` contains no `kd_point_tbl` while Gres's contains four, so
       Gres enumerates tables PostgreSQL's listing does not. Both are the next
       layer surfacing, not new defects; the psql listing divergence is its own
@@ -282,13 +282,13 @@ and their certified artifact describe current conformance.
       It took three follow-up waves to land, and every miss was a producer of
       relation oids the unit tests never join: first `pg_trigger`/`pg_depend`
       (`triggers` +73), then `TG_RELID` (+6), then the discovery that
-      `Trigger::table_id` is *polymorphic* — a catalog id for a table, but an
+      `Trigger::table_id` is _polymorphic_ — a catalog id for a table, but an
       already-formed `pg_class` oid when the trigger is `INSTEAD OF` on a view,
       which must not be banded twice. Route every new producer through
       `table_relation_oid`/`trigger_relation_oid`; a green `cargo test` does not
       cover this, because no unit test joins `pg_trigger` to `pg_class`.
 - [ ] ~~User relation OIDs fall inside the system-reserved range.~~ (done above) `CREATE
-      TABLE t; SELECT oid >= 16384 FROM pg_class WHERE relname = 't'` is `f`
+    TABLE t; SELECT oid >= 16384 FROM pg_class WHERE relname = 't'` is `f`
       here and `t` in PostgreSQL, so every upstream sanity query that separates
       catalogs from user objects with `c.oid < 16384` sees user tables. The
       `misc_sanity` varlena/toast query lists 580 rows against PostgreSQL's
@@ -301,7 +301,7 @@ and their certified artifact describe current conformance.
       not before it. The `box` type alone was implemented, verified
       byte-identical to the oracle (per-coordinate corner normalization, square
       brackets rejected) and then **reverted**, because certifying it showed the
-      failure surface *growing* by 132 lines: `box` -54 and several index files
+      failure surface _growing_ by 132 lines: `box` -54 and several index files
       improved, but `psql` +174, `gist` +30, `geometry` +10 and
       `create_index_spgist` +8. The statements a bare type unblocks do not then
       succeed — they reach `function box(...) does not exist` (3 lines with a
@@ -317,7 +317,7 @@ and their certified artifact describe current conformance.
       history if it helps: `feat(pgtypes): add PostgreSQL's box type`.
 - [x] **Land the geometry types and operators as one wave — proven necessary.**
       The `box` type alone measured `+132` lines and was reverted; the same
-      type *plus* the eleven operators measures `-128`. The difference is that
+      type _plus_ the eleven operators measures `-128`. The difference is that
       an unblocked statement must go on to succeed, not merely fail further
       along. Landed: the `box` type, the three operator tokens that did not lex
       (`~=`, `<<|`, `|>>`), and all eleven operators over the boxable types
@@ -326,7 +326,7 @@ and their certified artifact describe current conformance.
       the box reduction otherwise silently overrides.
       Result: `point` -161, `box` -156, `create_index` -52,
       `create_index_spgist` -40, against `psql` +196, `geometry` +73 and
-      `gist` +34 as those files reach the *next* layer.
+      `gist` +34 as those files reach the _next_ layer.
 - [x] Add `&<|`, `|&>`, `box(point,point)` and the box overloads of `area` and
       `center`: `geometry` -80, `box` -46, `index_including_gist` -38,
       `spgist` -5, nothing worsened.
@@ -353,7 +353,7 @@ and their certified artifact describe current conformance.
       **The first certification of this caught a security bug in it.** Pushing
       the user's `WHERE` under a row-level-security policy let
       `WHERE f_leak(title)` see rows the policy hides, and `f_leak` `RAISE
-      NOTICE`s what it is handed: `rowsecurity` +50, every line a leaked title.
+    NOTICE`s what it is handed: `rowsecurity` +50, every line a leaked title.
       `leakproof_predicate` now enforces PostgreSQL's `proleakproof` rule --
       no function calls, casts, or division across the barrier. The
       pre-existing `Inner`/`Cross` path had the same hole and is now covered
@@ -385,28 +385,29 @@ and their certified artifact describe current conformance.
       each -- none is a wave, every one is a feature:
 
       | lines | file | gated on |
-      |------:|------|----------|
-      | 17989 | `join` | `EXPLAIN` fidelity; `(<join>) alias` scoping |
-      |  8397 | `psql` | `\\d` listing fidelity, grows with every new table |
-      |  5308 | `cluster` | `CLUSTER` itself; cascading aborts after 8 parse errors |
-      |  4871 | `geometry` | `polygon`/`path` types, `box` ordering, SP-GiST |
-      |  4305 | `partition_join` | partitionwise join planning |
-      |  4149 | `partition_prune` | pruning + its `EXPLAIN` output |
-      |  4109 | `rowsecurity` | row-level security (see below) |
-      |  3399 | `timestamptz` | timezone-database breadth |
-      |  3137 | `inherit` | table inheritance |
-      |  2949 | `updatable_views` | auto-updatable view rules |
-      |  2922 | `horology` | datetime formatting breadth |
-      |  2864 | `rules` | the rewrite system |
-      |  2842 | `alter_table` | inheritance catalog (`attinhcount` reads 0, not 1) |
-      |  2571 | `window` | window-frame breadth |
+          |------:|------|----------|
+          | 17989 | `join` | `EXPLAIN` fidelity; `(<join>) alias` scoping |
+          |  8397 | `psql` | `\\d` listing fidelity, grows with every new table |
+          |  5308 | `cluster` | `CLUSTER` itself; cascading aborts after 8 parse errors |
+          |  4871 | `geometry` | `polygon`/`path` types, `box` ordering, SP-GiST |
+          |  4305 | `partition_join` | partitionwise join planning |
+          |  4149 | `partition_prune` | pruning + its `EXPLAIN` output |
+          |  4109 | `rowsecurity` | row-level security (see below) |
+          |  3399 | `timestamptz` | timezone-database breadth |
+          |  3137 | `inherit` | table inheritance |
+          |  2949 | `updatable_views` | auto-updatable view rules |
+          |  2922 | `horology` | datetime formatting breadth |
+          |  2864 | `rules` | the rewrite system |
+          |  2842 | `alter_table` | inheritance catalog (`attinhcount` reads 0, not 1) |
+          |  2571 | `window` | window-frame breadth |
 
-      `rowsecurity`'s 125 parse errors are `CREATE POLICY` (65),
-      `ALTER TABLE ... ENABLE ROW LEVEL SECURITY` (21) and `ALTER POLICY` (12).
-      Do **not** land the parser half alone: a parsed-but-unenforced policy
-      returns rows it should hide, which is a worse failure than the syntax
-      error, and this program has already shipped one RLS information leak (see
-      the pushdown entry above). Parse and enforce together, or not at all.
+          `rowsecurity`'s 125 parse errors are `CREATE POLICY` (65),
+          `ALTER TABLE ... ENABLE ROW LEVEL SECURITY` (21) and `ALTER POLICY` (12).
+          Do **not** land the parser half alone: a parsed-but-unenforced policy
+          returns rows it should hide, which is a worse failure than the syntax
+          error, and this program has already shipped one RLS information leak (see
+          the pushdown entry above). Parse and enforce together, or not at all.
+
 - [x] **Row-level security, end to end.** Ownership, a policy catalog, a
       fail-closed read gate, enforcement on every command, and qual deparsing.
       Certified in two runs: `-1657` lines for the feature itself (`rowsecurity`
@@ -439,7 +440,7 @@ and their certified artifact describe current conformance.
       The halves had to land together for a reason the plan only half stated.
       Safety was the known one: owner rights over an unenforced `GRANT` make any
       view a universal bypass. Measurement was the other -- enforcement alone
-      made `rowsecurity` and `select_views` *worse* (+136, +56), because
+      made `rowsecurity` and `select_views` _worse_ (+136, +56), because
       upstream grants the caller the view and never the tables under it, so
       every such access was wrongly denied until owner rights arrived.
       Enforcement also exposed a live leak in the row-security work: the
@@ -453,7 +454,7 @@ and their certified artifact describe current conformance.
       nothing. Out-of-scope calls are worth revisiting when the thing that made
       them harmless changes.
 - [ ] Close the remaining `rowsecurity` privilege gap: 34 `permission denied`
-      lines against PostgreSQL's 45, so the engine now *under*-denies. Schema,
+      lines against PostgreSQL's 45, so the engine now _under_-denies. Schema,
       function and column-level privileges are unenforced, and `relacl` /
       `nspacl` / `attacl` still project NULL although grants exist.
 - [x] **`ALTER TABLE` column changes recurse to descendants.** Certified `-51`
@@ -540,7 +541,7 @@ and their certified artifact describe current conformance.
       `partition_info` -64, `timestamp` -48) against `horology` +732.
       That +732 is one query, and it is worth understanding before anyone
       "fixes" it. It used to fail with `cannot compare timestamp without time
-      zone and text`; it now runs, and every value it returns matches
+    zone and text`; it now runs, and every value it returns matches
       PostgreSQL exactly. It counts as 104 changed lines because it returns 102
       rows where PostgreSQL returns 106 -- four `Mon Feb 10 1997` rows are
       missing -- and because psql pads a column to its widest value, so a
@@ -566,14 +567,14 @@ and their certified artifact describe current conformance.
       `crates/gres-conformance/pg-regress-baseline.json` was seeded once, in
       `179158c39`, and has never been ratcheted; `baseline.py update` correctly
       refuses ("would grow or replace the mismatch surface") because 55 files
-      are worse than it. That drift is *not* from the waves above -- `join`
+      are worse than it. That drift is _not_ from the waves above -- `join`
       (7969 -> 17962) and `cluster` (333 -> 5308) alone account for ~15k of it
       and already stood at those values in this program's first measurement,
       before any change here. Total against the seeded gate is 172573 -> 173731.
       Do not re-seed blindly. **Diagnosed:** the runner flag
       `--pgexec-blocking-query-memory=20MiB` did not exist when the baseline was
       seeded -- it arrived later, in `1a1d00376`. The baseline and every run
-      since were therefore measured under *different policies*, so "55 files
+      since were therefore measured under _different policies_, so "55 files
       worsened" is not by itself a code-regression signal.
       A/B on one snapshot, `join` replayed under each budget: at 20 MiB it
       finishes in seconds at 17505 changed lines; at 4 GiB it had emitted 4238
@@ -581,7 +582,7 @@ and their certified artifact describe current conformance.
       running, so it does not terminate in practical time. A full 4 GiB serial
       run hit the runner's 3600s timeout at test 92 of 231.
       So the drift is the "unblocked statements fail longer" effect at scale:
-      as Gres gained features, more of `join`'s statements began to *attempt*
+      as Gres gained features, more of `join`'s statements began to _attempt_
       execution instead of failing early on a missing feature, and now hit the
       memory cap -- each producing a memory error plus a cascade of
       `current transaction is aborted` (14 and 75 respectively in `join`).
@@ -593,30 +594,31 @@ and their certified artifact describe current conformance.
       own `EXPLAIN` gives it away:
 
           Nested Loop
-            Join Filter: ((a.unique2 < 10) AND (coalesce(...) = 44))
-            ->  Nested Loop
-                  ->  Seq Scan on tenk1 a
-                  ->  Seq Scan on tenk1 b
-            ->  Seq Scan on tenk1 c
+                Join Filter: ((a.unique2 < 10) AND (coalesce(...) = 44))
+                ->  Nested Loop
+                      ->  Seq Scan on tenk1 a
+                      ->  Seq Scan on tenk1 b
+                ->  Seq Scan on tenk1 c
 
-      Three 10k-row seq scans with no join key: 10^12 pairs. PostgreSQL runs
-      the same query as a `Nested Loop Left Join` whose inner side is an
-      `Index Cond: (thousand = a.unique1)`, and derives `c.unique2 = 44` by
-      equivalence.
-      Probing a scratch instance: every equality join -- inner or outer,
-      `JOIN ... ON` or comma-plus-`WHERE` -- plans as a bare nested loop with
-      the equality demoted to a per-pair filter (and `ON` conditions are not
-      printed in `EXPLAIN` at all). Results are *correct*; a 3x3 probe returns
-      exactly the matching rows. The defect is purely that no equality join
-      ever becomes a hash join or an index nested loop, so cost is O(n*m).
-      The 20 MiB cap has been masking this by turning a cartesian product into
-      a fast error.
-      The fix is an equality-join path -- hash join, or index nested loop when
-      the inner side has a usable index -- for both `ON` and `WHERE`
-      predicates, plus emitting the join condition in `EXPLAIN`. That is the
-      root gating `join`, `cluster` and the suite's runtime; it is a planner
-      and executor project, not a wave. Ratchet the other 53 files only after
-      it lands.
+          Three 10k-row seq scans with no join key: 10^12 pairs. PostgreSQL runs
+          the same query as a `Nested Loop Left Join` whose inner side is an
+          `Index Cond: (thousand = a.unique1)`, and derives `c.unique2 = 44` by
+          equivalence.
+          Probing a scratch instance: every equality join -- inner or outer,
+          `JOIN ... ON` or comma-plus-`WHERE` -- plans as a bare nested loop with
+          the equality demoted to a per-pair filter (and `ON` conditions are not
+          printed in `EXPLAIN` at all). Results are *correct*; a 3x3 probe returns
+          exactly the matching rows. The defect is purely that no equality join
+          ever becomes a hash join or an index nested loop, so cost is O(n*m).
+          The 20 MiB cap has been masking this by turning a cartesian product into
+          a fast error.
+          The fix is an equality-join path -- hash join, or index nested loop when
+          the inner side has a usable index -- for both `ON` and `WHERE`
+          predicates, plus emitting the join condition in `EXPLAIN`. That is the
+          root gating `join`, `cluster` and the suite's runtime; it is a planner
+          and executor project, not a wave. Ratchet the other 53 files only after
+          it lands.
+
 - [ ] Finish the geometry cluster. `box` and `point` still need their
       remaining functions (`box(point,point)`, `area`, `center`, `height`,
       `width` on more shapes) and `polygon` needs its type plus SP-GiST quad
@@ -627,7 +629,7 @@ and their certified artifact describe current conformance.
       `polygon`. **This is the highest-value repeatable shape left**, proven by
       `lseg`: each is a bounded type (input spellings, canonical output, a
       constructor, durable/wire encodings) that makes its own upstream file
-      exact *and* ripples into the shared geometry tests, because
+      exact _and_ ripples into the shared geometry tests, because
       `create_index_spgist`, `gist`, `spgist`, `polymorphism` and `geometry`
       all fail at `type "box" does not exist` rather than on their own subject.
       Current owner sizes: `box` 541/4h, `polygon` 278/2h, `line` 138/1h,
@@ -640,12 +642,12 @@ and their certified artifact describe current conformance.
       corners on input, so `((1,2),(3,4))` prints `(3,4),(1,2)`.
 - [ ] Match remaining exact wire-visible diagnostics.
 - [ ] Attach `22008 date/time field value out of range` and `malformed array
-      literal` source positions. Neither message names its type, so the
+    literal` source positions. Neither message names its type, so the
       "literal was coerced directly to the type that rejected it" evidence the
       22P02/22003/22007 attacher relies on is unavailable; these need a
-      separate rule that instead rejects a literal opening a cast *chain*.
+      separate rule that instead rejects a literal opening a cast _chain_.
 - [ ] Emit `HINT: Perhaps you need a different "DateStyle" setting.` Measured
-      against the oracle, PostgreSQL attaches it only to *month/day* field
+      against the oracle, PostgreSQL attaches it only to _month/day_ field
       overflow (`'2024-13-01'::date`), not to other datetime range errors
       (`'2024-02-30'::date`, `'25:00:00'::time`) — it is PostgreSQL's distinct
       `DTERR_MD_FIELD_OVERFLOW`, so the datetime parser must separate that case
@@ -665,11 +667,11 @@ and their certified artifact describe current conformance.
       cross-cutting parser change, not a type-registration change.
 - [ ] Give `oid` its own type identity. `krabka_pgtypes::datum` resolves `oid`
       to `ColumnType::Int4`, so every `oid` input failure reports `invalid input
-      syntax for type integer`; the upstream `oid` file expects `... for type
-      oid`, which is roughly half that file's residual. Its source positions are
+    syntax for type integer`; the upstream `oid` file expects `... for type
+    oid`, which is roughly half that file's residual. Its source positions are
       already correct.
 - [ ] Finish source-aware `bpchar` coercion. PostgreSQL treats a `bpchar`'s
-      trailing blanks as insignificant on *every* conversion out of the type —
+      trailing blanks as insignificant on _every_ conversion out of the type —
       `c::text`, `c::varchar`, `length(c)`, `lower(c)`/`upper(c)`, and `||` all
       strip them — so the fix belongs at the shared bpchar-to-text coercion, not
       at the explicit cast alone. Owns the padded-output residuals in
@@ -727,13 +729,13 @@ For each item, first add one focused test at the shared layer that fails before 
       `sanity_check` against a `--data-dir` instance, stop it, and start a new
       process on the same directory: every scan of either catalog then returns
       `catalog storage error: corrupt row encoding: column type oid 300119 is
-      not a registered type`, while `pg_type` and `pg_namespace` still read and
+    not a registered type`, while `pg_type` and `pg_namespace` still read and
       300119 is absent from the projected `pg_type`. One unhydrated type
-      therefore breaks *all* relation introspection, not merely the query that
+      therefore breaks _all_ relation introspection, not merely the query that
       touches it.
       Scope, established by measurement rather than assumed: the originating
       run itself logs **zero** such errors, and so does the complete certified
-      serial schedule — the failure appears only *after* the restart. It is a
+      serial schedule — the failure appears only _after_ the restart. It is a
       hydration defect (see the process-registry item below), not a
       `DROP TYPE` closure defect, and it does not affect the pg_regress score,
       which runs in-memory without restarting. It does mean Gres cannot be
@@ -764,7 +766,7 @@ For each item, first add one focused test at the shared layer that fails before 
       `relhassubclass` from the live child graph would reproduce both expected
       lines, because the test only samples it after an `ANALYZE` — but that is
       the test-only shortcut this plan forbids, since PostgreSQL clears the hint
-      *in `ANALYZE`* rather than at `DROP`. Implement the persisted hint. Preserve PostgreSQL's nontransactional row-count updates, target preflight, inheritance/partition counting, and stale-after-DML behavior. Keep `relhassubclass` separate: it is a persisted, potentially stale hint with different rollback semantics, not a projection of the current child graph.
+      _in `ANALYZE`_ rather than at `DROP`. Implement the persisted hint. Preserve PostgreSQL's nontransactional row-count updates, target preflight, inheritance/partition counting, and stale-after-DML behavior. Keep `relhassubclass` separate: it is a persisted, potentially stale hint with different rollback semantics, not a projection of the current child graph.
 - [ ] Finish source-aware `bpchar` to text coercion, input-independent scalar-HAVING scan elision, and clause-aware error positions. The measured `select_having` and `select_implicit` residuals otherwise already match.
 - [ ] Implement full `name` type identity plus executable unique/partial expression indexes and hash-index entries/options before claiming `hash_index`; catalog-only expression metadata is insufficient.
 - [ ] Implement schema element transformation/execution atomically, `CURRENT_ROLE` authorization resolution, ColId relation components, and DROP CASCADE notices before claiming `create_schema` exactness.
@@ -818,13 +820,13 @@ not re-derive it — and, for `join`, so nobody spends a slice on it.
 
 **`join`, 8,006 changed lines — do not chase this file.**
 
-| lines | share | what |
-|---:|---:|---|
-| 3,585 | 44% | EXPLAIN plan nodes |
-| 2,010 | 25% | genuinely different row content |
-| 1,186 | 14% | rulers and row counts, consequent on the rows above |
-| 450 | 6% | the same rows in a different order |
-| 182 | 2% | error text |
+| lines | share | what                                                |
+| ----: | ----: | --------------------------------------------------- |
+| 3,585 |   44% | EXPLAIN plan nodes                                  |
+| 2,010 |   25% | genuinely different row content                     |
+| 1,186 |   14% | rulers and row counts, consequent on the rows above |
+|   450 |    6% | the same rows in a different order                  |
+|   182 |    2% | error text                                          |
 
 Only ~50 statements in the whole file raise an error, so this is not a cascade
 that one fix unblocks. The EXPLAIN half is the separately-recorded dead end: the

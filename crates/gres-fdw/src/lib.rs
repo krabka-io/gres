@@ -20,9 +20,9 @@ pub mod source;
 pub mod types;
 
 pub use config::{ConnProfile, ServerProfile, resolve, resolve_server};
-pub use krabka_schema_serde::SchemaFetchRetryPolicy;
 pub use decode::{DecodedValue, FdwDecodePolicy, Wire, decode_value, decode_value_with_policy};
 pub use error::KafkaFdwError;
+pub use krabka_schema_serde::SchemaFetchRetryPolicy;
 pub use source::{
     FdwScanPolicy, FetchPlan, RawRecord, plan_fetch, scan_topic, scan_topic_with_dns_timeout,
 };

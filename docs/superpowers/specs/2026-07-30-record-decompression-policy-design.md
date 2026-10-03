@@ -53,10 +53,10 @@ Other library callers retain the current default behavior.
 `BrokerConfig` carries the three UOM values and validates them by constructing
 the shared policy. The existing runtime overlay exposes:
 
-| CLI | Environment | CRD `brokerTuning` |
-|---|---|---|
-| `--record-decompression-max-ratio` | `KRABKA_RECORD_DECOMPRESSION_MAX_RATIO` | `recordDecompressionMaxRatio` |
-| `--record-decompression-output-floor` | `KRABKA_RECORD_DECOMPRESSION_OUTPUT_FLOOR` | `recordDecompressionOutputFloor` |
+| CLI                                     | Environment                                  | CRD `brokerTuning`                 |
+| --------------------------------------- | -------------------------------------------- | ---------------------------------- |
+| `--record-decompression-max-ratio`      | `KRABKA_RECORD_DECOMPRESSION_MAX_RATIO`      | `recordDecompressionMaxRatio`      |
+| `--record-decompression-output-floor`   | `KRABKA_RECORD_DECOMPRESSION_OUTPUT_FLOOR`   | `recordDecompressionOutputFloor`   |
 | `--record-decompression-output-ceiling` | `KRABKA_RECORD_DECOMPRESSION_OUTPUT_CEILING` | `recordDecompressionOutputCeiling` |
 
 File configuration uses the matching snake-case names in `[runtime]`.

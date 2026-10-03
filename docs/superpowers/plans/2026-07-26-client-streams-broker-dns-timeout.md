@@ -45,12 +45,14 @@
 ### Task 1: Carry One Typed Timeout Through Client Streams
 
 **Files:**
+
 - Modify: `crates/client-streams/src/runtime/io_broker.rs`
 - Modify: `crates/client-streams/src/membership/client.rs`
 - Modify: `crates/client-streams/src/runtime/app.rs`
 - Modify: `crates/client-streams/src/streams_app.rs`
 
 **Interfaces:**
+
 - Consumes:
   ```rust
   krabka_client_core::ClientDnsTimeout
@@ -58,6 +60,7 @@
   ClientDnsTimeout::duration() -> Duration
   ```
 - Produces:
+
   ```rust
   KafkaStreams::builder().broker_dns_timeout(ClientDnsTimeout)
   StreamsApp::builder().broker_dns_timeout(ClientDnsTimeout)
@@ -406,17 +409,20 @@ git commit -m "feat(streams): bound broker DNS"
 ### Task 2: Expose the Demo Stream-Role Boundary
 
 **Files:**
+
 - Modify: `crates/observability-demo-app/src/main.rs`
 - Create: `crates/observability-demo-app/tests/streams_dns_config.rs`
 - Modify: `crates/observability-demo-app/tests/observability_demo_config.rs`
 - Modify: `demo/observability/docker-compose.yml`
 
 **Interfaces:**
+
 - Consumes:
   ```rust
   StreamsApp::builder().broker_dns_timeout(ClientDnsTimeout)
   ```
 - Produces:
+
   ```text
   --streams-broker-dns-timeout-ms
   KRABKA_DEMO_STREAMS_BROKER_DNS_TIMEOUT_MS
@@ -724,9 +730,11 @@ git commit -m "feat(demo): expose Streams DNS timeout"
 ### Task 3: Audit Evidence, Whole-Slice Review, and Publication
 
 **Files:**
+
 - Modify: `docs/configuration-audit.md`
 
 **Interfaces:**
+
 - Consumes: Tasks 1-2 complete process path.
 - Produces: an auditable closure record for Client Streams broker DNS and the
   next unresolved owner; it does not close the repository-wide goal.

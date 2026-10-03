@@ -43,7 +43,7 @@ crates/protocol/schemas/
 Only the four schemas that declare wider version ranges in 3.6.2 are
 vendored. Each file is taken verbatim from `kafka.git@3.6.2`, so its
 `validVersions` is whatever 3.6.2 declared (overlap with the modern
-decoder is fine — the wire router only routes the *legacy-exclusive*
+decoder is fine — the wire router only routes the _legacy-exclusive_
 range Produce v0–2 / Fetch v0–3 to the legacy decoder; overlap
 versions go to the modern decoder). Everything else stays in the
 existing top-level layout. The `README.md` records the upstream tag
@@ -160,13 +160,13 @@ snappy compression set. The records themselves don't change.
 
 ### Error handling
 
-| Failure                                     | Response                          |
-|---------------------------------------------|------------------------------------|
-| `legacy_to_v2` returns parse error          | `CORRUPT_MESSAGE` per partition    |
-| `v2_to_legacy` returns error                | log + close connection (server bug)|
-| Zstd decompress fails during down-conv      | `CORRUPT_MESSAGE` per partition    |
-| Wrong-decoder for version (impossible)      | unreachable; wire router enforces  |
-| Snappy re-compress fails                    | log + close connection (server bug)|
+| Failure                                | Response                            |
+| -------------------------------------- | ----------------------------------- |
+| `legacy_to_v2` returns parse error     | `CORRUPT_MESSAGE` per partition     |
+| `v2_to_legacy` returns error           | log + close connection (server bug) |
+| Zstd decompress fails during down-conv | `CORRUPT_MESSAGE` per partition     |
+| Wrong-decoder for version (impossible) | unreachable; wire router enforces   |
+| Snappy re-compress fails               | log + close connection (server bug) |
 
 ## Testing
 
@@ -174,7 +174,7 @@ snappy compression set. The records themselves don't change.
   for each of the four adapter impls, including the modern-only fields
   that get defaulted.
 - **Codegen snapshot**: add `kafka_3_6_2/{ProduceRequest,ProduceResponse,
-  FetchRequest,FetchResponse}.{owned,borrowed}.rs` under
+FetchRequest,FetchResponse}.{owned,borrowed}.rs` under
   `crates/protocol-codegen/tests/snapshots/`. Driven by extending
   `CURATED` with the new spec set.
 - **Broker integration (`crates/broker/tests/legacy_protocol.rs`, new)**:

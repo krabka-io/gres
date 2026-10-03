@@ -16,7 +16,9 @@ it for the symmetric KTable-KTable join.
 ## 2. Goal & non-goals
 
 ### Goal
+
 KTable-KTable join (inner/left/outer) in the DSL:
+
 ```rust
 KTable<K,VA>::join<VB,VR,F>(&self, other: &KTable<K,VB>, joiner: F) -> KTable<K,VR>      // inner
     where F: Fn(&VA, &VB) -> VR + Clone + Send + Sync + 'static;
@@ -25,6 +27,7 @@ KTable<K,VA>::left_join<VB,VR,F>(&self, other, joiner) -> KTable<K,VR>          
 KTable<K,VA>::outer_join<VB,VR,F>(&self, other, joiner) -> KTable<K,VR>                   // outer
     where F: Fn(Option<&VA>, Option<&VB>) -> VR + …;
 ```
+
 - A change on **either** input recomputes the join against the other side's current
   value and emits a `Change<VR>` to the result KTable.
 - Both inputs must be **materialized** (have a store + source topic).
@@ -34,6 +37,7 @@ KTable<K,VA>::outer_join<VB,VR,F>(&self, other, joiner) -> KTable<K,VR>         
 - Byte-exact vs JVM 4.1 (a captured `ktable_ktable_join` golden frame).
 
 ### Non-goals (deferred)
+
 - **Materialized** join result (a result store/changelog) — value-getter only.
 - **Windowed** joins → 4d; GlobalKTable joins, foreign-key joins, self-join → later.
 - Joining a **non-materialized** KTable (derived KTable without a store).
@@ -41,15 +45,17 @@ KTable<K,VA>::outer_join<VB,VR,F>(&self, other, joiner) -> KTable<K,VR>         
 ## 3. Architecture — dual processors + merger
 
 A KTable-KTable join is symmetric → two join processors + a merger:
+
 ```
 A node ──► JoinThis  (on A-change, reads B store)  ──┐
                                                       ├──► merger ──► result KTable<K,VR>
 B node ──► JoinOther (on B-change, reads A store)  ──┘
 ```
+
 Both processors connect to **both** source stores (4c-ii `connect_processor_store`)
 → grouping unions A, B, and the join into **one subtopology** (copartitioned). The
 merger is a passthrough node with the two join processors as predecessors (like
-`merge`); it *is* the result KTable's underlying node.
+`merge`); it _is_ the result KTable's underlying node.
 
 ## 4. Join processors & `Change` merge (`dsl/processors/ktable_join.rs`)
 
@@ -57,12 +63,15 @@ A unified **result rule** parameterized by required-ness flags handles all three
 join types. `JoinKind { a_required: bool, b_required: bool }` — inner `{true,true}`,
 left (`a.left_join(b)`) `{true,false}`, outer `{false,false}`. The joiner is stored
 in **outer form** `Fn(Option<&VA>, Option<&VB>) -> VR`:
+
 ```rust
 fn result(a: Option<&VA>, b: Option<&VB>) -> Option<VR> =
     if (a.is_some() || !a_required) && (b.is_some() || !b_required) && (a.is_some() || b.is_some())
     { Some(joiner(a, b)) } else { None }   // None = no row (tombstone if a row existed)
 ```
+
 Two processors (each connected to both stores):
+
 - **`KTableKTableJoinThisProcessor`** (`Processor<K, Change<VA>, K, Change<VR>>`):
   on A's `Change{oldA,newA}` for `k`, `bCur = bStore.get(k)`; forward
   `Change{ old: result(oldA, bCur), new: result(newA, bCur) }`.
@@ -83,6 +92,7 @@ unchanged) with two predecessors — the JVM `KTableKTableJoinMerger`.
 
 `join`/`left_join`/`outer_join` on `KTable<K,VA>` (parent forwards `Change<VA>`;
 `other: &KTable<K,VB>` forwards `Change<VB>`):
+
 - Require both materialized: `a_store = self.store_name().expect(..)`,
   `b_store = other.store_name().expect(..)`; `a_src = self.source_topic()`,
   `b_src = other.source_topic()` (for the copartition group).
@@ -93,7 +103,7 @@ unchanged) with two predecessors — the JVM `KTableKTableJoinMerger`.
 - Record nodes: `JoinThis` (pred = self.node), `JoinOther` (pred = other.node),
   `merger` (preds = [JoinThis, JoinOther]). Thunks:
   - JoinThis: `add_processor::<K, Change<VA>, K, Change<VR>, …>(name, || KTableKTableJoinThisProcessor{…}, [self_handle])`
-    + `connect_processor_store(name, a_store)` + `connect_processor_store(name, b_store)`.
+    - `connect_processor_store(name, a_store)` + `connect_processor_store(name, b_store)`.
   - JoinOther: same with B parent + both store connections.
   - merger: `add_processor::<K, Change<VR>, K, Change<VR>, …>(merge_name, || passthrough, [joinThis_handle, joinOther_handle])`.
   - `add_copartition_group([a_src, b_src])` (when both Some).
@@ -126,16 +136,18 @@ changelog**. The **7 prior golden frames stay byte-identical**.
 4. **Regression** — all #1/#2/#3/#4/#4c-i/#4c-ii tests stay green.
 
 ## 8. Success criteria
+
 - `KTable::join`/`left_join`/`outer_join` work (execution: inner/left/outer +
   tombstone) and the join topology byte-matches captured JVM 4.1 output (incl.
   copartition + both source changelogs, no result changelog).
 - The 7 prior golden frames unchanged.
 - `cargo test -p krabka-client-streams` green; `cargo clippy --workspace
-  --all-targets -- -D warnings` + `cargo fmt --check` clean; `cargo build
-  --workspace`.
+--all-targets -- -D warnings` + `cargo fmt --check` clean; `cargo build
+--workspace`.
 - A documented KTable-KTable join example/note in `lib.rs`.
 
 ## 9. Open points for the plan
+
 - **Subtopology placement** — confirm via the fixture that A, B, and both join
   processors land in ONE subtopology (the double store-connection unions them).
 - **Result changelog** — confirm the fixture has NO result changelog (unmaterialized
@@ -148,4 +160,4 @@ changelog**. The **7 prior golden frames stay byte-identical**.
   result directly); not wire-visible, but the result KTable must root at one node so
   downstream ops have a single parent. A merger node is the clean choice.
 - **`KTABLE-JOIN*` name prefixes / counter** — not wire-visible; the store/changelog
-  + copartition indices are; the fixture pins them.
+  - copartition indices are; the fixture pins them.

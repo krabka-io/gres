@@ -63,13 +63,13 @@ CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
 ```
 
 - [ ] Add `ConsumerFetchMaxBytes(i32)` and
-  `ConsumerFetchPartitionMaxBytes(i32)` beside the classic consumer
-  configuration types. Validate with `GreaterI32<0>`, implement `new`,
-  `bytes`, `size`, `Display`, and `FromStr`, and re-export both from `lib.rs`.
+      `ConsumerFetchPartitionMaxBytes(i32)` beside the classic consumer
+      configuration types. Validate with `GreaterI32<0>`, implement `new`,
+      `bytes`, `size`, `Display`, and `FromStr`, and re-export both from `lib.rs`.
 
 - [ ] Keep `Consumer::builder()` accepting `ByteSize`. Do not change
-  `DEFAULT_FETCH_MAX`, `DEFAULT_FETCH_PARTITION_MAX`, or duplicate its existing
-  fail-fast checks.
+      `DEFAULT_FETCH_MAX`, `DEFAULT_FETCH_PARTITION_MAX`, or duplicate its existing
+      fail-fast checks.
 
 - [ ] Verify GREEN and package quality:
 
@@ -96,7 +96,7 @@ git commit -m "feat(consumer): validate fetch byte settings"
 ### Task 2: Configure every traces WAL consumer
 
 - [ ] Add failing CLI tests for preserved defaults, invalid values, environment
-  values, and command-line precedence:
+      values, and command-line precedence:
 
 ```text
 KRABKA_TRACES_WAL_FETCH_MAX_BYTES=1024
@@ -115,7 +115,7 @@ CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
 ```
 
 - [ ] Replace `WAL_FETCH_MAX` and `WAL_FETCH_PARTITION_MAX` with raw named
-  service defaults and two small typed-default functions used by Clap.
+      service defaults and two small typed-default functions used by Clap.
 
 - [ ] Add:
 
@@ -128,11 +128,11 @@ KRABKA_TRACES_WAL_FETCH_PARTITION_MAX_BYTES
 ```
 
 - [ ] Pass both typed values into the shared `wal_consumer` helper and convert
-  with `size()` at the consumer-builder call. Update all four call paths:
-  block-builder, live-store, embedded querier live-store, and
-  metrics-generator. The required helper arguments make omitted propagation a
-  compile error; do not add a mock Kafka service solely to inspect builder
-  state.
+      with `size()` at the consumer-builder call. Update all four call paths:
+      block-builder, live-store, embedded querier live-store, and
+      metrics-generator. The required helper arguments make omitted propagation a
+      compile error; do not add a mock Kafka service solely to inspect builder
+      state.
 
 - [ ] Verify GREEN, caller coverage, help, and package quality:
 
@@ -165,11 +165,11 @@ git commit -m "feat(traces): configure WAL fetch limits"
 ### Task 3: Configure the profiles block-builder consumer
 
 - [ ] Add failing `BlockBuilderConfig` tests proving its defaults preserve
-  2,097,152 and 262,144 bytes and configured values survive in the config.
+      2,097,152 and 262,144 bytes and configured values survive in the config.
 
 - [ ] Add failing profiles CLI tests for invalid values, environment values,
-  and command-line precedence using the same values and child-process pattern
-  as traces.
+      and command-line precedence using the same values and child-process pattern
+      as traces.
 
 - [ ] Verify RED:
 
@@ -179,15 +179,15 @@ CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
 ```
 
 - [ ] Add typed `wal_fetch_max_bytes` and
-  `wal_fetch_partition_max_bytes` fields to `BlockBuilderConfig`. Its existing
-  constructor supplies the preserved service defaults through two public
-  typed-default functions that the profiles CLI also reuses.
+      `wal_fetch_partition_max_bytes` fields to `BlockBuilderConfig`. Its existing
+      constructor supplies the preserved service defaults through two public
+      typed-default functions that the profiles CLI also reuses.
 
 - [ ] Change `run_with_config` to call `.size()` and pass the resulting
-  `ByteSize` values to `Consumer::builder`.
+      `ByteSize` values to `Consumer::builder`.
 
 - [ ] Add the profiles CLI/environment arguments and copy them into
-  `BlockBuilderConfig` for `Target::BlockBuilder`.
+      `BlockBuilderConfig` for `Target::BlockBuilder`.
 
 - [ ] Verify GREEN, help, and package quality:
 
@@ -239,7 +239,7 @@ CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
 ```
 
 - [ ] Add only those four environment entries. Do not add unused values to
-  demo roles that do not run the affected consumers.
+      demo roles that do not run the affected consumers.
 
 - [ ] Verify GREEN and rendered Compose:
 
@@ -283,8 +283,8 @@ configured default, validation, propagation, deployment, or compatibility
 reference rather than an unresolved owner.
 
 - [ ] Append a WAL-fetch-limits section to `docs/configuration-audit.md` with
-  defaults, validation, precedence, UOM flow, production callers, deployment
-  wiring, exact counts, and verification evidence.
+      defaults, validation, precedence, UOM flow, production callers, deployment
+      wiring, exact counts, and verification evidence.
 
 - [ ] Run final gates:
 

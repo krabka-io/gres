@@ -46,12 +46,14 @@
 ### Task 1: Validate the library cache budget
 
 **Files:**
+
 - Modify: `crates/client-streams/src/runtime/app.rs`
 - Modify: `crates/client-streams/src/runtime/mod.rs`
 - Modify: `crates/client-streams/src/streams_app.rs`
 - Modify: `crates/client-streams/src/lib.rs`
 
 **Interfaces:**
+
 - Produces:
   `pub const DEFAULT_STREAMS_STATE_STORE_CACHE_MAX_BYTES: i64 = 10_485_760`
 - Produces:
@@ -343,6 +345,7 @@ git commit -m "feat(streams): validate cache byte budget"
 ### Task 2: Expose the demo CLI, environment, and Compose setting
 
 **Files:**
+
 - Modify: `crates/observability-demo-app/src/main.rs`
 - Create:
   `crates/observability-demo-app/tests/streams_state_store_cache_config.rs`
@@ -351,6 +354,7 @@ git commit -m "feat(streams): validate cache byte budget"
 - Modify: `demo/observability/docker-compose.yml`
 
 **Interfaces:**
+
 - Consumes: `StreamsStateStoreCacheMaxBytes`
 - Produces: `--streams-state-store-cache-max-bytes`
 - Produces: `KRABKA_DEMO_STREAMS_STATE_STORE_CACHE_MAX_BYTES`
@@ -565,9 +569,11 @@ git commit -m "feat(demo): expose cache byte budget"
 ### Task 3: Record the completed owner and final verification
 
 **Files:**
+
 - Modify: `docs/configuration-audit.md`
 
 **Interfaces:**
+
 - Consumes: the completed library, demo, and Compose behavior from Tasks 1-2
 - Produces: an exclusive focused-search classification and the next
   production-consumed configuration owner
@@ -600,7 +606,7 @@ Append `## Client Streams State-Store Cache Budget` to
 - the compatibility-preserving raw setters and single pre-I/O validation
   boundary;
 - the exact `StreamsApp -> KafkaStreams -> StreamThread -> instantiate ->
-  ThreadCache` flow;
+ThreadCache` flow;
 - the demo CLI, environment, precedence, role restriction, and Compose owner;
 - the reason no CRD exists;
 - the exact scanner and focused-search commands and measured classifications;

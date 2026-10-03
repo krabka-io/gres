@@ -16,17 +16,17 @@ A library crate (`krabka-broker`) plus a thin `krabka-broker` binary. The librar
 
 Handler implementations for exactly these API keys; everything else replies with `UNSUPPORTED_VERSION` (35):
 
-| API key | Name              | Why we need it                                                                   |
-|--------:|-------------------|----------------------------------------------------------------------------------|
-| 18      | ApiVersions       | First call from every Kafka client; without it nothing else negotiates.          |
-| 3       | Metadata          | Drives topic + partition + leader discovery for both producer and consumer.      |
-| 19      | CreateTopics      | `kafka-topics --create`.                                                         |
-| 20      | DeleteTopics      | `kafka-topics --delete`, plus cleanup between test runs.                         |
-| 0       | Produce           | `kafka-console-producer`.                                                        |
-| 1       | Fetch             | `kafka-console-consumer`.                                                        |
-| 2       | ListOffsets       | Consumer queries beginning / latest / by-timestamp before its first Fetch.       |
-| 32      | DescribeConfigs   | `kafka-topics --describe` probes this.                                           |
-| 10      | FindCoordinator   | Consumer always sends this; we stub-fail with `COORDINATOR_NOT_AVAILABLE` (15).  |
+| API key | Name            | Why we need it                                                                  |
+| ------: | --------------- | ------------------------------------------------------------------------------- |
+|      18 | ApiVersions     | First call from every Kafka client; without it nothing else negotiates.         |
+|       3 | Metadata        | Drives topic + partition + leader discovery for both producer and consumer.     |
+|      19 | CreateTopics    | `kafka-topics --create`.                                                        |
+|      20 | DeleteTopics    | `kafka-topics --delete`, plus cleanup between test runs.                        |
+|       0 | Produce         | `kafka-console-producer`.                                                       |
+|       1 | Fetch           | `kafka-console-consumer`.                                                       |
+|       2 | ListOffsets     | Consumer queries beginning / latest / by-timestamp before its first Fetch.      |
+|      32 | DescribeConfigs | `kafka-topics --describe` probes this.                                          |
+|      10 | FindCoordinator | Consumer always sends this; we stub-fail with `COORDINATOR_NOT_AVAILABLE` (15). |
 
 Topic provisioning is RPC-only — no auto-topic-creation on Produce, no static config file. Metadata mutation goes exclusively through CreateTopics / DeleteTopics.
 
@@ -81,10 +81,10 @@ crates/broker/
 - **`partition_writer`** — single task per partition. Loop: `recv` a `ProduceJob`, call `log.append(&mut batch)`, send the assigned base offset back on the oneshot. Sole owner of `&mut Log`. On `log.append` error, propagates the error back via oneshot — never panics out of the supervisor's reach.
 - **`network::*`** — `TcpListener::bind(config.listen_addr)`, accept loop spawns one task per connection. The task wraps the stream in `LengthDelimitedCodec` (same big-endian i32 framing as `krabka-client-core`), parses each request via `RequestHeader::decode`, dispatches to the right handler, encodes the response via `Response::encode`. Connection-level errors (frame decode failure, peer disconnect) close the stream; broker stays up.
 - **`handlers/*`** — one module per supported API key. Each implements:
-    ```rust
-    async fn handle(broker: &Broker, version: i16, req: Req) -> Result<Resp, BrokerError>
-    ```
-    Routing built at startup as a `HashMap<i16, fn pointer>`. Anything not in the table responds with `UNSUPPORTED_VERSION`.
+  ```rust
+  async fn handle(broker: &Broker, version: i16, req: Req) -> Result<Resp, BrokerError>
+  ```
+  Routing built at startup as a `HashMap<i16, fn pointer>`. Anything not in the table responds with `UNSUPPORTED_VERSION`.
 - **`log_dir`** — path helpers (`<log_dir>/<topic>-<partition>/`) and the startup-scan routine that walks the directory and registers existing partitions.
 
 ## Data flow
@@ -160,18 +160,18 @@ Two layers, distinct audiences.
 
 Per-(topic, partition) `error_code: i16` fields are populated with the canonical Apache Kafka codes; JVM clients react to specific codes and will misbehave if we substitute. Codes the MVP must emit correctly:
 
-| Code | Name                          | When |
-|-----:|-------------------------------|------|
-| 0    | NONE                          | Success. |
-| 1    | UNKNOWN_SERVER_ERROR          | Internal `BrokerError` we didn't map. Includes `tracing::error!` on the broker side. |
-| 3    | UNKNOWN_TOPIC_OR_PARTITION    | Topic / partition not in registry. |
-| 6    | NOT_LEADER_OR_FOLLOWER        | Partition was alive at metadata-lookup time but its writer mpsc is now closed. |
-| 7    | REQUEST_TIMED_OUT             | `timeout_ms` exceeded waiting for partition writer ack. |
-| 15   | COORDINATOR_NOT_AVAILABLE     | FindCoordinator stub response. |
-| 35   | UNSUPPORTED_VERSION           | API key + version combination not in our handler routing table. |
-| 36   | TOPIC_ALREADY_EXISTS          | CreateTopics on an existing name. |
-| 37   | INVALID_PARTITIONS            | CreateTopics with `partition_count <= 0`. |
-| 41   | NOT_CONTROLLER                | (Reserved — admin clients sometimes route topic ops through "the controller". We're it.) |
+| Code | Name                       | When                                                                                     |
+| ---: | -------------------------- | ---------------------------------------------------------------------------------------- |
+|    0 | NONE                       | Success.                                                                                 |
+|    1 | UNKNOWN_SERVER_ERROR       | Internal `BrokerError` we didn't map. Includes `tracing::error!` on the broker side.     |
+|    3 | UNKNOWN_TOPIC_OR_PARTITION | Topic / partition not in registry.                                                       |
+|    6 | NOT_LEADER_OR_FOLLOWER     | Partition was alive at metadata-lookup time but its writer mpsc is now closed.           |
+|    7 | REQUEST_TIMED_OUT          | `timeout_ms` exceeded waiting for partition writer ack.                                  |
+|   15 | COORDINATOR_NOT_AVAILABLE  | FindCoordinator stub response.                                                           |
+|   35 | UNSUPPORTED_VERSION        | API key + version combination not in our handler routing table.                          |
+|   36 | TOPIC_ALREADY_EXISTS       | CreateTopics on an existing name.                                                        |
+|   37 | INVALID_PARTITIONS         | CreateTopics with `partition_count <= 0`.                                                |
+|   41 | NOT_CONTROLLER             | (Reserved — admin clients sometimes route topic ops through "the controller". We're it.) |
 
 ### Internal `BrokerError`
 

@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make `krabka-blockstore` a *fourth*-signal tenant by adding a `ProfileIndex` (`impl BlockIndex`) — label-series postings that **reuse the metrics `SeriesIndex` label-postings machinery** (do not break `SeriesIndex`/`TraceIndex`; regression-tested), a **profile-type index** (`__profile_type__` → series fingerprints), per-block time-range, and a **stacktrace-partition map**. Define the **flattened profile-samples fact-table** column constants + Arrow/Parquet schema — *one row per SAMPLE* (a deliberate Crabka choice; semantic compat, not phlaredb byte-format) — and the on-block **symbol-DB artifact**: a per-partition parent-pointer stacktrace tree (`node { parent: i32, location_ref: i32 }`, `stacktrace_id = leaf node index`, intern dedups via the tree, resolve climbs parents leaf→root) + dedup tables (locations/functions/mappings/strings, `strings[0] == ""`) with `encode`/`decode`. The headline is the **stacktrace-tree dedup + resolve round-trip property test** — symbols are ~60% of a block's size, so dedup is the dominant lever.
+**Goal:** Make `krabka-blockstore` a _fourth_-signal tenant by adding a `ProfileIndex` (`impl BlockIndex`) — label-series postings that **reuse the metrics `SeriesIndex` label-postings machinery** (do not break `SeriesIndex`/`TraceIndex`; regression-tested), a **profile-type index** (`__profile_type__` → series fingerprints), per-block time-range, and a **stacktrace-partition map**. Define the **flattened profile-samples fact-table** column constants + Arrow/Parquet schema — _one row per SAMPLE_ (a deliberate Crabka choice; semantic compat, not phlaredb byte-format) — and the on-block **symbol-DB artifact**: a per-partition parent-pointer stacktrace tree (`node { parent: i32, location_ref: i32 }`, `stacktrace_id = leaf node index`, intern dedups via the tree, resolve climbs parents leaf→root) + dedup tables (locations/functions/mappings/strings, `strings[0] == ""`) with `encode`/`decode`. The headline is the **stacktrace-tree dedup + resolve round-trip property test** — symbols are ~60% of a block's size, so dedup is the dominant lever.
 
-**Architecture:** Pure data layer — no networking, no DataFusion query layer, no Kafka, **no query language** (profiles has none). This slice lands mostly in `krabka-blockstore` (the `ProfileIndex` + the samples-fact-table schema/constants) and *starts* `krabka-pprof` only for the `Frame` + `SymbolDb` types (they are shared: the engine in slice 2 consumes them, and the block-builder in slice 4 interns/resolves through them, so they live in `krabka-pprof` from day one rather than being moved later). The `ProfileIndex`'s label dimension *is* a `SeriesIndex`-style postings index — it **embeds a `SeriesIndex`** for the label/matcher resolution and layers a profile-type index + a stacktrace-partition map on top, so the metrics postings machinery is reused verbatim, not re-implemented. The samples schema is one-row-per-sample (phlaredb is one-row-per-profile with nested `Samples[]`; we flatten for a columnar DataFusion-native fold). The `(stacktrace_partition, stacktrace_id)` slot into the symbol DB is *raw* — never symbolized at rest.
+**Architecture:** Pure data layer — no networking, no DataFusion query layer, no Kafka, **no query language** (profiles has none). This slice lands mostly in `krabka-blockstore` (the `ProfileIndex` + the samples-fact-table schema/constants) and _starts_ `krabka-pprof` only for the `Frame` + `SymbolDb` types (they are shared: the engine in slice 2 consumes them, and the block-builder in slice 4 interns/resolves through them, so they live in `krabka-pprof` from day one rather than being moved later). The `ProfileIndex`'s label dimension _is_ a `SeriesIndex`-style postings index — it **embeds a `SeriesIndex`** for the label/matcher resolution and layers a profile-type index + a stacktrace-partition map on top, so the metrics postings machinery is reused verbatim, not re-implemented. The samples schema is one-row-per-sample (phlaredb is one-row-per-profile with nested `Samples[]`; we flatten for a columnar DataFusion-native fold). The `(stacktrace_partition, stacktrace_id)` slot into the symbol DB is _raw_ — never symbolized at rest.
 
-**Tech Stack:** Rust 2024 · `arrow` 59 (`array`, `datatypes`, `record_batch`) · `parquet` 59 · `object_store` 0.13 · `serde` / `serde-wincode` (the symbol-DB artifact codec — workspace convention) · `thiserror`. Tests: `assert2`, `proptest`, `tempfile`, `object_store::memory::InMemory`, `#[tokio::test]` (`tokio` dev-dep features `["macros", "rt-multi-thread"]`). `krabka-pprof` is a *new* crate started here; `krabka-blockstore` is modified in place.
+**Tech Stack:** Rust 2024 · `arrow` 59 (`array`, `datatypes`, `record_batch`) · `parquet` 59 · `object_store` 0.13 · `serde` / `serde-wincode` (the symbol-DB artifact codec — workspace convention) · `thiserror`. Tests: `assert2`, `proptest`, `tempfile`, `object_store::memory::InMemory`, `#[tokio::test]` (`tokio` dev-dep features `["macros", "rt-multi-thread"]`). `krabka-pprof` is a _new_ crate started here; `krabka-blockstore` is modified in place.
 
 ## Global Constraints
 
@@ -16,21 +16,21 @@
 - **Formatting:** run `cargo fmt -p krabka-blockstore` (and `-p krabka-pprof`) before every commit. **NEVER** run `cargo +nightly fmt --all` — it fails with OS error 206 / path-too-long in deep worktrees on Windows; always scope with `-p`.
 - **Assertions:** `assert2::assert!` / `assert2::check!` in tests, `prop_assert*` inside `proptest!`.
 - **Async tests:** `#[tokio::test]`. Crate dev-dep `tokio` features = `["macros", "rt-multi-thread"]`.
-- **Dependency pin (locked, for the DataFusion-touching slices 5+):** `datafusion = { git = "https://github.com/apache/datafusion", rev = "0838a4ddb902535b0e95a1c5a254be7e9c7fe9bf" }` (tracks arrow 59 / parquet 59 / object_store 0.13). This slice adds **no** DataFusion dependency — the samples *schema* is plain Arrow `SchemaRef`, materialized into blocks by slice 4's block-builder and queried by slice 5's querier. Note the future dep; gate nothing on it here.
+- **Dependency pin (locked, for the DataFusion-touching slices 5+):** `datafusion = { git = "https://github.com/apache/datafusion", rev = "0838a4ddb902535b0e95a1c5a254be7e9c7fe9bf" }` (tracks arrow 59 / parquet 59 / object_store 0.13). This slice adds **no** DataFusion dependency — the samples _schema_ is plain Arrow `SchemaRef`, materialized into blocks by slice 4's block-builder and queried by slice 5's querier. Note the future dep; gate nothing on it here.
 - **Arrow version identity:** import `arrow`/`parquet` directly (`use arrow::...`) as the existing blockstore does; all of arrow/parquet/object_store unify to one instance, so the schemas this slice produces are consumable by blockstore's `BlockWriter` without conversion.
 - **Reuse, don't fork, `SeriesIndex`.** The `ProfileIndex` **embeds** a `SeriesIndex` for label/matcher resolution and postings — it does **not** copy the `(name,value) → fingerprints` postings logic. The `SeriesIndex` extraction from the traces slice (`Index` → `SeriesIndex` behind `BlockIndex`) must stay behavior-preserving: every existing `SeriesIndex`/`TraceIndex` test keeps passing unchanged. This is the regression net.
 - **One row per SAMPLE.** The samples fact table is a deliberate Crabka flattening — `(series_fingerprint, timestamp, profile_type, stacktrace_id, value, stacktrace_partition, total_value, span_id, trace_id)`, one Arrow row per pprof sample. This is Pyroscope semantic/API compat, **not** phlaredb block-format compat (greenfield — no block-format interop required).
-- **Symbols are ~60% of a block; dedup is the lever.** The symbol DB's intern step dedups strings/functions/locations/mappings *and* the parent-pointer stacktrace tree (identical stacks share a path). The headline property test pins the dedup + resolve round-trip.
+- **Symbols are ~60% of a block; dedup is the lever.** The symbol DB's intern step dedups strings/functions/locations/mappings _and_ the parent-pointer stacktrace tree (identical stacks share a path). The headline property test pins the dedup + resolve round-trip.
 
 ---
 
 ## Dependency & slice roadmap
 
-**Depends on:** `krabka-blockstore` *(as designed in `docs/superpowers/plans/2026-06-18-crabka-blockstore.md`, generalized by the traces slice 1 `docs/superpowers/plans/2026-06-18-crabka-traces-slice1-blockstore-generalize-traceindex.md`)* — the `BlockIndex` trait + `BlockSchema`/`RequiredColumn`/`validate_against`, `SeriesIndex` (the label-postings impl this slice embeds), `BlockStore<I>`, `BlockWriter`/`write_block`/`read_block`, `BlockMeta`, `Labels`/`LabelMatcher`/`MatchOp`, `SeriesFingerprint`, `COL_FINGERPRINT = "series_fingerprint"` (UInt64), `COL_TIMESTAMP = "timestamp"` (Int64). This slice **modifies** blockstore in place (adds `ProfileIndex` + the profile-samples schema) and **starts** `krabka-pprof` (the `Frame` + `SymbolDb` types only). The `krabka-profiles` service crate is **not** started here.
+**Depends on:** `krabka-blockstore` _(as designed in `docs/superpowers/plans/2026-06-18-crabka-blockstore.md`, generalized by the traces slice 1 `docs/superpowers/plans/2026-06-18-crabka-traces-slice1-blockstore-generalize-traceindex.md`)_ — the `BlockIndex` trait + `BlockSchema`/`RequiredColumn`/`validate_against`, `SeriesIndex` (the label-postings impl this slice embeds), `BlockStore<I>`, `BlockWriter`/`write_block`/`read_block`, `BlockMeta`, `Labels`/`LabelMatcher`/`MatchOp`, `SeriesFingerprint`, `COL_FINGERPRINT = "series_fingerprint"` (UInt64), `COL_TIMESTAMP = "timestamp"` (Int64). This slice **modifies** blockstore in place (adds `ProfileIndex` + the profile-samples schema) and **starts** `krabka-pprof` (the `Frame` + `SymbolDb` types only). The `krabka-profiles` service crate is **not** started here.
 
 **The 8 profiles slices** (this plan = Slice 1; each later slice gets its own plan; commands use the slice's crate — `krabka-blockstore` + `krabka-pprof` here, `krabka-pprof` for 2–3, `krabka-profiles` for 4–8):
 
-1. **Blockstore `ProfileIndex` + profile-samples schema + symbol-DB artifact** *(this plan)* — `ProfileIndex` (`impl BlockIndex`, embeds `SeriesIndex`) = label postings + `__profile_type__` index + per-block time-range + stacktrace-partition map; the `PCOL_*` samples fact-table constants + `profile_samples_schema()` + `profile_samples_decl()`; the `krabka-pprof` `Frame` + `SymbolDb` (parent-pointer tree + dedup tables + `intern_stacktrace`/`resolve`/`encode`/`decode` + `SymbolSource`). **Freezes:** the `PCOL_*` constants + schema, `ProfileIndex` + its query surface (`add_series`/`resolve`/`profile_types`/`stacktrace_partitions`/`candidate_blocks_for_profile_type`), and the `SymbolDb`/`Frame`/`SymbolSource` public contract.
+1. **Blockstore `ProfileIndex` + profile-samples schema + symbol-DB artifact** _(this plan)_ — `ProfileIndex` (`impl BlockIndex`, embeds `SeriesIndex`) = label postings + `__profile_type__` index + per-block time-range + stacktrace-partition map; the `PCOL_*` samples fact-table constants + `profile_samples_schema()` + `profile_samples_decl()`; the `krabka-pprof` `Frame` + `SymbolDb` (parent-pointer tree + dedup tables + `intern_stacktrace`/`resolve`/`encode`/`decode` + `SymbolSource`). **Freezes:** the `PCOL_*` constants + schema, `ProfileIndex` + its query surface (`add_series`/`resolve`/`profile_types`/`stacktrace_partitions`/`candidate_blocks_for_profile_type`), and the `SymbolDb`/`Frame`/`SymbolSource` public contract.
 2. **`krabka-pprof` core** — the pprof model + codec, `ProfileType` parse/`Display`, the `ProfileStore` trait + pinned engine result types, the **MERGE → flamegraph** engine (fold-before-symbolize, `Tree`, 4-ints-per-bar `FlameGraph`). **Consumes** this slice's `SymbolDb`/`Frame`/`SymbolSource` + the `PCOL_*` columns. **No query parser — there is no language.**
 3. **Engine completeness** — `SelectSeries` (precomputed `total_value`, step-in-seconds, SUM/AVERAGE), `Diff` (7-ints-per-bar `FlameGraphDiff`), `max_nodes` truncation + synthetic `"other"`, `SelectMergeProfile` → pprof.
 4. **Ingest service** — the `distributor` (`push.v1` + `/ingest` + OTLP `v1development` + `relabel` + multi-value split) → `(tenant, series_fingerprint)`-partitioned WAL; the `block-builder` consumer group → the samples fact table + a per-block `SymbolDb` (interning each record's symbol set) + `ProfileIndex` (write-then-commit, idempotent keys). Defines `ProfileRecord`.
@@ -45,21 +45,21 @@
 
 `crates/blockstore/` — modified + new files:
 
-| File | Responsibility | Change |
-|---|---|---|
-| `src/lib.rs` | module decls + public re-exports | **modify** — re-export `ProfileIndex`, the `PCOL_*` constants, `profile_samples_schema`, `profile_samples_decl` |
-| `src/profile_schema.rs` | profile-samples column constants + `profile_samples_schema()` + `profile_samples_decl()` | **create** |
-| `src/profile_index.rs` | `ProfileIndex` (impl `BlockIndex`): embedded `SeriesIndex` + `__profile_type__` index + per-block time-range + stacktrace-partition map + snapshot serde | **create** |
-| `src/profile_block.rs` | profile-samples row builder: `&[ProfileSampleRow]` → `RecordBatch` matching `profile_samples_schema()` | **create** |
+| File                    | Responsibility                                                                                                                                           | Change                                                                                                          |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `src/lib.rs`            | module decls + public re-exports                                                                                                                         | **modify** — re-export `ProfileIndex`, the `PCOL_*` constants, `profile_samples_schema`, `profile_samples_decl` |
+| `src/profile_schema.rs` | profile-samples column constants + `profile_samples_schema()` + `profile_samples_decl()`                                                                 | **create**                                                                                                      |
+| `src/profile_index.rs`  | `ProfileIndex` (impl `BlockIndex`): embedded `SeriesIndex` + `__profile_type__` index + per-block time-range + stacktrace-partition map + snapshot serde | **create**                                                                                                      |
+| `src/profile_block.rs`  | profile-samples row builder: `&[ProfileSampleRow]` → `RecordBatch` matching `profile_samples_schema()`                                                   | **create**                                                                                                      |
 
 `crates/pprof/` — **new crate** (the language-less engine; this slice lands only the symbol model):
 
-| File | Responsibility | Change |
-|---|---|---|
-| `Cargo.toml` | crate manifest | **create** |
-| `src/lib.rs` | module decls + re-exports + crate docs | **create** |
-| `src/error.rs` | `ProfileError` (the engine's error enum; full variant set frozen here) | **create** |
-| `src/frame.rs` | `Frame` (a resolved stack frame) + `SymbolSource` trait | **create** |
+| File               | Responsibility                                                                                    | Change     |
+| ------------------ | ------------------------------------------------------------------------------------------------- | ---------- |
+| `Cargo.toml`       | crate manifest                                                                                    | **create** |
+| `src/lib.rs`       | module decls + re-exports + crate docs                                                            | **create** |
+| `src/error.rs`     | `ProfileError` (the engine's error enum; full variant set frozen here)                            | **create** |
+| `src/frame.rs`     | `Frame` (a resolved stack frame) + `SymbolSource` trait                                           | **create** |
 | `src/symbol_db.rs` | `SymbolDb` (parent-pointer tree + dedup tables) + `intern_stacktrace`/`resolve`/`encode`/`decode` | **create** |
 
 The symbol DB (`symbol_db.rs`) and the nested-set-equivalent tree are pure-compute, fully unit/property-testable without IO. `profile_block.rs` is the only file building Arrow record batches; `profile_index.rs` is pure in-memory + a JSON/wincode snapshot.
@@ -69,10 +69,12 @@ The symbol DB (`symbol_db.rs`) and the nested-set-equivalent tree are pure-compu
 ### Task 1: Profile-samples schema — column constants + `profile_samples_schema()` + `profile_samples_decl()`
 
 **Files:**
+
 - Create: `crates/blockstore/src/profile_schema.rs`
 - Modify: `crates/blockstore/src/lib.rs`
 
 **Interfaces:**
+
 - Consumes: `arrow::datatypes::{DataType, Field, Schema, SchemaRef}`, `BlockSchema`, `RequiredColumn`, `COL_FINGERPRINT`, `COL_TIMESTAMP`.
 - Produces:
   - Profile-samples column-name constants: `PCOL_PROFILE_TYPE` (`"profile_type"`), `PCOL_STACKTRACE_ID` (`"stacktrace_id"`), `PCOL_VALUE` (`"value"`), `PCOL_STACKTRACE_PARTITION` (`"stacktrace_partition"`), `PCOL_TOTAL_VALUE` (`"total_value"`), `PCOL_SPAN_ID` (`"span_id"`), `PCOL_TRACE_ID` (`"trace_id"`).
@@ -240,7 +242,7 @@ pub fn profile_samples_decl() -> BlockSchema {
 }
 ```
 
-> **Arrow-builder note (pin in Task 4):** `Dictionary<Int32,Utf8>` is materialized by a `StringDictionaryBuilder<Int32Type>` in Task 4. If arrow 59 names the dictionary key type or the builder differently, align the *declaration* and *schema* to the builder's actual output `DataType` (the builder is the source of truth) — keep the behavior the Task-4 `batch.schema() == profile_samples_schema()` assertion pins.
+> **Arrow-builder note (pin in Task 4):** `Dictionary<Int32,Utf8>` is materialized by a `StringDictionaryBuilder<Int32Type>` in Task 4. If arrow 59 names the dictionary key type or the builder differently, align the _declaration_ and _schema_ to the builder's actual output `DataType` (the builder is the source of truth) — keep the behavior the Task-4 `batch.schema() == profile_samples_schema()` assertion pins.
 
 - [ ] **Step 4: Wire `lib.rs`**
 
@@ -272,10 +274,12 @@ git commit -m "feat(blockstore): flattened one-row-per-sample profile-samples bl
 ### Task 2: `ProfileIndex` (impl `BlockIndex`) — embedded `SeriesIndex` + `__profile_type__` index + stacktrace-partition map + snapshot
 
 **Files:**
+
 - Create: `crates/blockstore/src/profile_index.rs`
 - Modify: `crates/blockstore/src/lib.rs`
 
 **Interfaces:**
+
 - Consumes: `BlockIndex`, `BlockMeta`, `SeriesIndex`, `Labels`, `LabelMatcher`, `SeriesFingerprint`, `Result`, `serde`, `object_store`.
 - Produces:
   - `pub const LABEL_PROFILE_TYPE: &str = "__profile_type__"` — the reserved label whose value is the 5-part profile-type string.
@@ -370,7 +374,7 @@ mod tests {
 }
 ```
 
-> **`Labels`/`LabelMatcher`/`MatchOp` import paths:** the test imports them from `crate::labels` / `crate::matcher` — adjust the `use` lines to wherever blockstore actually defines them (the blockstore plan puts `Labels`/`SeriesFingerprint` in `labels.rs` and `LabelMatcher`/`MatchOp` alongside). The asserted *behavior* is what matters; fix only the paths if they differ.
+> **`Labels`/`LabelMatcher`/`MatchOp` import paths:** the test imports them from `crate::labels` / `crate::matcher` — adjust the `use` lines to wherever blockstore actually defines them (the blockstore plan puts `Labels`/`SeriesFingerprint` in `labels.rs` and `LabelMatcher`/`MatchOp` alongside). The asserted _behavior_ is what matters; fix only the paths if they differ.
 
 - [ ] **Step 2: Run to verify it fails**
 
@@ -579,10 +583,12 @@ git commit -m "feat(blockstore): ProfileIndex (embeds SeriesIndex) + __profile_t
 ### Task 3: Profile-samples row builder — `ProfileSampleRow` → `RecordBatch` matching `profile_samples_schema()`
 
 **Files:**
+
 - Create: `crates/blockstore/src/profile_block.rs`
 - Modify: `crates/blockstore/src/lib.rs`
 
 **Interfaces:**
+
 - Consumes: every `PCOL_*` constant, `profile_samples_schema`, `COL_FINGERPRINT`, `COL_TIMESTAMP`, `Result`, `BlockStoreError`.
 - Produces:
   - `pub struct ProfileSampleRow { pub series_fingerprint: u64, pub timestamp: i64, pub profile_type: String, pub stacktrace_id: u64, pub value: i64, pub stacktrace_partition: u64, pub total_value: i64, pub span_id: Option<u64>, pub trace_id: Option<Vec<u8>> }` (`Clone`, `Debug`, `PartialEq`).
@@ -839,6 +845,7 @@ git commit -m "feat(blockstore): profile-samples row builder (dict-encoded profi
 ### Task 4: `krabka-pprof` crate scaffold + `ProfileError` + `Frame` + `SymbolSource`
 
 **Files:**
+
 - Create: `crates/pprof/Cargo.toml`
 - Create: `crates/pprof/src/lib.rs`
 - Create: `crates/pprof/src/error.rs`
@@ -846,6 +853,7 @@ git commit -m "feat(blockstore): profile-samples row builder (dict-encoded profi
 - Modify: root `Cargo.toml` (add `crates/pprof` to `members`)
 
 **Interfaces:**
+
 - Produces:
   - A compiling `krabka-pprof` crate.
   - `pub enum ProfileError { Decode(String), Plan(String), Exec(String), Store(String), Unsupported(String), Symbolize(String) }` (`thiserror`, `Debug`) — the FULL variant set, frozen here; slices 2–7 add no variants.
@@ -1035,14 +1043,16 @@ git commit -m "feat(pprof): scaffold krabka-pprof — ProfileError, Frame, Symbo
 ### Task 5: `SymbolDb` — parent-pointer stacktrace tree + dedup tables + `intern_stacktrace`/`resolve`/`encode`/`decode` (the headline)
 
 **Files:**
+
 - Create: `crates/pprof/src/symbol_db.rs`
 - Modify: `crates/pprof/src/lib.rs` (ensure `mod symbol_db;` + `pub use symbol_db::SymbolDb;`)
 
 **Interfaces:**
+
 - Consumes: `Frame`, `SymbolSource`, `ProfileError`, `serde`, `serde-wincode`.
 - Produces:
   - `pub struct SymbolDb` (`Default`, `Clone`, `Debug`, `serde::Serialize`, `serde::Deserialize`) — per-`u64`-partition parent-pointer stacktrace trees + dedup tables (`strings`/`functions`/`locations`/`mappings`), `strings[0] == ""`.
-  - `pub fn intern_stacktrace(&mut self, partition: u64, location_refs: &[u32]) -> u32` — interns a stack (a list of *location* refs, leaf→root) into the partition's parent-pointer tree, returning the **leaf node index** as the `StacktraceId`. Identical stacks dedup to the same leaf (parent-pointer path sharing).
+  - `pub fn intern_stacktrace(&mut self, partition: u64, location_refs: &[u32]) -> u32` — interns a stack (a list of _location_ refs, leaf→root) into the partition's parent-pointer tree, returning the **leaf node index** as the `StacktraceId`. Identical stacks dedup to the same leaf (parent-pointer path sharing).
   - `pub fn resolve(&self, partition: u64, stacktrace_id: u32) -> Vec<Frame>` — climb parents from the leaf, collect `location_ref`s, expand each location's `lines[]` (inlined frames, innermost-first) into `Frame`s; leaf→root order overall.
   - location/function/mapping/string interners: `pub fn intern_string(&mut self, s: &str) -> u32`, `pub fn intern_function(&mut self, f: FunctionRec) -> u32`, `pub fn intern_location(&mut self, l: LocationRec) -> u32`, `pub fn intern_mapping(&mut self, m: MappingRec) -> u32` (each dedups; returns the table index).
   - record structs: `pub struct FunctionRec { pub name: u32, pub system_name: u32, pub filename: u32, pub start_line: i64 }`; `pub struct LineRec { pub function_id: u32, pub line: i32 }`; `pub struct LocationRec { pub address: u64, pub mapping_id: u32, pub lines: Vec<LineRec> }`; `pub struct MappingRec { pub memory_start: u64, pub memory_limit: u64, pub file_offset: u64, pub filename: u32, pub build_id: u32, pub has_functions: bool, pub has_filenames: bool, pub has_line_numbers: bool, pub has_inline_frames: bool }` (all `Clone`, `Debug`, `PartialEq`, `Eq`, `Hash`, `Serialize`, `Deserialize`).
@@ -1567,12 +1577,14 @@ git commit -m "feat(pprof): SymbolDb — parent-pointer stacktrace tree + dedup 
 ## Self-review
 
 **Spec coverage (against §3.3 crate layout + §4 data model + §11 Slice 1):**
+
 - `ProfileIndex` (`impl BlockIndex`) = label-series postings **reusing the metrics `SeriesIndex`** (embedded, not forked; regression-tested by the full blockstore suite staying green) + `__profile_type__` index (`profile_types`/`fingerprints_for_profile_type`) + per-block time-range (the embedded `SeriesIndex` block list via the `BlockIndex` trait) + stacktrace-partition map (`add_profile_block`/`stacktrace_partitions`) → Task 2.
 - The flattened **one-row-per-sample** samples fact-table column constants (`PCOL_*`) + `profile_samples_schema()` (`COL_FINGERPRINT`/`COL_TIMESTAMP` + `PCOL_PROFILE_TYPE` dict + `PCOL_STACKTRACE_ID`/`PCOL_VALUE`/`PCOL_STACKTRACE_PARTITION`/`PCOL_TOTAL_VALUE`/`PCOL_SPAN_ID`/`PCOL_TRACE_ID`) + `profile_samples_decl()` → Task 1; the row builder + `BlockWriter` round-trip → Task 3.
 - The on-block **symbol-DB artifact** — per-partition parent-pointer stacktrace tree (`node { parent, location_ref }`, `stacktrace_id = leaf node index`, intern dedups via path-sharing, resolve climbs parents leaf→root with inlined-frame expansion) + dedup tables (strings/functions/locations/mappings, `strings[0] == ""`) + `encode`/`decode` + `SymbolSource` → Tasks 4, 5.
 - The headline **stacktrace-tree dedup + resolve round-trip property test** → Task 5 Step 6.
 
 **Deviations flagged (not hidden):**
+
 1. **`__profile_type__` index value type.** The shared-contract prose said "series fingerprints, as decimal strings"; the impl stores `BTreeSet<SeriesFingerprint>` directly (the embedded `SeriesIndex` already keys by `SeriesFingerprint`) — type-safe and simpler, no behavior difference. Flagged so slice 5's querier expects `SeriesFingerprint`, not a string.
 2. **`Frame`/`SymbolDb` live in `krabka-pprof` from slice 1, not `krabka-blockstore`.** The spec said the slice "starts `krabka-pprof` only for the `SymbolDb`/`Frame` types if shared" — they ARE shared (slice 2's engine + slice 4's block-builder both consume them), so they land in `krabka-pprof` now rather than in blockstore-then-moved (no-back-compat: no later move/migration). `krabka-blockstore` does NOT depend on `krabka-pprof` in this slice — the samples schema is pure Arrow; the block-builder (slice 4) is what wires the two together.
 3. **`write_block` is reused unchanged for profiles** (unlike the traces slice, which needed a declaration-aware variant for span blocks lacking `series_fingerprint`/`timestamp`). Profile-samples blocks carry both mandatory columns, so the existing summary scan works. Pinned by the Task 3 round-trip.
@@ -1582,4 +1594,4 @@ git commit -m "feat(pprof): SymbolDb — parent-pointer stacktrace tree + dedup 
 
 **Type consistency:** `PCOL_*` constants defined once (Task 1), referenced unchanged in Tasks 2/3. `ProfileSampleRow` field set identical between definition (Task 3) and the round-trip test. `SymbolDb` method set (`intern_string`/`intern_function`/`intern_location`/`intern_mapping`/`intern_stacktrace`/`resolve`/`string`/`encode`/`decode`) consistent between Task 5's definition, its unit tests, and the property test. `Frame { function, file, line }` and `SymbolSource::resolve(partition, stacktrace_id) -> Vec<Frame>` identical between Tasks 4 and 5 — and these are the exact signatures slice 2's engine and slice 7's symbolizer wrapper consume. `FunctionRec`/`LineRec`/`LocationRec`/`MappingRec` field sets are frozen here (slice 4's block-builder constructs them).
 
-**Known risk (flagged, not hidden):** Task 5 (`SymbolDb`) genuinely depends on Task 4's `Frame`/`SymbolSource`/`ProfileError`, so 4+5 are a sequential pair (the `mod symbol_db;` line in `lib.rs` ties them — land them together or stage the `mod` line per the Task 4 Step 4 note). Tasks 1, 2, 3 all touch `krabka-blockstore` but DIFFERENT new files (`profile_schema.rs`, `profile_index.rs`, `profile_block.rs`) plus the shared `lib.rs` re-export block — they can be dispatched as a parallel batch *if* the `lib.rs` edits are coordinated (each adds one `mod` + one `pub use` line; the conflict is only the single `lib.rs` file, so either serialize the three `lib.rs` edits or have one agent own `lib.rs`). Task 2's embed of `SeriesIndex` is the one place a regression could hide — the full `cargo test -p krabka-blockstore` suite staying green (Task 2 Step 6) is the guard that the embed didn't perturb `SeriesIndex`/`TraceIndex`. The `krabka-pprof` tasks (4, 5) touch a disjoint crate and run fully parallel to the blockstore tasks.
+**Known risk (flagged, not hidden):** Task 5 (`SymbolDb`) genuinely depends on Task 4's `Frame`/`SymbolSource`/`ProfileError`, so 4+5 are a sequential pair (the `mod symbol_db;` line in `lib.rs` ties them — land them together or stage the `mod` line per the Task 4 Step 4 note). Tasks 1, 2, 3 all touch `krabka-blockstore` but DIFFERENT new files (`profile_schema.rs`, `profile_index.rs`, `profile_block.rs`) plus the shared `lib.rs` re-export block — they can be dispatched as a parallel batch _if_ the `lib.rs` edits are coordinated (each adds one `mod` + one `pub use` line; the conflict is only the single `lib.rs` file, so either serialize the three `lib.rs` edits or have one agent own `lib.rs`). Task 2's embed of `SeriesIndex` is the one place a regression could hide — the full `cargo test -p krabka-blockstore` suite staying green (Task 2 Step 6) is the guard that the embed didn't perturb `SeriesIndex`/`TraceIndex`. The `krabka-pprof` tasks (4, 5) touch a disjoint crate and run fully parallel to the blockstore tasks.

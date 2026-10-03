@@ -15,7 +15,7 @@ with the offset-commit fencing + fetch path. The headline:
 > current owner — so a partition resumed after a rebalance continues from exactly its last committed offset
 > (no duplicate processing, no gap).
 
-The reconciliation engine's no-double-ownership is already verified *in isolation* (#521, which found + fixed
+The reconciliation engine's no-double-ownership is already verified _in isolation_ (#521, which found + fixed
 a real double-delivery bug). This composes it with the **offset/delivery layer** to verify the consumer-facing
 consequence — the **ownership ↔ offset seam**: a member that lost a partition via reconciliation must be
 fenced from committing a stale offset for it.
@@ -29,8 +29,8 @@ seam (a stale in-flight commit landing after a revocation). Narrower than the fi
   `reconcile_member` (the `acquire only free-or-owned` core — #521's fix), `install_target`,
   `advance_member_epoch`, group-epoch bump. The model holds a real `GroupState` and drives these methods.
 - **MODELED (faithful abstraction, NOT driving real code):** the offset-commit **fencing** rule
-  (`validate_group_commit` is async / handle-based; the rule is *a member may commit for a partition only
-  while it currently owns it at the current epoch*), the committed-offset store, and fetch-resumes-from-
+  (`validate_group_commit` is async / handle-based; the rule is _a member may commit for a partition only
+  while it currently owns it at the current epoch_), the committed-offset store, and fetch-resumes-from-
   committed. These are a small ownership/epoch predicate + a per-partition offset map.
 - **Out / NOT covered:** the `__consumer_offsets` log persistence + replication (the data-path model's
   territory), the classic (non-KIP-848) rebalance protocol (`classic_state_model`, #534), the async
@@ -51,6 +51,7 @@ hand-implements `Hash`/`Eq` over a sorted projection (per-member `assigned_parti
 `position: map<member, map<(tid,part), i64>>` (where a member has consumed to, for the no-gap/no-dup check).
 
 **Actions:**
+
 - `Join(m)` — a new member joins (added to `GroupState.members`); bump group epoch.
 - `Leave(m)` — member leaves (removed); bump group epoch.
 - `SetTarget(assignment)` — the assignor produces a new target over the tiny topic/partition universe;
@@ -66,8 +67,9 @@ hand-implements `Hash`/`Eq` over a sorted projection (per-member `assigned_parti
 ## Invariants
 
 Per-transition `next_state` asserts + `Property::always`:
+
 - **`exclusive_ownership`** (HEADLINE): no `(tid,part)` appears in two members' `assigned_partitions` — the
-  reconciliation engine never double-grants. (Re-verifies #521's property *in the composed context*, where
+  reconciliation engine never double-grants. (Re-verifies #521's property _in the composed context_, where
   joins/leaves/target-changes/heartbeats interleave with offset traffic.)
 - **`no_offset_regression`**: `committed[(tid,part)]` is monotonic non-decreasing across every transition.
 - **`only_owner_commits`**: a successful `Commit(m, …)` implies `m` owned the partition at commit time (the
@@ -107,7 +109,7 @@ drove the HWM-clamp strengthening.
 ## Verification discipline
 
 - `stateright` wrap-real; watchdog-guarded. `cargo +nightly fmt -p krabka-broker`; `cargo clippy -p
-  krabka-broker --all-targets -- -D warnings` clean. Production change limited to `#[derive(Clone)]` (and any
+krabka-broker --all-targets -- -D warnings` clean. Production change limited to `#[derive(Clone)]` (and any
   small visibility widening) on the coordinator state structs; no logic change.
 
 ## Success criteria

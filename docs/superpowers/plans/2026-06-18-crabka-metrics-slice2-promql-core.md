@@ -20,7 +20,7 @@
 - **Async tests:** `#[tokio::test]`. Crate dev-dep `tokio` features = `["macros", "rt-multi-thread"]`.
 - **Dependency pin (locked):** `datafusion = { git = "https://github.com/apache/datafusion", rev = "0838a4ddb902535b0e95a1c5a254be7e9c7fe9bf" }`. This `main` revision tracks arrow 59 / parquet 59 / object_store 0.13.2, which unify with the workspace pins (same major → cargo unifies to one crate instance, so arrow types cross the DataFusion boundary cleanly). Do **not** substitute a released `datafusion` (54.x is on arrow 58 and pulls a second, incompatible arrow major). `promql-parser = "0.10"` is parser-only (no arrow/DataFusion deps) — it cannot cause a version clash.
 - **Arrow version identity:** import `arrow` directly (`use arrow::...`) as blockstore/metrics do; all of arrow/parquet/object_store unify to one instance. If a type-mismatch error ever appears at the DataFusion boundary, switch that import to DataFusion's re-export (`datafusion::arrow`) to force identity.
-- **Churn-prone DataFusion-internal traits.** `UserDefinedLogicalNodeCore`, `ExecutionPlan`, `RecordBatchStream`, `ScalarUDFImpl`, and the `Array`/`ArrayData` plumbing for a custom array change shape between DataFusion/arrow revisions. **Do not fabricate exact trait method signatures.** Where this plan shows operator/UDF/array scaffolding it gives the *struct shape, field set, and a behavior-pinning test*, plus a **"verify against datafusion rev `0838a4d` / the GreptimeDB `src/promql/src/extension_plan/` source"** note. The test pins behavior; if a trait method's signature differs at the pinned rev, adapt the impl to satisfy the test — never change the asserted behavior. The reference implementation to mirror is GreptimeDB's `promql` crate (`extension_plan/{series_divide,normalize,instant_manipulate,range_manipulate}.rs` + `range_array.rs` + `functions/`), Apache-2.0; read it at a commit whose DataFusion is close to our pin and translate, do not copy verbatim.
+- **Churn-prone DataFusion-internal traits.** `UserDefinedLogicalNodeCore`, `ExecutionPlan`, `RecordBatchStream`, `ScalarUDFImpl`, and the `Array`/`ArrayData` plumbing for a custom array change shape between DataFusion/arrow revisions. **Do not fabricate exact trait method signatures.** Where this plan shows operator/UDF/array scaffolding it gives the _struct shape, field set, and a behavior-pinning test_, plus a **"verify against datafusion rev `0838a4d` / the GreptimeDB `src/promql/src/extension_plan/` source"** note. The test pins behavior; if a trait method's signature differs at the pinned rev, adapt the impl to satisfy the test — never change the asserted behavior. The reference implementation to mirror is GreptimeDB's `promql` crate (`extension_plan/{series_divide,normalize,instant_manipulate,range_manipulate}.rs` + `range_array.rs` + `functions/`), Apache-2.0; read it at a commit whose DataFusion is close to our pin and translate, do not copy verbatim.
 - **Counter-reset/extrapolation is the #1 correctness trap.** `rate`/`increase` must match Prometheus byte-for-byte: reset-correct on any decrease, `avgDurationBetweenSamples = sampledInterval / (n-1)`, `1.1×` boundary-extension threshold, extrapolation capped at half the average interval on each side, positive-counter zero-anchor clamp (if the extrapolated start goes below zero for an all-non-negative series, clamp the left extension to the distance to zero). Implement against spec §6.2 and pin with literal-value tests drawn from Prometheus's own `functions.test`.
 
 ---
@@ -28,13 +28,14 @@
 ## Dependency & slice roadmap
 
 **Depends on:**
-- `krabka-blockstore` (built — logs wedge Phase 1): `BlockStore`, `BlockStore::scan_context(tenant, &[LabelMatcher], min_ts: i64, max_ts: i64, schema: SchemaRef) -> Result<(SessionContext, String)>`, `Index`, `Labels`, `SeriesFingerprint = u64`, `LabelMatcher { name, op, value }`, `MatchOp { Eq, Neq, Re, Nre }`. Mandatory block columns `series_fingerprint: UInt64`, `timestamp: Int64`. **This slice consumes only the *types* (`LabelMatcher`/`MatchOp`/`Labels`/`SeriesFingerprint`)** — the `BlockStore`-backed `MetricStore` impl lands in Slice 5; here we ship `InMemoryMetricStore`.
+
+- `krabka-blockstore` (built — logs wedge Phase 1): `BlockStore`, `BlockStore::scan_context(tenant, &[LabelMatcher], min_ts: i64, max_ts: i64, schema: SchemaRef) -> Result<(SessionContext, String)>`, `Index`, `Labels`, `SeriesFingerprint = u64`, `LabelMatcher { name, op, value }`, `MatchOp { Eq, Neq, Re, Nre }`. Mandatory block columns `series_fingerprint: UInt64`, `timestamp: Int64`. **This slice consumes only the _types_ (`LabelMatcher`/`MatchOp`/`Labels`/`SeriesFingerprint`)** — the `BlockStore`-backed `MetricStore` impl lands in Slice 5; here we ship `InMemoryMetricStore`.
 - `krabka-metrics` (built — Slice 1): `NativeHistogram`, `BucketSpan`, `ResetHint`, `float_sample_schema()` / `native_histogram_schema()`, `encode/decode_native_histograms`, `encode/decode_float_samples`, `COL_FINGERPRINT` / `COL_TIMESTAMP`.
 
 **The 8 metrics slices** (this plan = Slice 2; each later slice gets its own plan):
 
-1. **Data layer** — block schemas + native-histogram codec + symbol table. *(built)*
-2. **`krabka-promql` core** *(this plan)* — parser + operator pattern + selectors + rate-family + aggregations + binary ops + `.test` harness.
+1. **Data layer** — block schemas + native-histogram codec + symbol table. _(built)_
+2. **`krabka-promql` core** _(this plan)_ — parser + operator pattern + selectors + rate-family + aggregations + binary ops + `.test` harness.
 3. **Query completeness** — `histogram_quantile` (classic + native), full function catalog, subqueries, `@`/`offset` general form. **Reuses this slice's operators (`SeriesDivide`/`SeriesNormalize`/`InstantManipulate`/`RangeManipulate`/`RangeArray`), the `InMemoryMetricStore` test double, and the `.test` DSL harness (`krabka_promql::testkit::{run_test_file(&TestFile), run_test_path(&str)}`) — those public names are frozen here.**
 4. **Ingest service** — remote_write v1/v2 + OTLP + Kafka produce + distributor + HA dedup + compactor.
 5. **Querier + Prometheus HTTP API** + hot/cold merge. **Replaces `InMemoryMetricStore` with a `BlockStore`-backed `MetricStore` — the trait is frozen here.**
@@ -110,31 +111,31 @@ pub enum PromqlError { Parse(String), Plan(String), Exec(String), Store(String),
 
 ## File structure (`crates/promql/`)
 
-| File | Responsibility |
-|---|---|
-| `Cargo.toml` | crate manifest; workspace deps |
-| `src/lib.rs` | module decls + public re-exports + crate docs |
-| `src/error.rs` | `PromqlError` enum + `From` conversions |
-| `src/result.rs` | `QueryResult`, `InstantSample`, `RangeSeries`, `SampleValue` |
-| `src/store.rs` | `MetricStore` trait, `ScanResult` |
-| `src/in_memory.rs` | `InMemoryMetricStore` test impl (float + histogram DF tables) |
-| `src/range_array.rs` | the custom `RangeArray` Arrow array |
-| `src/extension/mod.rs` | operator module wiring + `PromqlExtensionPlanner` |
-| `src/extension/series_divide.rs` | `SeriesDivide` node + exec + stream |
-| `src/extension/normalize.rs` | `SeriesNormalize` node + exec + stream |
-| `src/extension/instant_manipulate.rs` | `InstantManipulate` node + exec + stream |
-| `src/extension/range_manipulate.rs` | `RangeManipulate` node + exec + stream |
-| `src/functions/mod.rs` | UDF registry wiring |
-| `src/functions/extrapolate.rs` | the shared counter-reset + extrapolation core |
-| `src/functions/rate.rs` | `rate`/`increase`/`delta`/`irate`/`idelta` ScalarUDFs |
-| `src/planner/mod.rs` | `PromqlPlanner` entry + AST recursion |
-| `src/planner/selector.rs` | instant + range (matrix) vector selector lowering |
-| `src/planner/aggregate.rs` | `sum`/`avg`/`min`/`max`/`count` with `by`/`without` |
-| `src/planner/binary.rs` | arithmetic + comparison binary ops + vector matching |
-| `src/engine.rs` | `PromqlEngine`, `EngineOpts`, step grid, `QueryResult` assembly |
-| `src/conformance/mod.rs` | `.test` DSL parser + runner harness |
-| `tests/testdata/` | vendored Prometheus `.test` cases (Apache-2.0 attribution) |
-| `tests/conformance.rs` | runs the vendored `.test` files through the harness |
+| File                                  | Responsibility                                                  |
+| ------------------------------------- | --------------------------------------------------------------- |
+| `Cargo.toml`                          | crate manifest; workspace deps                                  |
+| `src/lib.rs`                          | module decls + public re-exports + crate docs                   |
+| `src/error.rs`                        | `PromqlError` enum + `From` conversions                         |
+| `src/result.rs`                       | `QueryResult`, `InstantSample`, `RangeSeries`, `SampleValue`    |
+| `src/store.rs`                        | `MetricStore` trait, `ScanResult`                               |
+| `src/in_memory.rs`                    | `InMemoryMetricStore` test impl (float + histogram DF tables)   |
+| `src/range_array.rs`                  | the custom `RangeArray` Arrow array                             |
+| `src/extension/mod.rs`                | operator module wiring + `PromqlExtensionPlanner`               |
+| `src/extension/series_divide.rs`      | `SeriesDivide` node + exec + stream                             |
+| `src/extension/normalize.rs`          | `SeriesNormalize` node + exec + stream                          |
+| `src/extension/instant_manipulate.rs` | `InstantManipulate` node + exec + stream                        |
+| `src/extension/range_manipulate.rs`   | `RangeManipulate` node + exec + stream                          |
+| `src/functions/mod.rs`                | UDF registry wiring                                             |
+| `src/functions/extrapolate.rs`        | the shared counter-reset + extrapolation core                   |
+| `src/functions/rate.rs`               | `rate`/`increase`/`delta`/`irate`/`idelta` ScalarUDFs           |
+| `src/planner/mod.rs`                  | `PromqlPlanner` entry + AST recursion                           |
+| `src/planner/selector.rs`             | instant + range (matrix) vector selector lowering               |
+| `src/planner/aggregate.rs`            | `sum`/`avg`/`min`/`max`/`count` with `by`/`without`             |
+| `src/planner/binary.rs`               | arithmetic + comparison binary ops + vector matching            |
+| `src/engine.rs`                       | `PromqlEngine`, `EngineOpts`, step grid, `QueryResult` assembly |
+| `src/conformance/mod.rs`              | `.test` DSL parser + runner harness                             |
+| `tests/testdata/`                     | vendored Prometheus `.test` cases (Apache-2.0 attribution)      |
+| `tests/conformance.rs`                | runs the vendored `.test` files through the harness             |
 
 `src/extension/` and `src/functions/` isolate the churn-prone DataFusion-internal surface from the planner and engine.
 
@@ -147,11 +148,13 @@ pub enum PromqlError { Parse(String), Plan(String), Exec(String), Store(String),
 ### Task A1: Crate scaffold + workspace wiring
 
 **Files:**
+
 - Create: `crates/promql/Cargo.toml`
 - Create: `crates/promql/src/lib.rs`
 - Modify: root `Cargo.toml` (add `promql-parser` to `[workspace.dependencies]`; `datafusion`/`parquet`/`url` already added by the blockstore plan)
 
 **Interfaces:**
+
 - Produces: a compiling `krabka-promql` crate with `pub fn crate_smoke() -> bool` (placeholder, removed in A2).
 
 - [ ] **Step 1: Add the `promql-parser` workspace dependency**
@@ -257,10 +260,12 @@ git commit -m "feat(promql): scaffold krabka-promql crate + promql-parser dep"
 ### Task A2: `PromqlError`
 
 **Files:**
+
 - Create: `crates/promql/src/error.rs`
 - Modify: `crates/promql/src/lib.rs` (declare module, re-export, remove placeholder)
 
 **Interfaces:**
+
 - Produces:
   - `pub enum PromqlError { Parse(String), Plan(String), Exec(String), Store(String), Unsupported(String) }` (`Debug`, `thiserror::Error`)
   - `impl From<datafusion::error::DataFusionError> for PromqlError` → `Exec`
@@ -364,10 +369,12 @@ git commit -m "feat(promql): PromqlError type + DataFusion conversion"
 ### Task A3: Result model — `QueryResult`, `InstantSample`, `RangeSeries`, `SampleValue`
 
 **Files:**
+
 - Create: `crates/promql/src/result.rs`
 - Modify: `crates/promql/src/lib.rs`
 
 **Interfaces:**
+
 - Consumes: `krabka_blockstore::Labels`, `krabka_metrics::NativeHistogram`.
 - Produces:
   - `pub enum SampleValue { Float(f64), Histogram(NativeHistogram) }` (`Clone`, `Debug`, `PartialEq`)
@@ -489,10 +496,12 @@ git commit -m "feat(promql): QueryResult / InstantSample / RangeSeries / SampleV
 ### Task A4: `MetricStore` trait + `ScanResult`
 
 **Files:**
+
 - Create: `crates/promql/src/store.rs`
 - Modify: `crates/promql/src/lib.rs`
 
 **Interfaces:**
+
 - Consumes: `krabka_blockstore::{LabelMatcher, Labels}`, `datafusion::prelude::SessionContext`, `PromqlError`.
 - Produces:
   - `pub struct ScanResult { pub ctx: SessionContext, pub float_table: Option<String>, pub histogram_table: Option<String> }`
@@ -657,10 +666,12 @@ git commit -m "feat(promql): MetricStore trait + ScanResult"
 ### Task A5: `InMemoryMetricStore`
 
 **Files:**
+
 - Create: `crates/promql/src/in_memory.rs`
 - Modify: `crates/promql/src/lib.rs`
 
 **Interfaces:**
+
 - Consumes: `MetricStore`, `ScanResult`, `krabka_metrics::{float_sample_schema, native_histogram_schema, encode_float_samples, encode_native_histograms, NativeHistogram, COL_FINGERPRINT, COL_TIMESTAMP}`, `krabka_blockstore::{Labels, LabelMatcher, MatchOp, SeriesFingerprint}`, DataFusion `MemTable`.
 - Produces:
   - `pub struct InMemoryMetricStore` (`Default`)
@@ -996,10 +1007,12 @@ git commit -m "feat(promql): InMemoryMetricStore test impl over DataFusion MemTa
 ### Task B1: `RangeArray` — the custom range-vector Arrow array
 
 **Files:**
+
 - Create: `crates/promql/src/range_array.rs`
 - Modify: `crates/promql/src/lib.rs`
 
 **Interfaces:**
+
 - Produces:
   - `pub struct RangeArray { /* values: ArrayRef, ranges: Vec<(u32,u32)> i.e. (offset,len) */ }`
   - `pub fn from_ranges(values: ArrayRef, ranges: impl IntoIterator<Item = (u32, u32)>) -> Result<RangeArray, ArrowError>` — validates each `offset+len <= values.len()`.
@@ -1007,9 +1020,9 @@ git commit -m "feat(promql): InMemoryMetricStore test impl over DataFusion MemTa
   - `pub fn values(&self) -> &ArrayRef`
   - `pub fn get(&self, index: usize) -> Option<ArrayRef>` — returns `values.slice(offset, len)` for cell `index`.
   - `pub fn ranges(&self) -> &[(u32, u32)]`
-  - `pub fn into_dict_array(self) -> DictionaryArray<...>` **OR** a `to_list_field()` representation chosen to match how GreptimeDB pipes `RangeArray` columns through DataFusion — **decide this against the reference** (see note); the *public surface above is frozen*, the in-Arrow encoding is the implementation detail.
+  - `pub fn into_dict_array(self) -> DictionaryArray<...>` **OR** a `to_list_field()` representation chosen to match how GreptimeDB pipes `RangeArray` columns through DataFusion — **decide this against the reference** (see note); the _public surface above is frozen_, the in-Arrow encoding is the implementation detail.
 
-> **Why a custom array.** A range vector at eval timestamp `t` is "the samples in `(t-range, t]`". Representing this as ordinary rows explodes the row count. `RangeArray` stores one contiguous backing `values` array plus a list of `(offset, len)` windows, so each cell is a zero-copy slice. DataFusion has no equivalent. **Reference: GreptimeDB `src/promql/src/range_array.rs`.** Its trick is to encode the ranges in the Arrow *type system* so the array survives passing through DataFusion's `RecordBatch`/UDF machinery (it builds on a `DictionaryArray<Int64Type>` whose keys pack `offset`/`length` into an `i64`, with the windowed values as the dictionary values). Mirror that encoding so `range_manipulate` can emit a `RangeArray` column and the rate UDFs can read it back — but keep the public methods above stable. **`unsafe_code = "forbid"`: build only on safe arrow constructors (`DictionaryArray::try_new`, `Array::slice`).**
+> **Why a custom array.** A range vector at eval timestamp `t` is "the samples in `(t-range, t]`". Representing this as ordinary rows explodes the row count. `RangeArray` stores one contiguous backing `values` array plus a list of `(offset, len)` windows, so each cell is a zero-copy slice. DataFusion has no equivalent. **Reference: GreptimeDB `src/promql/src/range_array.rs`.** Its trick is to encode the ranges in the Arrow _type system_ so the array survives passing through DataFusion's `RecordBatch`/UDF machinery (it builds on a `DictionaryArray<Int64Type>` whose keys pack `offset`/`length` into an `i64`, with the windowed values as the dictionary values). Mirror that encoding so `range_manipulate` can emit a `RangeArray` column and the rate UDFs can read it back — but keep the public methods above stable. **`unsafe_code = "forbid"`: build only on safe arrow constructors (`DictionaryArray::try_new`, `Array::slice`).**
 
 - [ ] **Step 1: Write the failing behavior test**
 
@@ -1136,7 +1149,7 @@ Expected: PASS (2 tests).
 
 - [ ] **Step 5: Add the DataFusion-column encoding (the GreptimeDB trick) + its round-trip test**
 
-The operators in B5 / the UDFs in Phase C must pass a `RangeArray` as an Arrow column inside a `RecordBatch`. Add `into_dict_array(self) -> DictionaryArray<Int64Type>` and `try_from_dict_array(arr: &DictionaryArray<Int64Type>) -> Result<RangeArray, ArrowError>` that pack each `(offset, len)` into the dictionary *keys* (e.g. `key = (offset as i64) << 32 | len as i64`) with `values` as the dictionary *values*, exactly as GreptimeDB does. Append this test:
+The operators in B5 / the UDFs in Phase C must pass a `RangeArray` as an Arrow column inside a `RecordBatch`. Add `into_dict_array(self) -> DictionaryArray<Int64Type>` and `try_from_dict_array(arr: &DictionaryArray<Int64Type>) -> Result<RangeArray, ArrowError>` that pack each `(offset, len)` into the dictionary _keys_ (e.g. `key = (offset as i64) << 32 | len as i64`) with `values` as the dictionary _values_, exactly as GreptimeDB does. Append this test:
 
 ```rust
     #[test]
@@ -1170,11 +1183,13 @@ git commit -m "feat(promql): RangeArray — windowed view + DataFusion dict-arra
 ### Task B2: `SeriesDivide` operator
 
 **Files:**
+
 - Create: `crates/promql/src/extension/mod.rs` (module wiring — first operator creates it)
 - Create: `crates/promql/src/extension/series_divide.rs`
 - Modify: `crates/promql/src/lib.rs`
 
 **Interfaces:**
+
 - Produces:
   - `pub struct SeriesDivide { /* tag_columns: Vec<String>, input: LogicalPlan */ }` implementing `UserDefinedLogicalNodeCore`.
   - `pub struct SeriesDivideExec { /* tag_columns, input: Arc<dyn ExecutionPlan>, metric: ExecutionPlanMetricsSet */ }` implementing `ExecutionPlan`, whose stream partitions an already-`(tags..., timestamp)`-sorted input into contiguous per-series runs (it does not reorder; it splits batch boundaries so no emitted batch straddles two series).
@@ -1248,7 +1263,7 @@ Expected: FAIL — `cannot find type SeriesDivideExec`.
 
 - [ ] **Step 3: Implement `series_divide.rs`**
 
-Implement the `UserDefinedLogicalNodeCore` node (`SeriesDivide`) and the `ExecutionPlan` (`SeriesDivideExec`) + stream. The structure below is the *shape*; fill the trait methods to satisfy the test against the pinned rev.
+Implement the `UserDefinedLogicalNodeCore` node (`SeriesDivide`) and the `ExecutionPlan` (`SeriesDivideExec`) + stream. The structure below is the _shape_; fill the trait methods to satisfy the test against the pinned rev.
 
 ```rust
 //! `SeriesDivide` — split a batch sorted by `(tag_columns..., timestamp)` into
@@ -1390,15 +1405,17 @@ git commit -m "feat(promql): SeriesDivide operator (logical node + exec + stream
 ### Task B3: `SeriesNormalize` operator
 
 **Files:**
+
 - Create: `crates/promql/src/extension/normalize.rs`
 - Modify: `crates/promql/src/extension/mod.rs`, `crates/promql/src/lib.rs`
 
 **Interfaces:**
+
 - Produces:
   - `pub struct SeriesNormalize { /* offset_ms: i64, time_index: String, need_filter_out_nan: bool, input: LogicalPlan */ }` (`UserDefinedLogicalNodeCore`).
   - `pub struct SeriesNormalizeExec` (`ExecutionPlan`) + stream: for each single-series batch, (1) apply the `offset` by adding `offset_ms` to the timestamp column, (2) sort by timestamp ascending, (3) optionally drop rows whose value is NaN.
 
-> **What it does (spec §6.1).** One series per batch in, normalized out: `offset`/`@` applied, time-sorted, NaNs dropped. Runs *after* `SeriesDivide`. **Reference: GreptimeDB `extension_plan/normalize.rs`.** The `@`-modifier general form is Slice 3; here implement the constant `offset` add + sort + NaN filter (the `.test` cases this slice vendors don't need `@`).
+> **What it does (spec §6.1).** One series per batch in, normalized out: `offset`/`@` applied, time-sorted, NaNs dropped. Runs _after_ `SeriesDivide`. **Reference: GreptimeDB `extension_plan/normalize.rs`.** The `@`-modifier general form is Slice 3; here implement the constant `offset` add + sort + NaN filter (the `.test` cases this slice vendors don't need `@`).
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1471,10 +1488,12 @@ git commit -m "feat(promql): SeriesNormalize operator (offset + sort + NaN filte
 ### Task B4: `InstantManipulate` operator
 
 **Files:**
+
 - Create: `crates/promql/src/extension/instant_manipulate.rs`
 - Modify: `crates/promql/src/extension/mod.rs`, `crates/promql/src/lib.rs`
 
 **Interfaces:**
+
 - Produces:
   - `pub struct InstantManipulate { /* start_ms, end_ms, step_ms, lookback_delta_ms, time_index, field_column, input */ }` (`UserDefinedLogicalNodeCore`).
   - `pub struct InstantManipulateExec` (`ExecutionPlan`) + stream: for a single time-sorted series, for each grid point `t` in `[start, end]` step `step`, select the most recent sample with `ts <= t` and `ts > t - lookback_delta` (the staleness/lookback rule); emit one row per grid point that has a valid sample (none if stale).
@@ -1498,10 +1517,12 @@ Logical node + exec + stream mirroring B2/B3. The per-series stream transform: c
 ### Task B5: `RangeManipulate` operator (emits `RangeArray` columns)
 
 **Files:**
+
 - Create: `crates/promql/src/extension/range_manipulate.rs`
 - Modify: `crates/promql/src/extension/mod.rs`, `crates/promql/src/lib.rs`
 
 **Interfaces:**
+
 - Consumes: `RangeArray` (B1).
 - Produces:
   - `pub struct RangeManipulate { /* start_ms, end_ms, step_ms, range_ms, time_index, field_columns, input */ }` (`UserDefinedLogicalNodeCore`).
@@ -1536,11 +1557,13 @@ Expected: all PASS. Commit any fmt/clippy fixups.
 ### Task C1: The counter-reset + extrapolation core (the #1 correctness trap)
 
 **Files:**
+
 - Create: `crates/promql/src/functions/mod.rs` (module wiring)
 - Create: `crates/promql/src/functions/extrapolate.rs`
 - Modify: `crates/promql/src/lib.rs`
 
 **Interfaces:**
+
 - Produces:
   - `pub(crate) enum RangeFn { Rate, Increase, Delta }` (the gauge/counter distinction: `Delta` skips reset correction).
   - `pub(crate) fn extrapolated_rate(timestamps: &[i64], values: &[f64], range_start_ms: i64, range_end_ms: i64, range_ms: i64, kind: RangeFn) -> Option<f64>` — the exact Prometheus `extrapolatedRate`/`rate`/`increase`/`delta` algorithm. Returns `None` for `< 2` samples (Prometheus emits no point).
@@ -1548,6 +1571,7 @@ Expected: all PASS. Commit any fmt/clippy fixups.
   - `pub(crate) enum IrateFn { Irate, Idelta }`.
 
 > **The algorithm (spec §6.2 — match Prometheus byte-for-byte):**
+>
 > 1. Need ≥ 2 samples in the window; else `None`.
 > 2. For counters (`Rate`/`Increase`): walk samples, sum `previous` whenever the current value < previous (a reset), i.e. `resultValue = last - first + correction`, where each decrease adds the pre-decrease value. For gauges (`Delta`): `resultValue = last - first` (no correction).
 > 3. `sampledInterval = (lastTs - firstTs)` in seconds; `averageDurationBetweenSamples = sampledInterval / (n - 1)`.
@@ -1778,10 +1802,12 @@ git commit -m "feat(promql): counter-reset + extrapolation core (rate/increase/d
 ### Task C2: rate-family `ScalarUDF`s over `RangeArray` columns
 
 **Files:**
+
 - Create: `crates/promql/src/functions/rate.rs`
 - Modify: `crates/promql/src/functions/mod.rs`, `crates/promql/src/lib.rs`
 
 **Interfaces:**
+
 - Consumes: `extrapolate::{extrapolated_rate, instant_delta, RangeFn, IrateFn}`, `RangeArray`.
 - Produces:
   - `pub(crate) fn rate_udf() -> ScalarUDF` (and `increase_udf`, `delta_udf`, `irate_udf`, `idelta_udf`) — each a `ScalarUDF` whose `invoke` takes two `RangeArray`-dict columns `(timestamp_range, value_range)`, the **per-row aligned grid-timestamp column** (a plain `Int64Array`, one `rangeEnd = t` per grid cell, emitted by `RangeManipulate` at line 1506), and a single scalar literal `range_ms`, and returns a `Float64Array` (one value per grid cell; null where the algorithm returns `None`). **Boundaries are computed per cell:** `range_end = grid_ts[i]`, `range_start = grid_ts[i] - range_ms`. (Threading a single broadcast `range_end_ms` scalar would be correct only for an instant query's single grid point and would corrupt the extrapolation edges of every other grid point in a range query — hence the per-row grid-timestamp column.)
@@ -1789,7 +1815,7 @@ git commit -m "feat(promql): counter-reset + extrapolation core (rate/increase/d
 
 > The UDF reads each cell with `RangeArray::try_from_dict_array(...).get(i)`, downcasts the timestamp window to `Int64Array` and the value window to `Float64Array`, reads the aligned grid timestamp `t = grid_ts.value(i)`, computes `range_start = t - range_ms` / `range_end = t` for that cell, calls the Phase-C1 core, and appends the result (or null). **Reference: GreptimeDB `functions/{rate,increase,delta,idelta}.rs`.**
 
-- [ ] **Step 1: Write the failing test** — call `rate_udf().invoke_*` (verify the exact invoke entry point at the pinned rev) with a hand-built **two-cell** `RangeArray` (two grid points `t` with *differing* edge gaps, so the per-cell `range_end` is actually exercised — a single-cell test would not catch a broadcast-scalar boundary bug) plus the matching two-element grid-timestamp `Int64Array`, and assert the output `Float64Array` matches the per-cell C1 literal values.
+- [ ] **Step 1: Write the failing test** — call `rate_udf().invoke_*` (verify the exact invoke entry point at the pinned rev) with a hand-built **two-cell** `RangeArray` (two grid points `t` with _differing_ edge gaps, so the per-cell `range_end` is actually exercised — a single-cell test would not catch a broadcast-scalar boundary bug) plus the matching two-element grid-timestamp `Int64Array`, and assert the output `Float64Array` matches the per-cell C1 literal values.
 
 - [ ] **Step 2: Run to verify it fails** — `cannot find function rate_udf`.
 
@@ -1804,10 +1830,12 @@ Build each UDF with `ScalarUDF::new_from_impl(...)` over a `struct RateUdf { kin
 ### Task C3: Planner scaffold + parse entry + context plumbing
 
 **Files:**
+
 - Create: `crates/promql/src/planner/mod.rs`
 - Modify: `crates/promql/src/lib.rs`
 
 **Interfaces:**
+
 - Consumes: `promql_parser::parser::{parse, Expr}`, `MetricStore`, `EngineOpts`-like context.
 - Produces:
   - `pub(crate) struct PlannerContext { pub tenant: String, pub start_ms: i64, pub end_ms: i64, pub step_ms: i64, pub lookback_delta_ms: i64, pub eval_range_ms: i64 }`
@@ -1829,10 +1857,12 @@ Build each UDF with `ScalarUDF::new_from_impl(...)` over a `struct RateUdf { kin
 ### Task C4: Instant + range (matrix) vector selector lowering
 
 **Files:**
+
 - Create: `crates/promql/src/planner/selector.rs`
 - Modify: `crates/promql/src/planner/mod.rs`
 
 **Interfaces:**
+
 - Consumes: `MetricStore::scan`, `ScanResult`, the operators `SeriesDivide`/`SeriesNormalize`/`InstantManipulate`/`RangeManipulate`, `krabka_blockstore::{LabelMatcher, MatchOp}`, `promql_parser::parser::{VectorSelector, MatrixSelector}`.
 - Produces:
   - `pub(crate) async fn plan_vector_selector(planner, vs: &VectorSelector) -> Result<PlannedQuery, PromqlError>` — converts the selector's matchers (including the `__name__` from the metric name) to `LabelMatcher`s, calls `store.scan(tenant, matchers, start-lookback, end)`, registers the float table, and builds the logical plan `floats -> SeriesDivide -> SeriesNormalize -> InstantManipulate` (the instant-vector pipeline).
@@ -1854,10 +1884,12 @@ Build each UDF with `ScalarUDF::new_from_impl(...)` over a `struct RateUdf { kin
 ### Task C5: Wire the rate-family calls into the planner
 
 **Files:**
+
 - Modify: `crates/promql/src/planner/mod.rs` (extend `Call` dispatch), `crates/promql/src/functions/mod.rs`
 - Create: `crates/promql/src/planner/call.rs`
 
 **Interfaces:**
+
 - Consumes: `plan_matrix_selector`, `register_rate_udfs`, the rate UDFs.
 - Produces:
   - `pub(crate) async fn plan_call(planner, call: &promql_parser::parser::Call) -> Result<PlannedQuery, PromqlError>` — for `rate`/`increase`/`delta`/`irate`/`idelta`: plan the single matrix-selector arg, register the rate UDFs on its `ctx`, and project the `RangeArray` timestamp + value columns **plus the aligned grid-timestamp column** (emitted by `RangeManipulate`) and the `range_ms` literal through the matching UDF, yielding an instant vector. Unsupported function names → `PromqlError::Unsupported(name)`.
@@ -1885,10 +1917,12 @@ git commit -m "feat(promql): lower rate-family calls onto matrix selector + UDF 
 ### Task D1: Core aggregations — `sum`/`avg`/`min`/`max`/`count` with `by`/`without`
 
 **Files:**
+
 - Create: `crates/promql/src/planner/aggregate.rs`
 - Modify: `crates/promql/src/planner/mod.rs`
 
 **Interfaces:**
+
 - Consumes: the instant-vector `PlannedQuery` of the aggregate's inner expr, `promql_parser::parser::AggregateExpr`.
 - Produces:
   - `pub(crate) async fn plan_aggregate(planner, agg: &AggregateExpr) -> Result<PlannedQuery, PromqlError>` — plan the inner expr to an instant vector, then build a DataFusion `Aggregate` grouping by the `by` labels (or all-labels-minus-`without`-minus-`__name__`) with the matching aggregate function (`sum`/`avg`/`min`/`max`/`count`). `without` always drops `__name__`; `by ()` collapses to a single group; the result drops `__name__` (aggregations don't carry a metric name).
@@ -1908,10 +1942,12 @@ git commit -m "feat(promql): lower rate-family calls onto matrix selector + UDF 
 ### Task D2: Binary ops — arithmetic + comparison + vector matching + `bool`
 
 **Files:**
+
 - Create: `crates/promql/src/planner/binary.rs`
 - Modify: `crates/promql/src/planner/mod.rs`
 
 **Interfaces:**
+
 - Consumes: planned instant-vectors / scalars of the two operands, `promql_parser::parser::{BinaryExpr, token}`.
 - Produces:
   - `pub(crate) async fn plan_binary(planner, be: &BinaryExpr) -> Result<PlannedQuery, PromqlError>` covering:
@@ -1936,10 +1972,12 @@ git commit -m "feat(promql): lower rate-family calls onto matrix selector + UDF 
 ### Task D3: `PromqlEngine` — step grid, execution, `QueryResult` assembly
 
 **Files:**
+
 - Create: `crates/promql/src/engine.rs`
 - Modify: `crates/promql/src/lib.rs`
 
 **Interfaces:**
+
 - Consumes: `parse_promql`, `PromqlPlanner`, `PlannedQuery`, `MetricStore`, the result model.
 - Produces:
   - `pub struct EngineOpts { pub lookback_delta_ms: i64, pub max_samples: usize }`; `impl Default for EngineOpts` (`lookback_delta_ms: 300_000`, `max_samples: 50_000_000`).
@@ -2061,10 +2099,12 @@ git commit -m "feat(promql): PromqlEngine — step grid + execution + QueryResul
 ### Task E1: The `.test` DSL parser
 
 **Files:**
+
 - Create: `crates/promql/src/conformance/mod.rs`
 - Modify: `crates/promql/src/lib.rs`
 
 **Interfaces:**
+
 - Produces:
   - `pub struct TestFile { pub statements: Vec<Statement> }`
   - `pub enum Statement { Load { step_ms: i64, series: Vec<LoadSeries> }, EvalInstant { at_ms: i64, expr: String, expect: Vec<ExpectLine>, fail: bool }, EvalRange { start_ms: i64, end_ms: i64, step_ms: i64, expr: String, expect: Vec<ExpectLine>, fail: bool }, Clear }`
@@ -2072,7 +2112,7 @@ git commit -m "feat(promql): PromqlEngine — step grid + execution + QueryResul
   - `pub struct ExpectLine { pub metric: String, pub value: f64 }`
   - `pub fn parse_test_file(src: &str) -> Result<TestFile, PromqlError>` — parses the `load`/`eval instant at`/`eval range from..to step..`/`clear` DSL, the `{label="v"}` series syntax, the expanding-point value syntax, and the `eval_fail`/`expect fail` forms.
 
-> **Scope:** implement the *legacy* assertion form (`eval instant at <dur> <expr>` followed by indented `<metric> <value>` lines) which the pinned-tag corpus uses; the float-only subset (native-histogram literals are Slice 3). Duration parsing: `5m`→`300_000`, `1h`→`3_600_000`, etc. Expanding points: `start(+step)x count` and `startxcount`, `_` = missing, `stale` = stale marker.
+> **Scope:** implement the _legacy_ assertion form (`eval instant at <dur> <expr>` followed by indented `<metric> <value>` lines) which the pinned-tag corpus uses; the float-only subset (native-histogram literals are Slice 3). Duration parsing: `5m`→`300_000`, `1h`→`3_600_000`, etc. Expanding points: `start(+step)x count` and `startxcount`, `_` = missing, `stale` = stale marker.
 
 - [ ] **Step 1: Write the failing tests** — `parse_test_file` of a small inline DSL string with one `load 1m`, one series `metric{a="b"} 0+1x4`, one `eval instant at 3m metric{a="b"}` + expect `metric{a="b"} 3` parses to the expected structs; the expanding-point `0+1x4` expands to `[0,1,2,3,4]`; `clear` parses.
 
@@ -2087,11 +2127,13 @@ git commit -m "feat(promql): PromqlEngine — step grid + execution + QueryResul
 ### Task E2: Vendor 2–3 Prometheus `.test` cases
 
 **Files:**
+
 - Create: `crates/promql/tests/testdata/aggregators.test` (subset, vendored)
 - Create: `crates/promql/tests/testdata/functions.test` (subset, vendored — must include the rate/increase/delta cases that pin Phase C1)
 - Create: `crates/promql/tests/testdata/ATTRIBUTION.md` (Apache-2.0 notice + the pinned Prometheus tag + commit SHA + upstream path)
 
 **Interfaces:**
+
 - Produces: vendored test corpus + provenance.
 
 - [ ] **Step 1: Vendor the files** — copy the **subset** of `promql/promqltest/testdata/aggregators.test` and `promql/promqltest/testdata/functions.test` (rate/increase/delta/irate/idelta + sum/avg/min/max/count blocks only — strip cases using features deferred to Slice 3: `histogram_quantile`, subqueries, `topk`, `@`, native histograms) from a **pinned Prometheus release tag** (record the exact tag, e.g. `v3.x.y`, and its commit SHA). Keep the upstream comment headers.
@@ -2123,11 +2165,13 @@ yet implemented in `krabka-promql` (tracked for Slice 3).
 ### Task E3: The conformance runner + integration test
 
 **Files:**
+
 - Create: `crates/promql/src/conformance/runner.rs`
 - Create: `crates/promql/tests/conformance.rs`
 - Modify: `crates/promql/src/conformance/mod.rs`, `crates/promql/src/lib.rs`
 
 **Interfaces:**
+
 - Consumes: `TestFile`/`Statement`, `InMemoryMetricStore`, `PromqlEngine`, `QueryResult`.
 - Produces (all under `pub mod testkit`, re-exported at the crate root — **frozen names Slice 3 interlocks on**):
   - `pub async fn testkit::run_test_file(file: &TestFile) -> Result<(), PromqlError>` — interprets statements: `Load` pushes the expanded `(metric labels, ts, value)` rows into an `InMemoryMetricStore` (ts derived from the `load` step and the value index); `EvalInstant` runs `query_instant` and asserts the `InstantVector` matches the `expect` lines (label set + value, order-independent, float tolerance `1e-9`); `EvalRange` runs `query_range`; `Clear` resets the store; `fail` statements assert an error. Returns the first mismatch as `PromqlError::Exec`.
@@ -2184,6 +2228,7 @@ git commit -m "test(promql): Prometheus .test conformance harness over InMemoryM
 ## Self-review
 
 **Spec coverage (against §6 PromQL engine + §11 Slice 2):**
+
 - `promql-parser` integration + parse entry (`promql_parser::parser::parse`) → Tasks A1, C3.
 - The four custom operators (`SeriesDivide`/`SeriesNormalize`/`InstantManipulate`/`RangeManipulate`) each as `UserDefinedLogicalNodeCore` + `ExecutionPlan` + stream → Tasks B2, B3, B4, B5.
 - The `RangeArray` custom Arrow array (windowed view + DataFusion dict-array column encoding, left-open/right-closed range vectors) → Tasks B1, B5.
@@ -2203,6 +2248,7 @@ git commit -m "test(promql): Prometheus .test conformance harness over InMemoryM
 **Type consistency:** `MetricStore`'s four method signatures are identical across A4 (definition), A5 (impl), C4 (consumer), and D3 (engine). `ScanResult` fields (`ctx`/`float_table`/`histogram_table`) are stable A4↔A5↔C4. `PromqlError` variants (`Parse`/`Plan`/`Exec`/`Store`/`Unsupported`) are the single error type across all tasks. `RangeArray`'s public surface (`from_ranges`/`get`/`len`/`ranges`/`into_dict_array`/`try_from_dict_array`) is fixed in B1 and consumed unchanged in B5/C2. `QueryResult`/`InstantSample`/`RangeSeries`/`SampleValue` defined once (A3) and assembled in D3. The `RangeFn`/`IrateFn` enums + `extrapolated_rate`/`instant_delta` signatures are stable C1↔C2. The frozen public names match the prompt's pinned contract exactly.
 
 **Known risks (flagged, not hidden):**
+
 1. **DataFusion-internal trait churn** (the four operators, the UDF invoke signature, the dict-array encoding, the logical/physical plan builders, the execute entry point) — the single largest risk. Contained to `src/extension/`, `src/functions/rate.rs`, `src/range_array.rs`, and the per-construct planner builders, each behind a behavior-pinning test + a verify-against-rev note. Drift surfaces as a compile error against a green test, never as silent wrong results.
 2. **Counter-reset/extrapolation fidelity** — the #1 correctness trap. Triple-guarded: literal-value unit tests in C1, the UDF round-trip in C2, and the vendored `functions.test` in E3 (ground truth). The zero-anchor clamp form is explicitly flagged to verify against the Prometheus tag the corpus is pinned to.
 3. **Slice executability** — this slice is large; the phase batching (A→B→C→D→E, with the noted intra-phase parallel batches) keeps each sub-batch's file sets disjoint per `CLAUDE.md`, and each phase ends at a green whole-crate gate so a sub-batch can be reviewed and merged before the next starts.

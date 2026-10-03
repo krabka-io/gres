@@ -6,21 +6,21 @@ re-run by a second, adversarial agent whose instructions were to refute it.
 
 **619 oracle truth rows gathered; 9 were wrong.** All seven specs came back
 `PARTLY_WRONG`, almost entirely from drifted line numbers and from narrative
-predictions rather than from the truth tables. Read each feature's *corrections*
+predictions rather than from the truth tables. Read each feature's _corrections_
 before implementing: several corrections change what the fix has to do.
 
 Full truth tables (619 rows) and every code anchor live in the workflow journal:
 `.claude/projects/*/subagents/workflows/wf_5b6faf2d-c1d/journal.jsonl`.
 
-| feature | statements | difficulty | execution reachable | oracle rows | wrong |
-|---|---|---|---|---|---|
-| CREATE TRIGGER / DROP TRIGGER (65 regress statements, the si | 65 | medium | **NO** | 76 | 6 |
-| WITHIN GROUP ordered-set aggregates: percentile_cont / perce | 33 | large | yes | 152 | 0 |
-| CREATE OR REPLACE VIEW (plus the `[TEMP|TEMPORARY]`, `[RECUR | 32 | medium | yes | 60 | 0 |
-| Subscripted INSERT target columns — `INSERT INTO t (a[1:5],  | 29 | medium | yes | 71 | 2 |
-| Named (labeled) function arguments: `f(param := value)` and  | 24 | medium | yes | 86 | 0 |
-| ALTER SEQUENCE — the full PostgreSQL 18.4 action list (AS <t | 24 | medium | yes | 105 | ? |
-| FILTER (WHERE ...) on a plain (non-window) aggregate call —  | 21 | medium | yes | 69 | 1 |
+| feature                                                      | statements           | difficulty | execution reachable | oracle rows | wrong |
+| ------------------------------------------------------------ | -------------------- | ---------- | ------------------- | ----------- | ----- |
+| CREATE TRIGGER / DROP TRIGGER (65 regress statements, the si | 65                   | medium     | **NO**              | 76          | 6     |
+| WITHIN GROUP ordered-set aggregates: percentile_cont / perce | 33                   | large      | yes                 | 152         | 0     |
+| CREATE OR REPLACE VIEW (plus the `[TEMP                      | TEMPORARY]`, `[RECUR | 32         | medium              | yes         | 60    | 0   |
+| Subscripted INSERT target columns — `INSERT INTO t (a[1:5],  | 29                   | medium     | yes                 | 71          | 2     |
+| Named (labeled) function arguments: `f(param := value)` and  | 24                   | medium     | yes                 | 86          | 0     |
+| ALTER SEQUENCE — the full PostgreSQL 18.4 action list (AS <t | 24                   | medium     | yes                 | 105         | ?     |
+| FILTER (WHERE ...) on a plain (non-window) aggregate call —  | 21                   | medium     | yes                 | 69          | 1     |
 
 ## Per-feature verifier corrections
 
@@ -32,6 +32,7 @@ Full truth tables (619 rows) and every code anchor live in the workflow journal:
 Source: `crates/pgparser/src/parser.rs:1552-1559` inside `Parser::func_call` — after `opt_filter_clause()` and `opt_over_clause()` have both run, the `let Some(over) = over else { ... }` branch checks `if filter.is_some()` and returns `ParseError::new("FILTER is only supported on a window function call", self.peek_pos())`. `ParseError::new` (crates/pgparser/src/error.rs:22-28) hard-codes `sqlstate: "42601"` and prefixes the text with `syntax error at position {position}: `. The grammar itself is complete — `opt_filter_clause` (parser.rs:1638-1646) parses `FILTER ( WHERE <expr> )` unconditionally, `filter` is in `NOT_BARE_LABEL_WORDS` (parser.rs:9928) so `SELECT count(*) filter FROM t` is already a 42601 like PostgreSQL — and the `Expr::Func(FuncCall{name,distinct,args})` returned at parser.rs:1561-1566 simply has nowhere to carry the predicate: `pub struct FuncCall` (crates/pgparser/src/ast.rs:2452-2457) has no `filter` field. Nothing in pgexec ever sees a filtered plain aggregate today.
 
 Related gate that stays: `sum(v ORDER BY v) FILTER (...)` still dies earlier at parser.rs:1541-1549 with 0A000 `aggregate ORDER BY is not supported` (aggregate ORDER BY is unimplemented engine-wide), and `row_number() FILTER (...) OVER ()` already gives the PostgreSQL-exact 0A000 `FILTER is not implemented for non-aggregate window functions` from crates/pgexec/src/window.rs:310-313.
+
 - verifier verdict **PARTLY_WRONG** (1 truth rows wrong, 4 anchors wrong)
 
 <details><summary>corrections</summary>
@@ -91,6 +92,7 @@ Every file exists. Every line number lands inside or within 3 lines of the named
 </details>
 
 Existing tests that assert the about-to-change behavior:
+
 - `crates/pgparser/tests/window_clause.rs` :: `window_syntax_errors_are_reported` — Its list (lines 297-306) contains `"SELECT count(*) FILTER (WHERE a > 1) FROM t"` with the comment "FILTER without OVER has no executor support and is refused, not aliased." — this becomes a VALID parse. Remove that one entry (and its comment) and keep the sibling `"SELECT count(*) FILTER (a > 1) OVER () FROM t"` entry, which stays a syntax error per the oracle. Replace it with a positive assertion that the filter now lands on the FuncCall.
 - `crates/pgparser/src/parser.rs` :: `aggregate_order_by_is_refused_as_unsupported (line ~12259)` — NOT stale — it asserts `"SELECT array_agg(v ORDER BY v) FILTER (WHERE v > 1) OVER () FROM w"` is 0A000 `aggregate ORDER BY is not implemented for window functions`, which the untouched ORDER BY gate at parser.rs:1541-1549 still produces. Listed so nobody 'fixes' it: it fires BEFORE the FILTER path.
 - `crates/pgparser/tests/window_clause.rs` :: `filter_attaches_to_the_window_call (line 250)` — NOT stale in behavior, but it constructs an expected `WindowCall { ... }`; if the implementer also touches WindowCall it must be updated. It is the template for the new plain-aggregate parser test.
@@ -107,6 +109,7 @@ Trace (read, not run): `Parser::statement` sees `Token::Keyword(Keyword::Create)
 This exact string is already recorded in the triage table: crates/gres-conformance/corpus-regress/TRIAGE.md:121 — `| 36 | 42601 | syntax error at position N: expected Keyword(Table), found Keyword(Or) | create or replace view agg_view1 as … |`.
 
 Two adjacent spellings fail differently and are also unsupported today, because `create_view` (parser.rs:6019) goes `expect(Create) → expect(View) → expect_object_name() → expect(As)` with nothing in between:
+
 - `CREATE VIEW v(a,b) AS …` → 42601 `syntax error at position N: expected Keyword(As), found LParen`
 - `CREATE VIEW v WITH (security_barrier=true) AS …` → 42601 `syntax error at position N: expected Keyword(As), found Keyword(With)`
 - verifier verdict **PARTLY_WRONG** (0 truth rows wrong, 6 anchors wrong)
@@ -150,6 +153,7 @@ Both are 0A000, so the SQLSTATE claims survive; the message text claims do not, 
 </details>
 
 Existing tests that assert the about-to-change behavior:
+
 - `crates/pgparser/src/parser.rs` :: `parses_view_ddl_and_retains_definition (test fn at parser.rs:10260, destructuring at parser.rs:10261)` — Exhaustively destructures `let Statement::CreateView { name, definition, query } = one("CREATE VIEW \"Sales View\" AS SELECT id FROM orders WHERE id > 1")`. Adding or_replace/columns/recursive fields to the AST variant makes this a hard compile error (E0027). Extend it with the new fields and add OR REPLACE / TEMP / RECURSIVE / column-list cases.
 - `crates/pgexec/src/exec.rs` :: `execute_ddl's CreateView arm (exec.rs:491) — not a test, but the second exhaustive destructuring that will fail to compile` — Same E0027 as above; listed here so the parser change is not landed without it.
 - `crates/gres-conformance/corpus-regress/TRIAGE.md` :: `the triage row at TRIAGE.md:121` — Records `| 36 | 42601 | syntax error at position N: expected Keyword(Table), found Keyword(Or) | create or replace view agg_view1 as … |` as a current top failure bucket. Regenerating triage will drop or shrink this row; if the file is hand-maintained it is stale documentation the moment the parser lands.
@@ -168,6 +172,7 @@ Where it comes from, by reading code (not by running the engine): `within` is li
 Secondary current behavior worth knowing: the regress line `select p, percentile_cont(p order by p) within group (order by x) -- error` does NOT reach that path. `Parser::func_call` (parser.rs:1507) calls `eat_aggregate_order_by` (parser.rs:1573), then at parser.rs:1539-1550 returns SQLSTATE `0A000` with message `aggregate ORDER BY is not supported` (the `over.is_some()` branch giving `aggregate ORDER BY is not implemented for window functions` does not apply, since `within` is neither FILTER nor OVER). PostgreSQL gives 42601 `cannot use multiple ORDER BY clauses with WITHIN GROUP` there.
 
 Third: `percentile_disc(0.5) within group (order by thousand) filter (where hundred=1)` (regress line 1059) will still fail after WITHIN GROUP parsing is added, because `Parser::func_call` refuses aggregate FILTER without OVER at parser.rs:1552-1560 with 42601 `FILTER is only supported on a window function call`.
+
 - verifier verdict **PARTLY_WRONG** (0 truth rows wrong, 8 anchors wrong)
 
 <details><summary>corrections</summary>
@@ -204,6 +209,7 @@ The message template exists: `crates/pgparser/src/parser.rs:2664` -> `format!("e
 </details>
 
 Existing tests that assert the about-to-change behavior:
+
 - `crates/gres-conformance/corpus-regress/TRIAGE.md` :: `the failure-taxonomy table, row at line 124` — Anti-rot documentation row asserting exactly the behavior about to change: `| 33 | 42601 | syntax error at position N: expected ; or end of input, found Ident("within") | select p, percentile_cont(p) within group (order by x::float8) ... |`. Both the count (33) and the error text become wrong. Row 117 (`Ident("partition")`) and row 40 (`aggregate ORDER BY is not supported`) are unrelated and stay.
 - `crates/gres-conformance/corpus-regress/baseline.json` :: `the `aggregates/aggregates.sql` entry (total 545, matched 318)` — The baseline is a FLOOR — crates/gres-conformance/src/lib.rs:535 and :581 only fail when `matched < baseline.matched` — so nothing breaks, but the entry must be ratcheted upward once the ~22 succeeding WITHIN GROUP statements start matching. This is the same ratchet already tracked by the pending 'ratchet baselines' task.
 - `crates/pgparser/src/parser.rs` :: `aggregate_order_by_is_refused_as_unsupported (line 12259)` — Does not itself use WITHIN GROUP (it only covers array_agg/string_agg), so it should keep passing — but it PINS the exact 0A000 messages `aggregate ORDER BY is not implemented for window functions` and `aggregate ORDER BY is not supported` produced by the very block at parser.rs:1539-1550 that must gain a third WITHIN-GROUP branch. Any refactor of that block has to keep both strings and both SQLSTATEs byte-identical.
@@ -240,6 +246,7 @@ WRONG ANCHOR / CLAIM 2 (MATERIAL — stale-test entry for TRIAGE.md is doubly wr
 </details>
 
 Existing tests that assert the about-to-change behavior:
+
 - `crates/gres-conformance/corpus/make_justify.sql` :: `file header comment, lines 9 and 12-15` — The header explicitly documents the gap that is about to close: line 9 labels make_interval `(POSITIONAL)` and lines 12-15 read `-- Exclusions (intentional, spec §1.3 deferred): NAMED arguments / -- (make_interval(days => 5)) — the parser has no name => value syntax; SP38 / -- supports the positional call only.` This is the anti-rot guard for the current behavior and must be rewritten, and the file should gain named-arg cases.
 - `crates/pgtypes/src/datetime.rs` :: `FieldSource for IntervalFields :: display_year doc comment, line 2708` — The rustdoc says `(make_interval(months => -12)) renders YYYY as -0001` — it already cites a spelling the engine cannot parse. Once `=>` works this becomes a claim that can actually be tested; today it is aspirational.
 - `crates/pgparser/src/lexer.rs` :: `cast_operator_wins_maximal_munch_over_the_lone_colon` — Not strictly stale — it asserts `toks("a : b")` yields `Token::Colon` with spaces, which still holds after `:=` is added. But it is the test that guards the maximal-munch arm ORDER being changed at lexer.rs:630-634, so it must be extended with `toks("a := b")`, `toks("a:=b")` and `toks("a => b")` or the new arms ship untested.
@@ -259,9 +266,10 @@ Source: `crates/pgparser/src/parser.rs:2877` opens the `Token::Ident(s) if s == 
         self.peek_pos(),
     )),
 
-`ParseError::new` (crates/pgparser/src/error.rs:22-28) prefixes `syntax error at position {position}: ` and hardcodes `sqlstate: "42601"`. `peek_pos()` (parser.rs:263) returns the offset of the *current* token, which at that dispatch point is still `alter` — i.e. offset 0 for a statement that starts the string. So every one of the 24 regress `ALTER SEQUENCE` statements dies in the parser before any executor code runs. There is no `CommandIdentity::AlterSequence` (crates/pgparser/src/command.rs `command_identities!` jumps from `AlterSchema` at :31 to `AlterServer` at :32), no `Statement::AlterSequence` variant, and no `COMMAND_PROBES` entry for "ALTER SEQUENCE".
+`ParseError::new` (crates/pgparser/src/error.rs:22-28) prefixes `syntax error at position {position}: ` and hardcodes `sqlstate: "42601"`. `peek_pos()` (parser.rs:263) returns the offset of the _current_ token, which at that dispatch point is still `alter` — i.e. offset 0 for a statement that starts the string. So every one of the 24 regress `ALTER SEQUENCE` statements dies in the parser before any executor code runs. There is no `CommandIdentity::AlterSequence` (crates/pgparser/src/command.rs `command_identities!` jumps from `AlterSchema` at :31 to `AlterServer` at :32), no `Statement::AlterSequence` variant, and no `COMMAND_PROBES` entry for "ALTER SEQUENCE".
 
-Note the shape crabka uses for the sequence statements it *does* support: CREATE SEQUENCE is desugared into `Statement::CreateIndex { table: "__krabka_sequence__", keys: <options as "k=v" strings> }` (parser.rs:6039-6060 + parser.rs:10168 `encode_sequence_options`), decoded back in `execute_ddl` at crates/pgexec/src/exec.rs:559-570 via `sequence_from_encoded_options` (exec.rs:1243). DROP SEQUENCE is desugared into `Statement::DropTable` with `__krabka_sequence__:<name>` names (parser.rs:6124-6140, decoded at exec.rs:356).
+Note the shape crabka uses for the sequence statements it _does_ support: CREATE SEQUENCE is desugared into `Statement::CreateIndex { table: "__krabka_sequence__", keys: <options as "k=v" strings> }` (parser.rs:6039-6060 + parser.rs:10168 `encode_sequence_options`), decoded back in `execute_ddl` at crates/pgexec/src/exec.rs:559-570 via `sequence_from_encoded_options` (exec.rs:1243). DROP SEQUENCE is desugared into `Statement::DropTable` with `__krabka_sequence__:<name>` names (parser.rs:6124-6140, decoded at exec.rs:356).
+
 - verifier verdict **?** (? truth rows wrong, ? anchors wrong)
 
 <details><summary>corrections</summary>
@@ -273,6 +281,7 @@ Note the shape crabka uses for the sequence statements it *does* support: CREATE
 </details>
 
 Existing tests that assert the about-to-change behavior:
+
 - `docs/PG_COMPAT_MATRIX.md` :: `tools/check-pg-compat-matrix.sh (CI gate: the "matrix anti-rot check" step of the pg-compat job in .github/workflows/ci.yml)` — Line 58 says `| ALTER SEQUENCE | Wave-assigned(D3) | Sequence lifecycle and sharded allocation. |`. The checker's `validate()` (tools/check-pg-compat-matrix.py:452-462) errors the moment the parser accepts a command whose matrix row is not Implemented/Mapped/Error-with-notice, and `validate_behavior_probes()` (line 375-383) separately errors on a parser-accepted Wave-assigned command. This is the single hardest anti-rot guard on this feature.
 - `crates/gres-conformance/src/parser_commands.rs` :: `statement_shape (line 810) — exhaustive `match statement`` — Adding `Statement::AlterSequence` breaks the exhaustive match and will not compile until an arm is added. Deliberate design: the doc comment at line 705-711 says the exhaustive match exists to force this module to account for new statement variants.
 - `crates/gres-conformance/corpus-regress/baseline.json` :: `the `sequence/sequence.sql` entry: {"total": 261, "matched": 123}` — The 24 ALTER SEQUENCE statements plus their downstream SELECTs move from mismatched to matched, so `matched` must be ratcheted up. Same for crates/gres-conformance/baseline.json if it carries a sequence-related count.
@@ -280,7 +289,7 @@ Existing tests that assert the about-to-change behavior:
 - `crates/pgexec/src/exec.rs` :: `sequence_bounds_and_cycle_are_enforced (inline #[tokio::test], around line 15239)` — Asserts only `err.code == "2200H"` for nextval exhaustion, which stays correct. It will need a message assertion once `sequence_wrapped_value` (seq.rs:180) starts emitting PostgreSQL's `reached maximum value of sequence "bounded" (3)` text, and the sibling setval assertions must move from 2200H to 22003.
 - `crates/pgcatalog/src/lib.rs` :: `list_sequences_reports_every_sequence_by_name_in_order (inline test, line 2940)` — Calls `Sequence::new(7, 2, None, None, None, true)` with six positional args. Adding a data-type parameter to `Sequence::new` breaks this call site (and every other `Sequence::new` caller, notably crates/pgexec/src/exec.rs:1266).
 
-### Subscripted INSERT target columns — `INSERT INTO t (a[1:5], b[1:1][1:2][1:2], c) VALUES (...)`, i.e. PostgreSQL's `insert_column_item := ColId opt_indirection`, where an entry in the INSERT column list carries an array subscript / slice chain (or a jsonb subscript chain) and assigns *into* a fresh NULL container instead of replacing the column.
+### Subscripted INSERT target columns — `INSERT INTO t (a[1:5], b[1:1][1:2][1:2], c) VALUES (...)`, i.e. PostgreSQL's `insert_column_item := ColId opt_indirection`, where an entry in the INSERT column list carries an array subscript / slice chain (or a jsonb subscript chain) and assigns _into_ a fresh NULL container instead of replacing the column.
 
 - difficulty **medium**, execution reachable: **yes**
 - current crabka behavior: SQLSTATE 42601, message `syntax error at position 22: expected RParen, found LBracket` for the headline `INSERT INTO arrtest (a[1:5], b[1:1][1:2][1:2], c, d, f, g) VALUES (...)`. (For `insert into inserttest (f2[1], f2[2]) values (1,2)` the same error reads `syntax error at position 26: expected RParen, found LBracket`.) Provenance, all by reading code: `Parser::insert` at crates/pgparser/src/parser.rs:6730 parses the column list as a bare `expect_col_id()` loop (6743/6746) with no `opt_indirection`, so after consuming `a` the `[` is not a comma, the loop breaks, and `self.expect(&Token::RParen)?` at parser.rs:6748 fails. `Parser::expect` (parser.rs:284-294) formats `format!("expected {want:?}, found {:?}", self.peek())` — `Token` derives Debug (crates/pgparser/src/token.rs:3), so the variants print as `RParen`/`LBracket`. `ParseError::new` (crates/pgparser/src/error.rs:23-28) prefixes `syntax error at position {position}: ` and sets sqlstate `"42601"`; `position` is `self.peek_pos()` = `self.toks[self.pos].1`, the 0-based byte offset of the `[` (parser.rs:263-265). The MERGE spelling `WHEN NOT MATCHED THEN INSERT (id, a[2]) VALUES (...)` fails the same way through `parse_parenthesized_ident_list` (parser.rs:7101-7115). The deferral is documented at docs/PG_COMPAT_MATRIX.md:226: "Deferred: subscripted INSERT target columns (`INSERT INTO t (a[1:5]) VALUES (...)`) are 42601".
@@ -297,22 +306,27 @@ Both are the same failure mode — the stated `oracle_result` does not follow fr
 
 ROW 3 (`arrays.sql:44` / `:49`). Claimed output has row 1's `e` = `[0:1]={1.1,2.2}`. Real output for exactly the SQL given (fresh session, the three INSERTs and nothing else):
 ```
+
       a      |        b        |     c     |       d       |     e     |        f        |      g
+
 -------------+-----------------+-----------+---------------+-----------+-----------------+-------------
- {1,2,3,4,5} | {{{0,0},{1,2}}} | {}        | {}            |           | {}              | {}
- {11,12,23}  | {{3,4},{4,5}}   | {foobar}  | {{elt1,elt2}} | {3.4,6.7} | {"abc  ",abcde} | {abc,abcde}
- {}          | {3,4}           | {foo,bar} | {bar,foo}     |           |                 |
+{1,2,3,4,5} | {{{0,0},{1,2}}} | {} | {} | | {} | {}
+{11,12,23} | {{3,4},{4,5}} | {foobar} | {{elt1,elt2}} | {3.4,6.7} | {"abc ",abcde} | {abc,abcde}
+{} | {3,4} | {foo,bar} | {bar,foo} | | |
 (3 rows)
+
 ```
 `e` is NULL for row 1, not `[0:1]={1.1,2.2}`. The row's own note admits it depends on "the intervening `UPDATE arrtest SET e[0]='1.1'`", but those UPDATEs are not in the `sql` field. Everything else in the row is right — I confirmed the per-row dims claim exactly: `da/db/dd` = `[1:5] / [1:1][1:2][1:2] / (null)`, `[1:3] / [1:2][1:2] / [1:1][1:2]`, `(null) / [1:2] / [1:2]`, and the "declared dimensionality is not enforced" point (`b int4[][][]` really does end up `[1:2][1:2]`).
 
 ROW 57 (zero source rows). Claimed `SELECT i, a, b FROM subscriptinsert_t;` returns `(0 rows)`. Run in the spec's own accumulated sequence — row 54 (`INSERT INTO subscriptinsert_t (b[1]) VALUES (5.7)`) already succeeded and left `{6}` in the table — the real output is:
 ```
+
 INSERT 0 0
- i | a |  b
+i | a | b
 ---+---+-----
-   |   | {6}
+| | {6}
 (1 row)
+
 ```
 The load-bearing claim (zero source rows ⇒ `INSERT 0 0`, no error from the subscript) is correct; the printed table is not.
 
@@ -337,6 +351,7 @@ WRONG-5. anchor `crates/pgexec/src/exec.rs:4744`, "`plan_timestamp_write` (the `
 </details>
 
 Existing tests that assert the about-to-change behavior:
+
 - `crates/pgparser/src/parser.rs` :: `insert_sources_cover_values_query_and_default_values` — Line 15711 asserts `columns == Some(vec!["a".into(), "b".into()])` for `INSERT INTO t (a, b) VALUES (1, 2)`. Changing `Statement::Insert.columns` to `Option<Vec<InsertTarget>>` breaks this at compile time; it should become `Some(vec![InsertTarget{name:"a", subscripts: vec![]}, ...])` and gain a subscripted case mirroring update_parses_subscripted_set_targets.
 - `crates/pgparser/src/parser.rs` :: `merge_parses_every_when_clause_shape` — Lines 15863-15884 match `MergeAction::Insert { values: Some(_), .. }` and compare against `MergeAction::Insert { columns: None, values: None }`. Both still compile after the element-type change, but the test is the natural home for the new MERGE `INSERT (id, a[2]) VALUES (...)` parse coverage, and the `columns: None` literal should be re-checked once the field type moves.
 - `crates/pgparser/src/parser.rs` :: `update_parses_subscripted_set_targets` — Not stale, but it is the exact assertion shape to clone for the new INSERT-target parse test (it asserts the Assignment's `subscripts: vec![ArraySubscript::Index(...), ...]`).
@@ -356,6 +371,7 @@ Origin, exactly: `trigger` is not a keyword (crates/pgparser/src/token.rs has no
 `CREATE OR REPLACE TRIGGER` would instead give `expected Keyword(Table), found Keyword(Or)` (same fallthrough, different token) — that spelling does not appear in the corpus. `ALTER TRIGGER` does not appear in the corpus either.
 
 There is NO `CommandIdentity::CreateTrigger`/`DropTrigger`/`AlterTrigger` (crates/pgparser/src/command.rs), no `Statement::CreateTrigger` (crates/pgparser/src/ast.rs), and no trigger token/keyword anywhere in crates/pgparser — the word `trigger` appears exactly once in the whole crate, in a doc comment at crates/pgparser/src/ast.rs:1277.
+
 - verifier verdict **PARTLY_WRONG** (6 truth rows wrong, 7 anchors wrong)
 
 <details><summary>corrections</summary>
@@ -416,6 +432,7 @@ Consequence: the an
 </details>
 
 Existing tests that assert the about-to-change behavior:
+
 - `docs/PG_COMPAT_MATRIX.md` :: `row 128 `| CREATE TRIGGER | Wave-assigned(P4) | Trigger support. |`` — tools/check-pg-compat-matrix.py `validate()` (line ~450) errors `parser accepts command(s) without a resolved Implemented/Mapped/Error-with-notice matrix row` the moment `CommandIdentity::CreateTrigger` exists. Must flip to `Implemented` (or `Mapped(...)`) in the same change. Also `validate_behavior_probes()` at line 375 errors `parser-accepted wave-assigned command(s) lack intentional refusal` if a probe is added while the row stays Wave-assigned.
 - `docs/PG_COMPAT_MATRIX.md` :: `row 175 `| DROP TRIGGER | Wave-assigned(P4) | Trigger support. |`` — same checker, same reason. DROP TRIGGER is half the 65-statement bucket, so it has to land with CREATE TRIGGER.
 - `docs/PG_COMPAT_MATRIX.md` :: `row 72 `| ALTER TRIGGER | Wave-assigned(P4) | Trigger lifecycle. |`` — only if ALTER TRIGGER … RENAME TO is implemented too (it appears nowhere in the regress corpus, so it is optional and wins 0 statements).
@@ -427,13 +444,12 @@ Existing tests that assert the about-to-change behavior:
 - `crates/gres-conformance/corpus-regress/TRIAGE.md` :: `line 106, the `| 65 | 42601 | … found Ident("trigger") |` root-cause row` — documentation-only, but it is the row this whole study is against and it becomes wrong. Note the same file's partitioning rows (lines 104-105, 254 + 115 statements for PARTITION OF / PARTITION BY) are ALREADY stale — partitioning is implemented now (crates/pgexec/src/partition.rs, exec.rs:10636 range/list/hash), which is why most trigger target relations do exist today.
 - `crates/pgexec/tests/catalog_introspection.rs` :: `every_named_catalog_relation_resolves (line 88 lists pg_catalog.pg_trigger)` — NOT stale — it only asserts the relation resolves, not that it is empty. Listed so a reader does not assume it needs touching.
 
-
 ## Next steps, with what was learned attempting them
 
 ### `public.`-qualified relation names (the 75 x 3F000 cluster, plus create_table/create_view cascade)
 
 `public` is now accepted as an identifier (`expect_ident` takes `Keyword::Public`), so `SELECT 1 AS public`
-and a `public.t` in FROM position both parse. What still fails is *resolution*: `public.t` reaches the
+and a `public.t` in FROM position both parse. What still fails is _resolution_: `public.t` reaches the
 catalog as the literal name `"public.t"` and misses.
 
 Do NOT fix this in the parser. Two attempts were made and reverted:
@@ -469,6 +485,7 @@ stripping a leading `public.` or `pg_temp.`, which is what crabka's single flat 
 PostgreSQL's default `search_path` — makes `public.t` and `t` the same relation for every path at once.
 
 Care needed, because this sits under all catalog access:
+
 - Apply it in ONE shared helper used by all four key builders, not copy-pasted.
 - `get_table` stores `name: name.to_string()`, so a `Table` built from `public.t` would carry the qualified
   spelling into error messages and `pg_class`. Normalise the stored name too.

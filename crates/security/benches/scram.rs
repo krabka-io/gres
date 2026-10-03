@@ -7,8 +7,8 @@
 
 use std::collections::HashMap;
 
-use krabka_security::{SaslMechanism, scram, verify_plain};
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use krabka_security::{SaslMechanism, scram, verify_plain};
 
 // ---------------------------------------------------------------------------
 // PBKDF2 — the dominant cost in a SCRAM login.

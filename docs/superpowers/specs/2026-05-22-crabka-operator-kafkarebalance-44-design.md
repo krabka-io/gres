@@ -29,11 +29,11 @@ metadata:
   name: my-rebalance
   namespace: kafka
   labels:
-    crabka.io/cluster: my-cluster   # optional; used to derive the endpoint
+    crabka.io/cluster: my-cluster # optional; used to derive the endpoint
 spec:
-  goals: ["RackAware", "ReplicaDistribution"]   # optional (default registry if unset)
-  throttleBytesPerSec: 52428800                  # optional (KIP-73 execute throttle)
-  endpoint: http://my-cluster-rebalancer.kafka.svc:9300  # optional override
+  goals: ["RackAware", "ReplicaDistribution"] # optional (default registry if unset)
+  throttleBytesPerSec: 52428800 # optional (KIP-73 execute throttle)
+  endpoint: http://my-cluster-rebalancer.kafka.svc:9300 # optional override
 ```
 
 - **`goals`** → `CreateProposal.goals`. Empty/unset = the rebalancer's full
@@ -56,12 +56,12 @@ follow-up slice adds the fields.
 ```yaml
 status:
   conditions:
-    - type: ProposalReady   # the active state lives in the condition type
+    - type: ProposalReady # the active state lives in the condition type
       status: "True"
       reason: ProposalReady
       message: "proposal 4f3c… computed: 8 replica / 3 leader movements"
       lastTransitionTime: "2026-05-22T…Z"
-  sessionId: 4f3c…          # rebalancer proposal id
+  sessionId: 4f3c… # rebalancer proposal id
   observedGeneration: 2
   optimizationResult:
     replicaMovements: 8
@@ -94,12 +94,12 @@ The decision core is a pure function
 `decide(state, command, has_session) -> RebalanceAction` (fully unit-tested
 in isolation); the reconcile fn only does I/O. Mapping:
 
-| state \ command | (none) | approve | refresh | stop |
-|-----------------|--------|---------|---------|------|
-| New | CreateProposal | — | CreateProposal | — |
-| ProposalReady | Idle | **Execute** | CreateProposal | Idle |
-| Rebalancing | **Poll** | Idle | CreateProposal | **Cancel** |
-| Ready/NotReady/Stopped | Idle | Idle | CreateProposal | Idle |
+| state \ command        | (none)         | approve     | refresh        | stop       |
+| ---------------------- | -------------- | ----------- | -------------- | ---------- |
+| New                    | CreateProposal | —           | CreateProposal | —          |
+| ProposalReady          | Idle           | **Execute** | CreateProposal | Idle       |
+| Rebalancing            | **Poll**       | Idle        | CreateProposal | **Cancel** |
+| Ready/NotReady/Stopped | Idle           | Idle        | CreateProposal | Idle       |
 
 RPC results map back to states: `Computed → ProposalReady`, `Executing →
 Rebalancing`, `Completed → Ready`, `Failed → NotReady`, `Cancelled →
@@ -153,8 +153,8 @@ endpoint on `Context`, evicted on transport error.
   approve→Rebalancing (+ throttle forwarded + annotation consumed),
   poll→Ready, stop→Stopped, poll-failure→NotReady, missing-endpoint, and
   transport-error-leaves-status-untouched.
-- **1 end-to-end wire test** (`rebalance_e2e.rs`): the operator's *real*
-  `ConnectRebalancerClient` driven over HTTP against the *real* rebalancer
+- **1 end-to-end wire test** (`rebalance_e2e.rs`): the operator's _real_
+  `ConnectRebalancerClient` driven over HTTP against the _real_ rebalancer
   Connect router (served in-process against a real single-broker Crabka).
   Verifies `CreateProposal`/`GetProposal` round-trips, the
   `not_found` error on an unknown id, and the `failed_precondition` error

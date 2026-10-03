@@ -32,6 +32,7 @@
 ## Task 1: Package scaffold + codegen + the h2c transport smoke
 
 **Files:**
+
 - Create: `sdks/ts/{package.json, tsconfig.json, vitest.config.ts}`; Modify: `buf.gen.yaml`
 - Create: `sdks/ts/test/transport.smoke.test.ts`
 
@@ -52,13 +53,19 @@ git commit -m "feat(sdk-ts): package scaffold, connect-es codegen, h2c transport
 
 ```ts
 test("connect codes map to the taxonomy", () => {
-  expect(fromConnectError(new ConnectError("x", Code.NotFound))).toBeInstanceOf(NotFoundError);
-  expect(fromConnectError(new ConnectError("x", Code.Unavailable))).toBeInstanceOf(TransportError);
+  expect(fromConnectError(new ConnectError("x", Code.NotFound))).toBeInstanceOf(
+    NotFoundError,
+  );
+  expect(
+    fromConnectError(new ConnectError("x", Code.Unavailable)),
+  ).toBeInstanceOf(TransportError);
 });
 test("stub errors carry pinned slugs", () => {
   const c = createClient({ endpoint: "http://localhost:1" });
   return expect(c.queues.acquire("t", {})).rejects.toMatchObject({
-    name: "UnimplementedError", module: "queues", gatedOn: "gateway-sharegroup-rpc",
+    name: "UnimplementedError",
+    module: "queues",
+    gatedOn: "gateway-sharegroup-rpc",
   });
 });
 ```

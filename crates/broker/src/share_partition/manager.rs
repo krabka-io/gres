@@ -12,10 +12,10 @@
 
 use std::{collections::HashSet, sync::Arc, time::Duration};
 
+use dashmap::DashMap;
 use krabka_ids::PartitionIndex;
 use krabka_log::Offset;
 use krabka_metadata::NodeId;
-use dashmap::DashMap;
 use tokio::sync::Mutex;
 use tracing::warn;
 

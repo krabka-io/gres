@@ -97,13 +97,13 @@ mod metadata_manager;
 mod s3;
 mod storage_manager;
 
+pub use dump::{PartitionDump, RlmmCacheDump};
+pub use error::RemoteStorageError;
+pub use inmemory::InmemoryRemoteLogMetadataManager;
 pub use krabka_object_store::{
     DEFAULT_MULTIPART_CHUNK_SIZE, DEFAULT_MULTIPART_THRESHOLD, GcsConfig, ObjectStoreConfig,
     S3Config,
 };
-pub use dump::{PartitionDump, RlmmCacheDump};
-pub use error::RemoteStorageError;
-pub use inmemory::InmemoryRemoteLogMetadataManager;
 pub use local::LocalTieredStorage;
 pub use metadata::{
     CustomMetadata, RemoteLogSegmentDetails, RemoteLogSegmentId, RemoteLogSegmentMetadata,

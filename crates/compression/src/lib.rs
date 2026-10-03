@@ -38,12 +38,12 @@ mod error;
 
 use bytes::Bytes;
 pub use codec_type::CompressionType;
+pub use error::CompressionError;
 use krabka_units::{
     ByteSize, Ratio,
     convert::{ByteSizeExt as _, RatioExt as _},
     fraction, gibibytes, mebibytes,
 };
-pub use error::CompressionError;
 use refined_type::rule::MinMaxU64;
 
 /// Fixed security ceiling for record decompression expansion.

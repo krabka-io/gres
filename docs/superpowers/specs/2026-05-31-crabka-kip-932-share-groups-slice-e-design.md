@@ -21,6 +21,7 @@ auto-Accept the prior poll's batch on the next poll; Explicit: app calls accept/
 ## Components
 
 `crates/client-consumer/src/share/` (new submodule; re-export from `lib.rs`):
+
 - `share/consumer.rs` — `ShareConsumer` struct + bon builder + `poll`/`acknowledge`/`commit`/`close`.
 - `share/coordinator.rs` — background `ShareGroupHeartbeat` loop (mirror `coordinator.rs`).
 - `share/types.rs` — `ShareConsumerRecord { topic, partition, offset, timestamp, key, value, delivery_count: i16 }`, `ShareAckMode { Implicit, Explicit }`, `ShareAckType { Accept, Release, Reject }`, `ShareConsumerError` (reuse `ConsumerError` variants + share-specific).
@@ -32,6 +33,7 @@ auto-Accept the prior poll's batch on the next poll; Explicit: app calls accept/
 **Heartbeat loop:** `interval(heartbeat_interval)`; each tick send `ShareGroupHeartbeat{ group_id, member_id, member_epoch, subscribed_topic_names: None (steady-state) }`; on response update `member_epoch` + `assignment` (if changed); on fenced/unknown-member error, rejoin from scratch (epoch 0, empty member_id) like the classic loop. Shutdown via the token.
 
 **`poll(timeout) -> Result<Vec<ShareConsumerRecord>, ShareConsumerError>`:**
+
 1. Determine acks to piggyback: Implicit ⇒ `Accept` for the previous poll's delivered ranges; Explicit ⇒ the app's accumulated `pending_acks`. Clear after attaching.
 2. Build `ShareFetch` for the current assignment (one `FetchTopic` per assigned topic_id, the assigned partitions, `acknowledgement_batches` = the piggybacked acks for that partition), `share_session_epoch` (0 first call, then the tracked value), `max_wait_ms = timeout`, `max_records`. Send via `client.send`.
 3. Increment/track `share_session_epoch` from the exchange. Decode each partition's `records.as_v2()` → records; pair with `acquired_records` ranges (a record's offset within `[first,last]` carries that range's `delivery_count`). Return `ShareConsumerRecord`s. Record the delivered ranges as the next-poll Implicit-Accept set.
@@ -40,14 +42,17 @@ auto-Accept the prior poll's batch on the next poll; Explicit: app calls accept/
 **`acknowledge(&record, ShareAckType)` (Explicit):** push `(topic_id, partition, offset, offset, ack_type)` into `pending_acks` (coalesce contiguous same-type ranges where easy). **`commit()`** / **`close()`** flush `pending_acks` via a standalone `ShareAcknowledge` (and `close` leaves the group via heartbeat epoch -1 + cancels the loop).
 
 ## Error handling
+
 - Heartbeat fenced/unknown-member → rejoin from scratch (mirror classic). ShareFetch/Acknowledge per-partition errors surfaced via the record/ack result; transient → retry next poll. `close()` best-effort (swallow flush errors).
 
 ## Non-goals (Slice E)
+
 - Multi-broker FindCoordinator + per-leader routing (send to bootstrap; follow-up).
 - `RENEW` ack / read_committed (broker Slice F).
 - Streams-style cooperative assignment (share assignment is server-driven, non-exclusive).
 
 ## Testing (`crates/client-consumer/tests/share_consumer.rs`, in-process broker)
+
 1. **basic consume + implicit accept:** produce N; `ShareConsumer.poll` returns N records (delivery_count 1); second poll auto-Accepts the first batch and returns nothing new (SPSO advanced).
 2. **explicit release → redelivery:** explicit mode; poll, `acknowledge(Release)` all, poll again → same records, delivery_count 2.
 3. **explicit reject:** reject → not redelivered; SPSO advances.
@@ -55,9 +60,11 @@ auto-Accept the prior poll's batch on the next poll; Explicit: app calls accept/
 5. **close leaves the group:** after `close()`, `ShareGroupDescribe` (via a raw client) shows the member gone.
 
 ## Acceptance gate
+
 1. fmt clean. 2. `clippy --workspace --all-targets -- -D warnings` clean. 3. `cargo test --workspace` green. 4. no drift. 5. All `tests/share_consumer.rs` cases green.
 
 ## Decomposition
+
 - **E1:** `share/{types,coordinator,consumer}.rs` skeleton — builder, first heartbeat + background loop, state, `close()`. lib.rs re-exports. (No fetch.)
 - **E2:** `poll()` + ShareFetch + session epoch + decode/pair + implicit auto-ack + explicit `acknowledge`/`commit` + Metadata resolution.
 - **E3:** `tests/share_consumer.rs`.

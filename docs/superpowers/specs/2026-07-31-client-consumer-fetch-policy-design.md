@@ -36,11 +36,11 @@ newtypes already enforce the required boundaries.
 
 The observability demo Consume role exposes:
 
-| CLI | Environment | Default |
-|---|---|---:|
-| `--consumer-fetch-min` | `KRABKA_DEMO_CONSUMER_FETCH_MIN` | `1B` |
-| `--consumer-fetch-max` | `KRABKA_DEMO_CONSUMER_FETCH_MAX` | `50MiB` |
-| `--consumer-fetch-partition-max` | `KRABKA_DEMO_CONSUMER_FETCH_PARTITION_MAX` | `1MiB` |
+| CLI                              | Environment                                | Default |
+| -------------------------------- | ------------------------------------------ | ------: |
+| `--consumer-fetch-min`           | `KRABKA_DEMO_CONSUMER_FETCH_MIN`           |    `1B` |
+| `--consumer-fetch-max`           | `KRABKA_DEMO_CONSUMER_FETCH_MAX`           | `50MiB` |
+| `--consumer-fetch-partition-max` | `KRABKA_DEMO_CONSUMER_FETCH_PARTITION_MAX` |  `1MiB` |
 
 Use direct `ByteSize` UOM parsing. Keep fields optional so explicit CLI or
 environment inputs can be rejected on Produce and Stream roles. Absence selects

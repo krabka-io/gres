@@ -16,6 +16,9 @@
 
 use std::{collections::BTreeMap, net::IpAddr};
 
+use k8s_openapi::{
+    ByteString, api::core::v1::Secret, apimachinery::pkg::apis::meta::v1::ObjectMeta,
+};
 use krabka_security::ca::{
     CaMaterial, SubjectAltName, generate_clients_ca, generate_cluster_ca, issue_broker_cert,
 };
@@ -24,9 +27,6 @@ use krabka_units::{
     convert::TimeExt as _,
     days,
     uom::{num_traits::ToPrimitive as _, si::time::day},
-};
-use k8s_openapi::{
-    ByteString, api::core::v1::Secret, apimachinery::pkg::apis::meta::v1::ObjectMeta,
 };
 use kube::{
     Resource, ResourceExt as _,

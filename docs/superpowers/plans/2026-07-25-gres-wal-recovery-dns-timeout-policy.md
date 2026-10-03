@@ -37,10 +37,12 @@
 ### Task 1: Validate and enforce the raw WAL DNS deadline
 
 **Files:**
+
 - Modify: `crates/gres-substrate/src/recovery.rs`
 - Modify: `crates/gres-substrate/src/lib.rs`
 
 **Interfaces:**
+
 - Produces: `DEFAULT_WAL_RECOVERY_DNS_TIMEOUT_MS: u64 = 10_000`
 - Produces: `RecoveryReadPolicy::with_dns_timeout(u64) -> Result<Self, String>`
 - Produces: `RecoveryReadPolicy::dns_timeout() -> Duration`
@@ -283,10 +285,12 @@ Obtain independent spec-compliance and quality approval. Resume this implementer
 ### Task 2: Expose standalone Gres CLI and environment policy
 
 **Files:**
+
 - Modify: `crates/gres/src/lib.rs`
 - Modify: `crates/gres/tests/runtime.rs` only if compilation requires adding the new `ServeArgs` field to an explicit fixture
 
 **Interfaces:**
+
 - Consumes: `DEFAULT_WAL_RECOVERY_DNS_TIMEOUT_MS`
 - Consumes: `RecoveryReadPolicy::with_dns_timeout`
 - Produces: `ServeArgs::wal_recovery_dns_timeout_ms: Option<PositiveMillis>`
@@ -414,11 +418,13 @@ If `crates/gres/tests/runtime.rs` did not change, omit it from `git add`. Obtain
 ### Task 3: Expose fleet CRD policy and render it once
 
 **Files:**
+
 - Modify: `crates/operator/src/crd/gres.rs`
 - Modify: `crates/operator/src/controller/gres_tenant.rs`
 - Modify generated: `deploy/crds/crabka.io_greses.yaml`
 
 **Interfaces:**
+
 - Consumes: `DEFAULT_WAL_RECOVERY_DNS_TIMEOUT_MS`
 - Produces: optional `GresComputeSpec::wal_recovery_dns_timeout_ms: Option<u64>`
 - Produces: validated `EffectiveGresComputePolicy::wal_recovery_dns_timeout_ms: PositiveMillis`
@@ -592,9 +598,11 @@ Obtain independent spec-compliance and quality approval and remediate every find
 ### Task 4: Audit, verify, publish, and continue
 
 **Files:**
+
 - Modify: `docs/configuration-audit.md`
 
 **Interfaces:**
+
 - Consumes: the reviewed substrate, standalone, and operator implementation
 - Produces: classified audit evidence, an updated draft PR #904, and the next coherent owner
 

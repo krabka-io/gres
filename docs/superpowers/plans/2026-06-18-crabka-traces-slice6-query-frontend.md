@@ -11,6 +11,7 @@
 > the full Tempo HTTP surface are all present and tested.
 >
 > **Deviations from the literal plan (adapted to the real types/topology):**
+>
 > - **Merge currency is the typed wire structs** (`TraceJson` for search, typed
 >   OTLP-JSON for by-id), not `krabka_traceql::TraceResult`/`TraceSpans`: the real
 >   `SpanRef` is 17 fields while the querier's search JSON is the thin Tempo shape,
@@ -39,7 +40,7 @@
 
 **Goal:** Build the `query-frontend` role for `krabka-traces` — an axum server that sits in front of N queriers (Slice 5) and (1) **shards** the trace search space into bounded jobs (time: recent live-store vs backend blocks; then per-block; then per-row-group sized ~`target_bytes_per_job`), (2) **queues** those jobs and **fans** them across queriers in parallel through a trait-abstracted `QuerierBackend` with bounded concurrency, (3) **merges** the per-job partials back into one Tempo JSON response while respecting `limit` (traces) and `spss` (spans-per-spanset), and (4) accumulates the `metrics{}` job-accounting block (`totalJobs`/`completedJobs`/`inspectedTraces`/`inspectedBytes`/`totalBlocks`) — all while preserving the Tempo HTTP byte-shapes the querier (Slice 5) exposes. `trace_by_id` fans the same job model (one job per candidate block) and assembles the single trace.
 
-**Architecture:** A new `frontend` module tree inside `krabka-traces`. The querier backend is a `QuerierBackend` **trait** (`async fn search_job` / `async fn trace_by_id_job`) so tests drive a `MockQuerier` returning canned per-job partials and real deployments use an `HttpQuerier` pool (reqwest, the grpc-gateway `forward.rs` pattern). The shardable unit is a `SearchJob { shard: JobShard, sub_start_ns, sub_end_ns }` where `JobShard` is `Live` (the hot tier) or `Block { block_id, row_group: Option<usize> }` (a cold block, optionally one row-group). A `SearchPartial` / `TracePartial` mirrors the slice-2 `krabka-traceql` result types (`TraceResult`/`SpanSet`/`SpanRef`, `TraceSpans`) plus a `JobMetrics` accumulator, so the merge logic manipulates parsed results, not raw bytes. The pipeline composes as `plan jobs → queue (bounded fan-out) → per-job search → merge-traces (limit/spss) → accumulate metrics → render Tempo JSON`. A result cache is **optional** for traces and is *not* built here (see the "Result cache (deferred)" note) — search is dominated by block scan, the moving-window reuse that makes range-result caching pay off for metrics does not apply to ad-hoc TraceQL search, and Tempo's own frontend caches *job results* (per block+shard), which we leave to a hardening slice. The role binary is `krabka-traces --target query-frontend`.
+**Architecture:** A new `frontend` module tree inside `krabka-traces`. The querier backend is a `QuerierBackend` **trait** (`async fn search_job` / `async fn trace_by_id_job`) so tests drive a `MockQuerier` returning canned per-job partials and real deployments use an `HttpQuerier` pool (reqwest, the grpc-gateway `forward.rs` pattern). The shardable unit is a `SearchJob { shard: JobShard, sub_start_ns, sub_end_ns }` where `JobShard` is `Live` (the hot tier) or `Block { block_id, row_group: Option<usize> }` (a cold block, optionally one row-group). A `SearchPartial` / `TracePartial` mirrors the slice-2 `krabka-traceql` result types (`TraceResult`/`SpanSet`/`SpanRef`, `TraceSpans`) plus a `JobMetrics` accumulator, so the merge logic manipulates parsed results, not raw bytes. The pipeline composes as `plan jobs → queue (bounded fan-out) → per-job search → merge-traces (limit/spss) → accumulate metrics → render Tempo JSON`. A result cache is **optional** for traces and is _not_ built here (see the "Result cache (deferred)" note) — search is dominated by block scan, the moving-window reuse that makes range-result caching pay off for metrics does not apply to ad-hoc TraceQL search, and Tempo's own frontend caches _job results_ (per block+shard), which we leave to a hardening slice. The role binary is `krabka-traces --target query-frontend`.
 
 **Tech Stack:** Rust 2024 · `axum` 0.8 (`http1`, `tokio`) · `reqwest` 0.13 (`json`, `rustls`) · `serde`/`serde_json` (Tempo JSON) · `tokio` (`rt-multi-thread`, `macros`, `time`, `sync`) · `futures` (bounded `buffer_unordered` fan-out) · `thiserror` · `async-trait` · `krabka-traceql` (result types: `TraceResult`/`SpanSet`/`SpanRef`/`TraceSpans`/`TagScope`/`ScopedTag`/`TypedValue`). Tests: `assert2`, `tokio` (`test`, `macros`).
 
@@ -50,7 +51,7 @@
 - **Lints:** `clippy::pedantic` is `warn`. New code clippy-pedantic clean. Run `cargo clippy -p krabka-traces --all-targets` before each commit.
 - **Formatting:** `cargo fmt -p krabka-traces` before every commit (never `cargo +nightly fmt --all` — OS error 206 in deep worktrees on Windows; always `-p`).
 - **Assertions:** `assert2::assert!`/`assert2::check!` in tests.
-- **Tempo wire fidelity:** the frontend must round-trip the querier's Tempo JSON unchanged for the no-op path (single job, no merge needed) — that is the byte-equality analog. Sharding only ever *partitions then re-unions* the same trace/span set; **a sharded search MUST equal the unsharded search over identical data** (the correctness centerpiece, Tasks 4–5, 9). The merged `traces` array respects `limit`; each `spanSets[].spans` respects `spss`; `startTimeUnixNano`/`durationNanos` stay string-encoded nanos, `durationMs` an int.
+- **Tempo wire fidelity:** the frontend must round-trip the querier's Tempo JSON unchanged for the no-op path (single job, no merge needed) — that is the byte-equality analog. Sharding only ever _partitions then re-unions_ the same trace/span set; **a sharded search MUST equal the unsharded search over identical data** (the correctness centerpiece, Tasks 4–5, 9). The merged `traces` array respects `limit`; each `spanSets[].spans` respects `spss`; `startTimeUnixNano`/`durationNanos` stay string-encoded nanos, `durationMs` an int.
 - **Tenant propagation:** the inbound `X-Scope-OrgID` header is threaded onto every backend job request. Never collapse tenants across jobs.
 - **Job accounting is additive and lossless:** the response `metrics{}` block is the sum over completed jobs (`totalJobs`/`completedJobs`/`inspectedTraces`/`inspectedBytes`/`totalBlocks`); a failed job increments neither `completedJobs` nor its byte counters but does count toward `totalJobs`.
 
@@ -65,18 +66,18 @@
 - `GET /api/v2/search/tags` + `tag/{tag}/values` → tag discovery → the frontend fans, unions, dedupes.
 - Tenant via `X-Scope-OrgID`. Errors as Tempo envelopes.
 
-**The querier's job-restriction support is assumed (Slice 5 contract):** the querier honors a `blockID=<ulid>` query param (restrict the scan to that one block) and a `shard=live` param (restrict to the live-store hot tier) on `/api/search` and `/api/v2/traces/{id}`, and reports its scan accounting in the response `metrics{}` block. The frontend's job is to *enumerate* blocks/shards into jobs, *queue+fan* them, and *merge* partials; the querier's job is to *honor* the restriction and *report* its bytes. **This slice does not implement querier-side block/shard filtering** — it injects the params and merges. The block enumeration source is the querier's `/api/v2/search/blocks`-style metadata door (Slice-5 contract: `GET /api/blocks?tenant=&start=&end=` → `{ blocks:[ { blockID, startUnixNano, endUnixNano, totalRecords, sizeBytes, rowGroups } ] }`); absent at authoring time it is modeled here behind the `BlockCatalog` trait so tests drive a `MockCatalog`.
+**The querier's job-restriction support is assumed (Slice 5 contract):** the querier honors a `blockID=<ulid>` query param (restrict the scan to that one block) and a `shard=live` param (restrict to the live-store hot tier) on `/api/search` and `/api/v2/traces/{id}`, and reports its scan accounting in the response `metrics{}` block. The frontend's job is to _enumerate_ blocks/shards into jobs, _queue+fan_ them, and _merge_ partials; the querier's job is to _honor_ the restriction and _report_ its bytes. **This slice does not implement querier-side block/shard filtering** — it injects the params and merges. The block enumeration source is the querier's `/api/v2/search/blocks`-style metadata door (Slice-5 contract: `GET /api/blocks?tenant=&start=&end=` → `{ blocks:[ { blockID, startUnixNano, endUnixNano, totalRecords, sizeBytes, rowGroups } ] }`); absent at authoring time it is modeled here behind the `BlockCatalog` trait so tests drive a `MockCatalog`.
 
-**Slices 2 & 5 absent at authoring time** — the result types this slice merges (`TraceResult`/`SpanSet`/`SpanRef`/`TraceSpans`) are **imported from `krabka-traceql`** (Slice 2 defines them as the pinned crate contract; do not redefine). The Tempo-JSON projection of those types (`/api/search` and `/api/v2/traces/{id}` shapes) is (re)stated here in `frontend/wire.rs` as the slice's own canonical serde model, because it is the *HTTP-edge* projection the frontend renders and parses — when Slice 5 lands its querier serializes to the same shape. If Slice 5 already exposes a shared `wire` module, import it instead and delete `frontend/wire.rs`.
+**Slices 2 & 5 absent at authoring time** — the result types this slice merges (`TraceResult`/`SpanSet`/`SpanRef`/`TraceSpans`) are **imported from `krabka-traceql`** (Slice 2 defines them as the pinned crate contract; do not redefine). The Tempo-JSON projection of those types (`/api/search` and `/api/v2/traces/{id}` shapes) is (re)stated here in `frontend/wire.rs` as the slice's own canonical serde model, because it is the _HTTP-edge_ projection the frontend renders and parses — when Slice 5 lands its querier serializes to the same shape. If Slice 5 already exposes a shared `wire` module, import it instead and delete `frontend/wire.rs`.
 
 **The 8 traces slices** (this plan = Slice 6):
 
-1. Blockstore generalization + span block schema (nested-set columns + DFS) + `TraceIndex`. *(`krabka-blockstore`)*
+1. Blockstore generalization + span block schema (nested-set columns + DFS) + `TraceIndex`. _(`krabka-blockstore`)_
 2. `krabka-traceql` core — parser + planner + selectors + `SpanStructuralJoin` (core ops) + the `SpanStore` trait + pinned result types.
 3. TraceQL completeness — negated/union structural ops + pipeline aggregations + TraceQL metrics + tag discovery.
-4. Ingest service — `distributor` → `trace_id`-partitioned WAL; `block-builder`; `live-store`. *(`krabka-traces`)*
+4. Ingest service — `distributor` → `trace_id`-partitioned WAL; `block-builder`; `live-store`. _(`krabka-traces`)_
 5. Querier + Tempo HTTP API — `SpanStore` as hot/cold UNION; `/api/echo`, `/api/v2/traces/{id}`, `/api/search`, `/api/v2/search/tags`+`values`, `/api/metrics/query_range`+`query`.
-6. **Query-frontend** *(this plan)* — search **sharding** (time/block/row-group jobs) + **queueing** + fan-out + spanSet/trace merge + the `query-frontend` role binary.
+6. **Query-frontend** _(this plan)_ — search **sharding** (time/block/row-group jobs) + **queueing** + fan-out + spanSet/trace merge + the `query-frontend` role binary.
 7. Metrics-generator — span-metrics (RED) + service-graphs → remote_write.
 8. Hardening — per-tenant limits + multi-tenancy isolation + differential-vs-Tempo + Grafana integration.
 
@@ -84,35 +85,37 @@
 
 ## File structure (`crates/traces/`)
 
-| File | Responsibility |
-|---|---|
-| `src/lib.rs` | add `pub mod frontend;` |
-| `src/frontend/mod.rs` | module decls + public re-exports + `QueryFrontend` orchestrator |
-| `src/frontend/wire.rs` | `SearchResponseJson` / `TraceJson` / `Metrics` — the Tempo-JSON edge model + `From<krabka_traceql::*>` projections |
-| `src/frontend/job.rs` | `JobShard` / `SearchJob` / `BlockCatalog` trait + `MockCatalog` + the **job planner** (time→shard→block→row-group) |
-| `src/frontend/backend.rs` | `QuerierBackend` trait + `SearchJobRequest`/`TraceByIdJobRequest` + `SearchPartial`/`TracePartial`/`JobMetrics` + `MockQuerier` (test) |
-| `src/frontend/http_backend.rs` | `HttpQuerier` — reqwest pool over configurable querier addrs (fan-out target) |
-| `src/frontend/merge.rs` | trace/spanSet merge honoring `limit`/`spss` + `JobMetrics` accumulation + tag-union; trace-by-id assembly |
-| `src/frontend/queue.rs` | bounded fan-out (`buffer_unordered`) over the planned jobs |
-| `src/frontend/server.rs` | axum router + handlers (`/api/search`, `/api/v2/traces/{id}`, `/api/v2/search/tags`+`values`, `/api/echo`) wiring the orchestrator |
-| `src/frontend/config.rs` | `FrontendConfig` (backend addrs, target bytes/job, max concurrency, default limit/spss, timeouts) |
-| `src/bin/krabka-traces.rs` | (modify) `--target query-frontend` role dispatch |
-| `tests/frontend_shard_equivalence.rs` | integration: sharded search == unsharded over canned per-block partials, limit/spss honored |
-| `tests/frontend_trace_by_id_assembly.rs` | integration: a trace split across blocks reassembles into one v2 trace |
-| `tests/frontend_http_backend.rs` | integration: `HttpQuerier` request shape (path, `blockID`, `X-Scope-OrgID`) + Tempo-JSON parse |
-| `tests/frontend_server.rs` | integration: router round-trips `/api/search` with tenant + limit/spss |
+| File                                     | Responsibility                                                                                                                         |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/lib.rs`                             | add `pub mod frontend;`                                                                                                                |
+| `src/frontend/mod.rs`                    | module decls + public re-exports + `QueryFrontend` orchestrator                                                                        |
+| `src/frontend/wire.rs`                   | `SearchResponseJson` / `TraceJson` / `Metrics` — the Tempo-JSON edge model + `From<krabka_traceql::*>` projections                     |
+| `src/frontend/job.rs`                    | `JobShard` / `SearchJob` / `BlockCatalog` trait + `MockCatalog` + the **job planner** (time→shard→block→row-group)                     |
+| `src/frontend/backend.rs`                | `QuerierBackend` trait + `SearchJobRequest`/`TraceByIdJobRequest` + `SearchPartial`/`TracePartial`/`JobMetrics` + `MockQuerier` (test) |
+| `src/frontend/http_backend.rs`           | `HttpQuerier` — reqwest pool over configurable querier addrs (fan-out target)                                                          |
+| `src/frontend/merge.rs`                  | trace/spanSet merge honoring `limit`/`spss` + `JobMetrics` accumulation + tag-union; trace-by-id assembly                              |
+| `src/frontend/queue.rs`                  | bounded fan-out (`buffer_unordered`) over the planned jobs                                                                             |
+| `src/frontend/server.rs`                 | axum router + handlers (`/api/search`, `/api/v2/traces/{id}`, `/api/v2/search/tags`+`values`, `/api/echo`) wiring the orchestrator     |
+| `src/frontend/config.rs`                 | `FrontendConfig` (backend addrs, target bytes/job, max concurrency, default limit/spss, timeouts)                                      |
+| `src/bin/krabka-traces.rs`               | (modify) `--target query-frontend` role dispatch                                                                                       |
+| `tests/frontend_shard_equivalence.rs`    | integration: sharded search == unsharded over canned per-block partials, limit/spss honored                                            |
+| `tests/frontend_trace_by_id_assembly.rs` | integration: a trace split across blocks reassembles into one v2 trace                                                                 |
+| `tests/frontend_http_backend.rs`         | integration: `HttpQuerier` request shape (path, `blockID`, `X-Scope-OrgID`) + Tempo-JSON parse                                         |
+| `tests/frontend_server.rs`               | integration: router round-trips `/api/search` with tenant + limit/spss                                                                 |
 
 ---
 
 ### Task 1: Crate deps + `frontend` module scaffold + the Tempo-JSON edge model
 
 **Files:**
+
 - Modify: `crates/traces/Cargo.toml`
 - Modify: `crates/traces/src/lib.rs`
 - Create: `crates/traces/src/frontend/mod.rs`
 - Create: `crates/traces/src/frontend/wire.rs`
 
 **Interfaces:**
+
 - Consumes (from `krabka-traceql`, Slice 2): `TraceResult { trace_id:[u8;16], root_service_name, root_trace_name, start_time_unix_nano:u64, duration_ms:u64, span_sets:Vec<SpanSet> }`, `SpanSet { spans:Vec<SpanRef>, matched:u32 }`, `SpanRef { span_id:[u8;8], start_time_unix_nano:u64, duration_nanos:u64, attributes:Vec<(String,AttrValue)> }`, `AttrValue`, `TraceSpans`, `ScopedTag`/`TagScope`/`TypedValue`.
 - Produces:
   - `struct Metrics { total_jobs:u64, completed_jobs:u64, total_blocks:u64, inspected_traces:u64, inspected_bytes:u64, inspected_spans:u64 }` (serde, camelCase: `totalJobs`/`completedJobs`/`totalBlocks`/`inspectedTraces`/`inspectedBytes`/`inspectedSpans`) with `fn add(&mut self, other:&Metrics)`.
@@ -445,20 +448,22 @@ git commit -m "feat(traces): query-frontend Tempo-JSON edge model + metrics acco
 ### Task 2: `QuerierBackend` trait + per-job request/partial types + `MockQuerier`
 
 **Files:**
+
 - Create: `crates/traces/src/frontend/backend.rs`
 - Modify: `crates/traces/src/frontend/mod.rs`
 
 **Interfaces:**
+
 - Consumes: `krabka_traceql::{TraceResult, TraceSpans, ScopedTag, TypedValue, TagScope}`, `wire::Metrics`.
 - Produces:
-  - `struct SearchJobRequest { tenant:String, query:String, start_ns:i64, end_ns:i64, limit:usize, spss:usize, shard:JobShard }` (`JobShard` from Task 3; forward-declare via `pub use crate::frontend::job::JobShard` — Task 3 defines it; for Task 2's own test a `JobShard::Live` literal suffices, so Task 2 implements the minimal `JobShard` enum here and Task 3 *extends* `job.rs` to re-export it — **decision: `JobShard` lives in `job.rs` (Task 3); Task 2 takes a dependency on it**, so do Task 3's enum first or land them together).
+  - `struct SearchJobRequest { tenant:String, query:String, start_ns:i64, end_ns:i64, limit:usize, spss:usize, shard:JobShard }` (`JobShard` from Task 3; forward-declare via `pub use crate::frontend::job::JobShard` — Task 3 defines it; for Task 2's own test a `JobShard::Live` literal suffices, so Task 2 implements the minimal `JobShard` enum here and Task 3 _extends_ `job.rs` to re-export it — **decision: `JobShard` lives in `job.rs` (Task 3); Task 2 takes a dependency on it**, so do Task 3's enum first or land them together).
   - `struct TraceByIdJobRequest { tenant:String, trace_id:[u8;16], start_ns:i64, end_ns:i64, block_id:Option<String> }`.
   - `struct SearchPartial { traces:Vec<TraceResult>, metrics:Metrics }`; `struct TracePartial { trace:Option<TraceSpans>, metrics:Metrics }`.
   - `enum BackendError { Timeout, Transport(String), Backend { status:String, message:String } }` (`thiserror`).
   - `#[async_trait] trait QuerierBackend: Send + Sync { async fn search_job(&self, req:&SearchJobRequest) -> Result<SearchPartial, BackendError>; async fn trace_by_id_job(&self, req:&TraceByIdJobRequest) -> Result<TracePartial, BackendError>; async fn tag_names(&self, tenant:&str, scope:Option<TagScope>, start_ns:i64, end_ns:i64) -> Result<(Vec<ScopedTag>, Metrics), BackendError>; async fn tag_values(&self, tenant:&str, tag:&str, start_ns:i64, end_ns:i64) -> Result<(Vec<TypedValue>, Metrics), BackendError>; }`.
   - `struct MockQuerier` — programmable FIFO-stub backend + a call recorder: `stub_search(SearchPartial)`, `stub_trace(TracePartial)`, `search_calls() -> Vec<SearchJobRequest>`, `trace_calls() -> Vec<TraceByIdJobRequest>`. Exposed un-gated (it's a fixture integration tests in `tests/` construct).
 
-> **Ordering note:** Task 2 imports `JobShard` from Task 3's `job.rs`. Implement Task 3's `JobShard` enum (just the enum + its module) *before or alongside* Task 2 so `backend.rs` compiles. The two tasks touch different files (`backend.rs` vs `job.rs`) and can be authored in either order, but `JobShard` must exist when `backend.rs` is first built.
+> **Ordering note:** Task 2 imports `JobShard` from Task 3's `job.rs`. Implement Task 3's `JobShard` enum (just the enum + its module) _before or alongside_ Task 2 so `backend.rs` compiles. The two tasks touch different files (`backend.rs` vs `job.rs`) and can be authored in either order, but `JobShard` must exist when `backend.rs` is first built.
 
 - [x] **Step 1: Write the failing test**
 
@@ -746,10 +751,12 @@ git commit -m "feat(traces): QuerierBackend trait + per-job request/partial type
 ### Task 3: `JobShard` + `BlockCatalog` + the job planner (time → shard → block → row-group)
 
 **Files:**
+
 - Create: `crates/traces/src/frontend/job.rs`
 - Modify: `crates/traces/src/frontend/mod.rs`
 
 **Interfaces:**
+
 - Produces:
   - `enum JobShard { Live, Block { block_id:String, row_group:Option<usize> } }`.
   - `struct BlockMetaInfo { block_id:String, start_ns:i64, end_ns:i64, total_records:u64, size_bytes:u64, row_groups:usize, row_group_sizes:Vec<u64> }`.
@@ -1009,7 +1016,7 @@ pub fn plan_trace_by_id_jobs(blocks: &[BlockMetaInfo], hot_frontier_ns: i64) -> 
 }
 ```
 
-> **Frontier semantics note:** `hot_frontier_ns` is the *cold-edge* timestamp — data at or after it lives in the live-store (hot) tier, data before it is in committed blocks. The planner probes the `Live` shard whenever the window could reach hot data and emits cold-block jobs for everything the catalog returned (the catalog already filtered to the window). A trace that straddles the frontier (late spans in a new block + recent spans in live) is correctly covered by *both* a block job and the Live job; the merge (Task 5) reunions per `trace_id` so no span is double-counted or lost — this is the hot/cold-merge correctness the spec §10 calls out.
+> **Frontier semantics note:** `hot_frontier_ns` is the _cold-edge_ timestamp — data at or after it lives in the live-store (hot) tier, data before it is in committed blocks. The planner probes the `Live` shard whenever the window could reach hot data and emits cold-block jobs for everything the catalog returned (the catalog already filtered to the window). A trace that straddles the frontier (late spans in a new block + recent spans in live) is correctly covered by _both_ a block job and the Live job; the merge (Task 5) reunions per `trace_id` so no span is double-counted or lost — this is the hot/cold-merge correctness the spec §10 calls out.
 
 - [x] **Step 4: Re-export from `mod.rs`**
 
@@ -1041,13 +1048,15 @@ git commit -m "feat(traces): job planner — time/shard/block/row-group sharding
 ### Task 4: Trace/spanSet merge honoring `limit` + `spss` (the correctness centerpiece, part 1)
 
 **Files:**
+
 - Create: `crates/traces/src/frontend/merge.rs`
 - Modify: `crates/traces/src/frontend/mod.rs`
 
 **Interfaces:**
+
 - Consumes: `krabka_traceql::{TraceResult, SpanSet, SpanRef}`, `backend::SearchPartial`, `wire::Metrics`.
 - Produces:
-  - `fn merge_search(partials:Vec<SearchPartial>, limit:usize, spss:usize) -> (Vec<TraceResult>, Metrics)` — union per-job partials by `trace_id` (a trace seen in multiple jobs/blocks merges its spanSets), accumulate `Metrics`, then **truncate**: keep at most `limit` traces (ordered by `start_time_unix_nano` descending — newest first, Tempo's default), and within each kept trace cap each spanSet's `spans` to `spss` (preserving `matched`, which reflects the *true* count before truncation).
+  - `fn merge_search(partials:Vec<SearchPartial>, limit:usize, spss:usize) -> (Vec<TraceResult>, Metrics)` — union per-job partials by `trace_id` (a trace seen in multiple jobs/blocks merges its spanSets), accumulate `Metrics`, then **truncate**: keep at most `limit` traces (ordered by `start_time_unix_nano` descending — newest first, Tempo's default), and within each kept trace cap each spanSet's `spans` to `spss` (preserving `matched`, which reflects the _true_ count before truncation).
   - `fn merge_one_trace(a:TraceResult, b:TraceResult) -> TraceResult` — same-`trace_id` reunion: concatenate `span_sets`, dedupe spans by `span_id` across blocks (the hot/cold + late-span overlap case), keep the earliest `start_time_unix_nano` and the max end (recompute `duration_ms`), prefer a non-empty `root_service_name`/`root_trace_name`.
 
 - [x] **Step 1: Write the failing test**
@@ -1265,7 +1274,7 @@ fn dedupe_spans(span_sets: &mut Vec<SpanSet>) {
 }
 ```
 
-> **`matched` semantics note:** Tempo's `matched` is the number of spans in the spanSet *that matched the query*, and it can exceed the number of spans actually returned (which is capped by `spss`). Here `merge_one_trace`/`dedupe_spans` set `matched` to the deduped real count, then `merge_search` truncates `spans` to `spss` **without** touching `matched` — so the wire shows the true match count alongside a capped span list, exactly as Tempo does (pinned by `spss_caps_spans_but_matched_is_true_count`). If Slice-3's TraceQL metrics path computes `matched` differently for pipeline aggregations, that is upstream of this merge; the frontend only re-totals after dedup.
+> **`matched` semantics note:** Tempo's `matched` is the number of spans in the spanSet _that matched the query_, and it can exceed the number of spans actually returned (which is capped by `spss`). Here `merge_one_trace`/`dedupe_spans` set `matched` to the deduped real count, then `merge_search` truncates `spans` to `spss` **without** touching `matched` — so the wire shows the true match count alongside a capped span list, exactly as Tempo does (pinned by `spss_caps_spans_but_matched_is_true_count`). If Slice-3's TraceQL metrics path computes `matched` differently for pipeline aggregations, that is upstream of this merge; the frontend only re-totals after dedup.
 
 - [x] **Step 4: Re-export from `mod.rs`**
 
@@ -1294,9 +1303,11 @@ git commit -m "feat(traces): trace/spanSet merge honoring limit+spss + cross-blo
 ### Task 5: Trace-by-id assembly + tag-union merge (the correctness centerpiece, part 2)
 
 **Files:**
+
 - Modify: `crates/traces/src/frontend/merge.rs` (add `assemble_trace`, `merge_tag_names`, `merge_tag_values`)
 
 **Interfaces:**
+
 - Consumes: `krabka_traceql::{TraceSpans, ScopedTag, TagScope, TypedValue}`, `backend::TracePartial`, `wire::Metrics`.
 - Produces:
   - `fn assemble_trace(partials:Vec<TracePartial>, max_trace_bytes:u64) -> (Option<TraceSpans>, Metrics, TraceStatus)` — union the per-block `TraceSpans` for one trace (concatenate `resourceSpans`, dedupe spans by `span_id`), accumulate metrics; if the assembled trace exceeds `max_trace_bytes` return `TraceStatus::Partial` (the v2 endpoint's oversized-trace contract), else `TraceStatus::Complete`; `None` when no block returned the trace.
@@ -1304,7 +1315,7 @@ git commit -m "feat(traces): trace/spanSet merge honoring limit+spss + cross-blo
   - `fn merge_tag_names(parts:Vec<(Vec<ScopedTag>, Metrics)>) -> (Vec<ScopedTag>, Metrics)` — union tags per `TagScope`, dedupe, sort; accumulate metrics.
   - `fn merge_tag_values(parts:Vec<(Vec<TypedValue>, Metrics)>) -> (Vec<TypedValue>, Metrics)` — union+dedupe `(type, value)` pairs; accumulate metrics.
 
-> **`TraceSpans` opacity note:** the Slice-2 contract states `TraceSpans { /* full OTLP resource→scope→spans for one trace */ }` without pinning its internal fields. This task therefore needs a *minimal accessor* on `TraceSpans` to union and size it. **Decision:** assume Slice 2 exposes (or this slice adds, as a `krabka-traceql` PR dependency) `TraceSpans { pub resource_spans: Vec<ResourceSpansJson>, ... }` plus `fn span_ids(&self) -> impl Iterator<Item=[u8;8]>` and `fn approx_size_bytes(&self) -> u64`. If those accessors are absent at authoring time, gate this task: implement `merge_tag_names`/`merge_tag_values` (which need no `TraceSpans` internals) now, and land `assemble_trace` once Slice 2 exposes the accessors. The test below for `assemble_trace` is written against those accessors — **verify against the Slice-2 `TraceSpans` definition before implementing**; do not fabricate fields.
+> **`TraceSpans` opacity note:** the Slice-2 contract states `TraceSpans { /* full OTLP resource→scope→spans for one trace */ }` without pinning its internal fields. This task therefore needs a _minimal accessor_ on `TraceSpans` to union and size it. **Decision:** assume Slice 2 exposes (or this slice adds, as a `krabka-traceql` PR dependency) `TraceSpans { pub resource_spans: Vec<ResourceSpansJson>, ... }` plus `fn span_ids(&self) -> impl Iterator<Item=[u8;8]>` and `fn approx_size_bytes(&self) -> u64`. If those accessors are absent at authoring time, gate this task: implement `merge_tag_names`/`merge_tag_values` (which need no `TraceSpans` internals) now, and land `assemble_trace` once Slice 2 exposes the accessors. The test below for `assemble_trace` is written against those accessors — **verify against the Slice-2 `TraceSpans` definition before implementing**; do not fabricate fields.
 
 - [x] **Step 1: Write the failing test**
 
@@ -1510,10 +1521,12 @@ git commit -m "feat(traces): trace-by-id assembly (v2 PARTIAL/COMPLETE) + tag-un
 ### Task 6: Bounded fan-out queue
 
 **Files:**
+
 - Create: `crates/traces/src/frontend/queue.rs`
 - Modify: `crates/traces/src/frontend/mod.rs`
 
 **Interfaces:**
+
 - Produces:
   - `async fn run_jobs<T, F, Fut>(jobs:Vec<T>, max_concurrency:usize, run:F) -> Vec<R>` where `F: Fn(T) -> Fut`, `Fut: Future<Output = R>` — drive `jobs` through a bounded-concurrency fan-out (`futures::stream::iter(...).map(run).buffer_unordered(max_concurrency).collect()`), preserving **no** ordering guarantee (results come back in completion order; callers key results by `trace_id`/job identity, never by position). `max_concurrency.max(1)` clamps a zero.
 
@@ -1627,11 +1640,13 @@ git commit -m "feat(traces): bounded-concurrency job fan-out queue"
 ### Task 7: `FrontendConfig` + `QueryFrontend` orchestrator
 
 **Files:**
+
 - Create: `crates/traces/src/frontend/config.rs`
 - Add the orchestrator in: `crates/traces/src/frontend/mod.rs` (struct `QueryFrontend`)
 - Modify: `crates/traces/src/frontend/mod.rs` (re-exports)
 
 **Interfaces:**
+
 - Produces:
   - `struct FrontendConfig { backend_addrs:Vec<String>, target_bytes_per_job:u64, max_concurrency:usize, default_limit:usize /*20*/, default_spss:usize /*3*/, hot_frontier_ns:i64, max_trace_bytes:u64, request_timeout:Duration, listen_addr:SocketAddr }` (+ `Default`).
   - `struct QueryFrontend<B:QuerierBackend, C:BlockCatalog> { backend:Arc<B>, catalog:Arc<C>, cfg:FrontendConfig }`.
@@ -1941,7 +1956,7 @@ impl<B: QuerierBackend + 'static, C: BlockCatalog + 'static> QueryFrontend<B, C>
 use crate::frontend::{job, merge, queue};
 ```
 
-> **Plan-vs-per-job metrics note:** `total_jobs`/`total_blocks` are *plan*-derived (known before any job runs); `completed_jobs`/`inspected_*` are *summed from per-job partials* (each `SearchPartial`/`TracePartial` carries the bytes/traces/spans that job actually scanned). The orchestrator overwrites `total_jobs`/`total_blocks` after the merge so a job that errored (and contributed an empty partial) still counts toward `total_jobs` but not `completed_jobs` — exactly the accounting the Global Constraint pins. The `search_plans_jobs_fans_and_merges` test asserts both halves.
+> **Plan-vs-per-job metrics note:** `total_jobs`/`total_blocks` are _plan_-derived (known before any job runs); `completed_jobs`/`inspected_*` are _summed from per-job partials_ (each `SearchPartial`/`TracePartial` carries the bytes/traces/spans that job actually scanned). The orchestrator overwrites `total_jobs`/`total_blocks` after the merge so a job that errored (and contributed an empty partial) still counts toward `total_jobs` but not `completed_jobs` — exactly the accounting the Global Constraint pins. The `search_plans_jobs_fans_and_merges` test asserts both halves.
 
 > **Suppressed-error note:** failed jobs degrade to empty partials (`unwrap_or_else`) so one slow/broken querier does not fail the whole search — Tempo's partial-results behavior. A future hardening slice can surface a `partial: true` flag / per-job error list; not in scope here.
 
@@ -1964,11 +1979,13 @@ git commit -m "feat(traces): QueryFrontend orchestrator (plan+queue+fan-out+merg
 ### Task 8: `HttpQuerier` fan-out backend (reqwest pool)
 
 **Files:**
+
 - Create: `crates/traces/src/frontend/http_backend.rs`
 - Create: `crates/traces/tests/frontend_http_backend.rs`
 - Modify: `crates/traces/src/frontend/mod.rs`
 
 **Interfaces:**
+
 - Produces:
   - `struct HttpQuerier { http:reqwest::Client, addrs:Vec<String>, next:AtomicUsize, timeout:Duration }` implementing `QuerierBackend`.
   - `fn new(addrs:Vec<String>, timeout:Duration) -> Result<HttpQuerier, BackendError>`.
@@ -2418,10 +2435,12 @@ git commit -m "feat(traces): HttpQuerier reqwest fan-out backend (per-job Tempo 
 ### Task 9: Shard-equivalence + trace-by-id-assembly integration tests
 
 **Files:**
+
 - Create: `crates/traces/tests/frontend_shard_equivalence.rs`
 - Create: `crates/traces/tests/frontend_trace_by_id_assembly.rs`
 
 **Interfaces:**
+
 - Consumes the public `frontend` API end-to-end with `MockQuerier` + `MockCatalog`.
 
 - [x] **Step 1: Shard-equivalence test (`frontend_shard_equivalence.rs`)**
@@ -2627,12 +2646,14 @@ git commit -m "test(traces): frontend shard-equivalence + trace-by-id assembly"
 ### Task 10: axum server + handlers + `--target query-frontend` role binary
 
 **Files:**
+
 - Create: `crates/traces/src/frontend/server.rs`
 - Create: `crates/traces/tests/frontend_server.rs`
 - Modify: `crates/traces/src/bin/krabka-traces.rs`
 - Modify: `crates/traces/src/frontend/mod.rs`
 
 **Interfaces:**
+
 - Produces:
   - `fn router_with_backend<B,C>(qf:Arc<QueryFrontend<B,C>>) -> axum::Router` — `/api/echo`, `/api/search`, `/api/v2/traces/{traceID}`, `/api/v2/search/tags`, `/api/v2/search/tag/{tag}/values` (GET), tenant from `X-Scope-OrgID`, returns the Tempo JSON. (`B: QuerierBackend + 'static, C: BlockCatalog + 'static`.)
   - `async fn run_query_frontend(cfg:FrontendConfig, shutdown:CancellationToken) -> std::io::Result<()>` — build the `HttpQuerier` pool + an `HttpCatalog` (Slice-5 block-metadata door), bind `cfg.listen_addr`, serve.
@@ -3009,7 +3030,7 @@ Extend the existing role binary `crates/traces/src/bin/krabka-traces.rs` (Slices
 
 Ensure `Target` (the `clap::ValueEnum`) has a `QueryFrontend` variant; add it if Slices 4–5 left it out.
 
-> **Binary-config note:** this slice wires the role *dispatch* and a working `HttpQuerier`/`HttpCatalog` from the default config. Real config loading (querier addresses, `target_bytes_per_job`, `max_concurrency`, the per-partition `hot_frontier_ns` from the live-store/block-builder offsets, the listen addr) lands in Slice 8 hardening. The server test targets the library router, not the binary, so the default config suffices to pass.
+> **Binary-config note:** this slice wires the role _dispatch_ and a working `HttpQuerier`/`HttpCatalog` from the default config. Real config loading (querier addresses, `target_bytes_per_job`, `max_concurrency`, the per-partition `hot_frontier_ns` from the live-store/block-builder offsets, the listen addr) lands in Slice 8 hardening. The server test targets the library router, not the binary, so the default config suffices to pass.
 
 - [x] **Step 5: Run to verify it passes + whole-crate gate**
 
@@ -3030,8 +3051,8 @@ git commit -m "feat(traces): query-frontend axum server + --target query-fronten
 
 A result cache is **optional** for traces and intentionally **not** built in this slice:
 
-- **No moving-window reuse.** The metrics frontend's result cache pays off because Grafana re-issues the *same* `query_range` with a sliding window, so older step-aligned sub-ranges are reused. Ad-hoc TraceQL **search** has no such repeated-sub-range structure — each search is a fresh predicate over a time window; there is little to reuse across requests.
-- **Where Tempo actually caches.** Tempo's frontend caches **job results** (per block+shard) and **bloom/footer** lookups, not whole-search results. That job-result cache is a *block-keyed* cache (a completed `Block` job's partial is content-addressable by `block_id` + query hash since a sealed block is immutable). Adding it is a clean follow-on: a `JobCache` trait consulted inside the per-`Block`-job branch of `run_jobs`, keyed by `(tenant, block_id, row_group, query_hash, start, end)`, with `Live` jobs never cached (the hot tier mutates). The `Metrics` accounting already distinguishes completed jobs, so a cache-hit job would contribute `inspected_bytes = 0` and still count as completed.
+- **No moving-window reuse.** The metrics frontend's result cache pays off because Grafana re-issues the _same_ `query_range` with a sliding window, so older step-aligned sub-ranges are reused. Ad-hoc TraceQL **search** has no such repeated-sub-range structure — each search is a fresh predicate over a time window; there is little to reuse across requests.
+- **Where Tempo actually caches.** Tempo's frontend caches **job results** (per block+shard) and **bloom/footer** lookups, not whole-search results. That job-result cache is a _block-keyed_ cache (a completed `Block` job's partial is content-addressable by `block_id` + query hash since a sealed block is immutable). Adding it is a clean follow-on: a `JobCache` trait consulted inside the per-`Block`-job branch of `run_jobs`, keyed by `(tenant, block_id, row_group, query_hash, start, end)`, with `Live` jobs never cached (the hot tier mutates). The `Metrics` accounting already distinguishes completed jobs, so a cache-hit job would contribute `inspected_bytes = 0` and still count as completed.
 - **Decision:** ship the shard/queue/fan-out/merge correctness first (this slice), and add the block-keyed `JobCache` in the hardening slice (Slice 8) alongside per-tenant limits — where the cache's eviction/size budget is a tenant-quota concern anyway. This is flagged, not forgotten.
 
 ---
@@ -3039,6 +3060,7 @@ A result cache is **optional** for traces and intentionally **not** built in thi
 ## Self-review
 
 **Spec coverage (against §6.7 two query paths, §8 Tempo HTTP API, §11 Slice 6):**
+
 - **Search sharding** (time: hot live-store vs cold backend; then per-block; then per-row-group ~`target_bytes_per_job`) → Tasks 3, 7, 9.
 - **Queueing + fan-out** (bounded-concurrency `buffer_unordered` across queriers, trait-abstracted backend, per-job dispatch with timeouts) → Tasks 2 (trait), 6 (queue), 7 (orchestrator), 8 (`HttpQuerier`).
 - **Merge respecting limit/spss** (reunion by `trace_id`, cross-block span dedup, newest-first `limit`, per-spanSet `spss` with true `matched`) → Tasks 4, 9.
@@ -3051,8 +3073,9 @@ A result cache is **optional** for traces and intentionally **not** built in thi
 **Contract fidelity:** consumes the Slice-2 `krabka-traceql` result types (`TraceResult`/`SpanSet`/`SpanRef`/`TraceSpans`/`TagScope`/`ScopedTag`/`TypedValue`/`AttrValue`) **by import, not redefinition**, and the Slice-5 querier HTTP surface (`/api/search`, `/api/v2/traces/{id}`, `/api/blocks`, tag endpoints) at the per-job grain. The `SearchResponseJson`/`TraceJson`/`Metrics` model (Task 1) is shaped to Tempo's JSON and pinned by a serde test; the no-op path (single job) round-trips the querier's body unchanged — the byte-equality analog.
 
 **Churn-prone surfaces — structured + behavior-pinned + verify-noted:**
+
 - `reqwest` 0.13 + querier Tempo contract (`http_backend.rs`) — pinned by a loopback axum-stub test asserting search request shape (`blockID`/`shard`, `X-Scope-OrgID`) + response parse; verify-note for method/param-name drift.
-- `krabka-traceql` Slice-2 types (`wire.rs` `From` impls, `merge.rs`) — the result-type field names are the pinned contract; the **`TraceSpans` accessors** (`merge_in`/`span_ids`/`approx_size_bytes`/`Deserialize`) are explicitly flagged as *not* in the pinned contract, with a "verify against the real `TraceSpans`; add a companion `krabka-traceql` PR if absent" note and the dependent test (`frontend_trace_by_id_assembly.rs`) gated accordingly — **not fabricated**.
+- `krabka-traceql` Slice-2 types (`wire.rs` `From` impls, `merge.rs`) — the result-type field names are the pinned contract; the **`TraceSpans` accessors** (`merge_in`/`span_ids`/`approx_size_bytes`/`Deserialize`) are explicitly flagged as _not_ in the pinned contract, with a "verify against the real `TraceSpans`; add a companion `krabka-traceql` PR if absent" note and the dependent test (`frontend_trace_by_id_assembly.rs`) gated accordingly — **not fabricated**.
 - `futures` `buffer_unordered` (`queue.rs`) — standard idiom, `futures_util` fallback noted; pinned by the bounded-concurrency test.
 - `axum` 0.8 routing (`server.rs`) — `{param}` capture + `Path<String>` verify-noted against the grpc-gateway precedent; pinned by the loopback server test.
 

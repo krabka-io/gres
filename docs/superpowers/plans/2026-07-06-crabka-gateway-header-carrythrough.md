@@ -42,6 +42,7 @@ The three `DecodedConsumerRecord {` construction sites (verified: `consume.rs:80
 ## Task 1: `DecodedConsumerRecord.headers` + Subscribe-egress population
 
 **Files:**
+
 - Modify: `crates/grpc-gateway/src/consume.rs:16-25` (struct), `crates/grpc-gateway/src/consume.rs:80-89` (`poll()`)
 - Modify: `crates/grpc-gateway/src/streaming.rs:146-160` (`inbound_from_decoded_record`), `crates/grpc-gateway/src/streaming.rs:485-517` (test mod)
 
@@ -149,6 +150,7 @@ git commit -m "feat(gateway): carry record headers on the Subscribe egress path"
 ## Task 2: Outbound envelope header array
 
 **Files:**
+
 - Modify: `crates/grpc-gateway/src/outbound.rs:280-296` (`render_envelope`), `crates/grpc-gateway/src/outbound.rs:488-532` (test mod)
 
 - [ ] **Step 1: Write the failing test**
@@ -223,6 +225,7 @@ git commit -m "feat(gateway): carry record headers on the outbound webhook envel
 ## Task 3: End-to-end header round-trip (behavior lock)
 
 **Files:**
+
 - Modify: `crates/grpc-gateway/tests/integration_consume.rs`
 
 - [ ] **Step 1: Write the behavior test**

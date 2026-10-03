@@ -4,11 +4,6 @@
 
 use std::{collections::BTreeMap, fmt::Write as _, sync::Arc};
 
-use krabka_gres_control::{
-    PgdogGeneral, PgdogRenderInput, PgdogTimeouts, PgdogUser, TenantEndpoint, TenantName,
-    TenantState, render_pgdog_toml, render_users_toml,
-};
-use krabka_units::{Time, convert::TimeExt as _, fmt::Human as _};
 use futures::StreamExt as _;
 use k8s_openapi::{
     ByteString,
@@ -17,6 +12,11 @@ use k8s_openapi::{
         core::v1::{Pod, Secret, Service},
     },
 };
+use krabka_gres_control::{
+    PgdogGeneral, PgdogRenderInput, PgdogTimeouts, PgdogUser, TenantEndpoint, TenantName,
+    TenantState, render_pgdog_toml, render_users_toml,
+};
+use krabka_units::{Time, convert::TimeExt as _, fmt::Human as _};
 use kube::{
     Resource, ResourceExt as _,
     api::{Api, ListParams, Patch, PatchParams},

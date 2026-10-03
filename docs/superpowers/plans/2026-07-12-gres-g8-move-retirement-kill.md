@@ -22,9 +22,11 @@
 ### Task 1: Exact Retirement Predicates
 
 **Files:**
+
 - Modify: `crates/gres/tests/topology_process_nemesis.rs`
 
 **Interfaces:**
+
 - Consumes: `SplitOperationRecord`, `TenantRecord`, `RangeRetirementPhase`, and Kafka topic presence.
 - Produces: four retirement `SourceKillPoint` variants and an exact predicate over journal, tenant, and topic state.
 
@@ -58,9 +60,11 @@ git commit -m "test(gres): define move retirement kill predicates"
 ### Task 2: Counting Real-Admin Ambiguity Seam
 
 **Files:**
+
 - Modify: `crates/gres/tests/topology_process_nemesis.rs`
 
 **Interfaces:**
+
 - Consumes: `AdminClientLike`, exact predecessor topic, and shared delete-ledger state.
 - Produces: a counting wrapper with a one-shot real-delete-then-error mode.
 
@@ -94,10 +98,12 @@ git commit -m "test(gres): add retirement delete ambiguity seam"
 ### Task 3: Real-Process Driver and Evidence
 
 **Files:**
+
 - Modify: `crates/gres/tests/topology_process_nemesis.rs`
 - Create: `docs/superpowers/evidence/2026-07-12-gres-g8-retirement-kill.md`
 
 **Interfaces:**
+
 - Consumes: exact predicates and counting wrapper.
 - Produces: four executable retirement cases and complete JSON evidence.
 
@@ -135,10 +141,12 @@ git commit -m "test(gres): cover move retirement phase recovery"
 ### Task 4: CI Validator and Review
 
 **Files:**
+
 - Create: `scripts/tests/gres-topology-process-retirement-nemesis-ci.sh`
 - Modify: `docs/superpowers/evidence/2026-07-12-gres-g8-retirement-kill.md`
 
 **Interfaces:**
+
 - Consumes: retirement evidence JSON and measured bounds.
 - Produces: one CI entry point running four isolated processes and exact validation.
 

@@ -17,7 +17,7 @@ handler (api_key 57) exists and persists a `V1FeatureLevel` record via Raft, and
 - A freshly-formatted cluster never establishes a finalized MV at all — it sits
   at `epoch −1` ("UNKNOWN") until an admin runs `UpdateFeatures`.
 - All upgrade safety lives in the operator (`krabka_operator::version`, Slice
-  28), which renders a `metadata.version` *string* into the broker's **inert**
+  28), which renders a `metadata.version` _string_ into the broker's **inert**
   `[server_properties]` (ignored at `file_config.rs:545`).
 
 STATUS.md (Slice 28) explicitly deferred "broker-side `metadata.version`
@@ -48,7 +48,7 @@ Real broker enforcement, decomposed into four behaviors (all in scope):
   (empirical, not from memory).
 - **Fail-fast / abort** on an out-of-range finalized MV — one reaction for both
   startup-load and runtime post-commit.
-- **Full upstream gate set** — downgrade floor *plus* per-RPC admission gates.
+- **Full upstream gate set** — downgrade floor _plus_ per-RPC admission gates.
 
 ## Hard Kafka-compat constraint
 
@@ -81,9 +81,9 @@ guard, and the per-RPC gates.
 ## 2. Bootstrap — every image carries a real finalized MV
 
 - `crabka format` (`crates/cli/src/format.rs`) gains `--release-version
-  <X.Y[-IVn]>` (the kafka-storage spelling). It maps the string → level via the
+<X.Y[-IVn]>` (the kafka-storage spelling). It maps the string → level via the
   table, validates it's in `[MIN, MAX]`, and emits a `V1FeatureLevel { name:
-  "metadata.version", level: N }` into `bootstrap.records.bin` alongside the
+"metadata.version", level: N }` into `bootstrap.records.bin` alongside the
   existing seed records (`V1KRaftVersion`, `V1Voters`, optional SCRAM/ACL).
   Default when the flag is absent: `MAX`.
 - **Operator handoff (chosen: option A).** The operator passes its resolved
@@ -110,11 +110,11 @@ Two observation points, one reaction (abort):
   after the new image is published, if the just-applied state carries a
   `metadata.version` outside `[MIN, MAX]` → fatal log + abort. This respects the
   infallible-apply contract: the committed record is applied successfully,
-  *then* the node crashes (matches the existing "the right move is to crash"
+  _then_ the node crashes (matches the existing "the right move is to crash"
   comment).
-- A **missing** finalized MV (epoch −1) is *not* a violation — a pre-bootstrap
+- A **missing** finalized MV (epoch −1) is _not_ a violation — a pre-bootstrap
   or legacy/test image is permitted (the broker advertises `UNKNOWN`). The guard
-  fires only on a *present, out-of-range* level.
+  fires only on a _present, out-of-range_ level.
 
 The operator's existing `binary >= finalized` version-guard is what keeps a
 correctly-run cluster from ever tripping this.
@@ -125,11 +125,11 @@ New pure function `features::min_required_metadata_version(image) -> i16`,
 computing the floor from live image state. Initial requirement map (exact levels
 pinned at implementation):
 
-| Live state present | Requires MV ≥ |
-|---|---|
-| SCRAM credentials (`V1ScramCredential`) | `3.5-IV2` (11) |
+| Live state present                      | Requires MV ≥   |
+| --------------------------------------- | --------------- |
+| SCRAM credentials (`V1ScramCredential`) | `3.5-IV2` (11)  |
 | Delegation tokens (`V1DelegationToken`) | `3.6-IV2` (14)* |
-| (baseline) | `MIN` (7) |
+| (baseline)                              | `MIN` (7)       |
 
 \*exact level verified against cp-kafka 4.0.
 
@@ -167,7 +167,7 @@ Targeted, since the broker now owns the table:
   `MetadataVersionTooLow` (mirror of the existing `MetadataVersionTooHigh`),
   keeping the operator from injecting a value the broker would abort on.
 - The resolved `metadata.version` string is passed to `crabka format
-  --release-version` (the option-A handoff).
+--release-version` (the option-A handoff).
 - No change to the Strimzi-shaped `spec.metadataVersion` surface.
 
 ## 7. Testing & jvm_acceptance

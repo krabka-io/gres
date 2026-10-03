@@ -136,21 +136,21 @@ precedence, zero/overflow rejection, and exact rendered TOML for custom values.
 
 Expose:
 
-| CLI | Environment | Default |
-|---|---|---:|
-| `--bootstrap` | `KRABKA_GRES_PGDOG_BOOTSTRAP` | required |
-| `--out-dir` | `KRABKA_GRES_PGDOG_OUT_DIR` | required |
-| `--activator` | `KRABKA_GRES_PGDOG_ACTIVATOR` | absent |
-| `--listen-port` | `KRABKA_GRES_PGDOG_LISTEN_PORT` | 6432 |
-| `--tls-certificate` | `KRABKA_GRES_PGDOG_TLS_CERTIFICATE` | absent |
-| `--tls-private-key` | `KRABKA_GRES_PGDOG_TLS_PRIVATE_KEY` | absent |
-| `--tls-client-ca-certificate` | `KRABKA_GRES_PGDOG_TLS_CLIENT_CA_CERTIFICATE` | absent |
-| `--pooler-mode` | `KRABKA_GRES_PGDOG_POOLER_MODE` | transaction |
-| `--connect-attempts` | `KRABKA_GRES_PGDOG_CONNECT_ATTEMPTS` | 3 |
-| `--cold-start-ceiling-ms` | `KRABKA_GRES_PGDOG_COLD_START_CEILING_MS` | 30000 |
-| `--idle-timeout-ms` | `KRABKA_GRES_PGDOG_IDLE_TIMEOUT_MS` | 60000 |
-| `--suspension-idle-timeout-ms` | `KRABKA_GRES_PGDOG_SUSPENSION_IDLE_TIMEOUT_MS` | 1000 |
-| `--server-lifetime-ms` | `KRABKA_GRES_PGDOG_SERVER_LIFETIME_MS` | 300000 |
+| CLI                            | Environment                                    |     Default |
+| ------------------------------ | ---------------------------------------------- | ----------: |
+| `--bootstrap`                  | `KRABKA_GRES_PGDOG_BOOTSTRAP`                  |    required |
+| `--out-dir`                    | `KRABKA_GRES_PGDOG_OUT_DIR`                    |    required |
+| `--activator`                  | `KRABKA_GRES_PGDOG_ACTIVATOR`                  |      absent |
+| `--listen-port`                | `KRABKA_GRES_PGDOG_LISTEN_PORT`                |        6432 |
+| `--tls-certificate`            | `KRABKA_GRES_PGDOG_TLS_CERTIFICATE`            |      absent |
+| `--tls-private-key`            | `KRABKA_GRES_PGDOG_TLS_PRIVATE_KEY`            |      absent |
+| `--tls-client-ca-certificate`  | `KRABKA_GRES_PGDOG_TLS_CLIENT_CA_CERTIFICATE`  |      absent |
+| `--pooler-mode`                | `KRABKA_GRES_PGDOG_POOLER_MODE`                | transaction |
+| `--connect-attempts`           | `KRABKA_GRES_PGDOG_CONNECT_ATTEMPTS`           |           3 |
+| `--cold-start-ceiling-ms`      | `KRABKA_GRES_PGDOG_COLD_START_CEILING_MS`      |       30000 |
+| `--idle-timeout-ms`            | `KRABKA_GRES_PGDOG_IDLE_TIMEOUT_MS`            |       60000 |
+| `--suspension-idle-timeout-ms` | `KRABKA_GRES_PGDOG_SUSPENSION_IDLE_TIMEOUT_MS` |        1000 |
+| `--server-lifetime-ms`         | `KRABKA_GRES_PGDOG_SERVER_LIFETIME_MS`         |      300000 |
 
 Use the suspension idle timeout only when at least one rendered tenant has
 `idle_seconds > 0`; `Some(0)` means never suspend and must not select it.

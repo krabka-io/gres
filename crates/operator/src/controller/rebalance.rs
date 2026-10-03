@@ -19,8 +19,8 @@
 
 use std::sync::Arc;
 
-use krabka_units::Time;
 use futures::StreamExt as _;
+use krabka_units::Time;
 use kube::{
     Resource, ResourceExt as _,
     api::{Api, Patch, PatchParams},

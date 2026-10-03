@@ -36,20 +36,20 @@ settings.
 
 ## Approved Surfaces
 
-| Process | Queue/frame environment prefix | Extra fetch minimum |
-|---|---|---|
-| bench-driver | `BENCH_` | none |
-| broker | `KRABKA_BROKER_` | none |
-| gres | `KRABKA_GRES_` | `FDW_FETCH_MIN`, `WAL_RECOVERY_FETCH_MIN`, `REGISTRY_READER_FETCH_MIN` |
-| grpc-gateway | `KRABKA_GRPC_GATEWAY_` | none |
-| metrics | `KRABKA_METRICS_` | none |
-| metrics-service | `KRABKA_METRICS_SERVICE_` | none |
-| observability-demo-app | `KRABKA_DEMO_` | `STREAMS_FETCH_MIN` |
-| profiles | `KRABKA_PROFILES_` | none |
-| rebalancer | `KRABKA_REBALANCER_` | none |
-| replicator | `KRABKA_REPLICATOR_` | none |
-| schema-registry | `SCHEMA_REGISTRY_` | none |
-| traces | `KRABKA_TRACES_` | none |
+| Process                | Queue/frame environment prefix | Extra fetch minimum                                                    |
+| ---------------------- | ------------------------------ | ---------------------------------------------------------------------- |
+| bench-driver           | `BENCH_`                       | none                                                                   |
+| broker                 | `KRABKA_BROKER_`               | none                                                                   |
+| gres                   | `KRABKA_GRES_`                 | `FDW_FETCH_MIN`, `WAL_RECOVERY_FETCH_MIN`, `REGISTRY_READER_FETCH_MIN` |
+| grpc-gateway           | `KRABKA_GRPC_GATEWAY_`         | none                                                                   |
+| metrics                | `KRABKA_METRICS_`              | none                                                                   |
+| metrics-service        | `KRABKA_METRICS_SERVICE_`      | none                                                                   |
+| observability-demo-app | `KRABKA_DEMO_`                 | `STREAMS_FETCH_MIN`                                                    |
+| profiles               | `KRABKA_PROFILES_`             | none                                                                   |
+| rebalancer             | `KRABKA_REBALANCER_`           | none                                                                   |
+| replicator             | `KRABKA_REPLICATOR_`           | none                                                                   |
+| schema-registry        | `SCHEMA_REGISTRY_`             | none                                                                   |
+| traces                 | `KRABKA_TRACES_`               | none                                                                   |
 
 If a binary's checked-in parser uses a different established prefix, preserve
 that prefix and update this table/audit rather than introducing an alias.
@@ -59,6 +59,7 @@ that prefix and update this table/audit rather than introducing an alias.
 ### Task 1: Add Shared Parser-Test Conventions Without a Shared Parser
 
 **Files:**
+
 - Inspect: existing parser helpers in the listed binaries
 - Modify: no shared crate unless an identical existing helper already owns
   `ByteSize` environment parsing
@@ -66,14 +67,15 @@ that prefix and update this table/audit rather than introducing an alias.
 - [ ] Inventory existing CLI/environment precedence tests and human-UOM parsers.
 - [ ] Reuse those local patterns. Do not create a cross-binary config framework.
 - [ ] For every process, require tests for default, environment, CLI precedence,
-  zero queue, over-ceiling frame, and fractional/non-finite frame where its
-  input path can represent them.
+      zero queue, over-ceiling frame, and fractional/non-finite frame where its
+      input path can represent them.
 
 ---
 
 ### Task 2: Propagate Policy Through Producer-Only Deployments
 
 **Files:**
+
 - Modify: `crates/bench-driver/src/main.rs`
 - Modify: `crates/bench-driver/src/workload.rs`
 - Modify: `crates/metrics/src/bin/krabka-metrics.rs`
@@ -84,15 +86,15 @@ that prefix and update this table/audit rather than introducing an alias.
 
 - [ ] Add failing parser precedence and invalid-input tests for each binary.
 - [ ] Add the two raw CLI/environment values using the binary's existing
-  parser pattern.
+      parser pattern.
 - [ ] Validate into `ConnectionDispatchQueueCapacity` and `ClientFrameMax`
-  before constructing work.
+      before constructing work.
 - [ ] Apply the pair to every `Producer::builder()` in the process, including
-  workload or role-specific helpers.
+      workload or role-specific helpers.
 - [ ] Re-scan each crate for `Producer::builder()` and prove every production
-  hit consumes the process policy.
+      hit consumes the process policy.
 - [ ] Run each package's all-target tests and commit one coherent package (or
-  tightly related small group) at a time.
+      tightly related small group) at a time.
 
 Suggested commit subjects:
 
@@ -108,6 +110,7 @@ feat(traces): expose client resource policy
 ### Task 3: Propagate Policy Through Rebalancer
 
 **Files:**
+
 - Modify: `crates/rebalancer/src/bin/rebalancer.rs`
 - Modify: `crates/rebalancer/src/ingest/admin_client.rs`
 - Modify: `crates/rebalancer/src/executor/client_impl.rs`
@@ -116,10 +119,10 @@ feat(traces): expose client resource policy
 - Modify: the existing rebalancer config structs and tests
 
 - [ ] Write failing tests proving one non-default pair reaches ingest,
-  executor, state-topic producer, and state-topic loader clients.
+      executor, state-topic producer, and state-topic loader clients.
 - [ ] Parse and validate the process pair before startup I/O.
 - [ ] Store it once in the existing rebalancer config and forward it to all
-  five client-owning paths.
+      five client-owning paths.
 - [ ] Verify reconnect/reload paths retain the pair.
 - [ ] Run `cargo test -p krabka-rebalancer --all-targets --locked` and commit.
 
@@ -128,6 +131,7 @@ feat(traces): expose client resource policy
 ### Task 4: Propagate Policy Through gRPC Gateway
 
 **Files:**
+
 - Modify: `crates/grpc-gateway/src/bin/gateway.rs`
 - Modify: `crates/grpc-gateway/src/produce.rs`
 - Modify: `crates/grpc-gateway/src/dedup/membership.rs`
@@ -136,9 +140,9 @@ feat(traces): expose client resource policy
 - Modify: focused parser and role/path tests
 
 - [ ] Add failing tests for default/env/CLI precedence and propagation to
-  direct production plus every dedup producer.
+      direct production plus every dedup producer.
 - [ ] Validate once at gateway startup and store the typed pair in its existing
-  application configuration.
+      application configuration.
 - [ ] Forward the same pair to all `Producer::builder()` calls.
 - [ ] Run `cargo test -p krabka-grpc-gateway --all-targets --locked` and commit.
 
@@ -147,25 +151,27 @@ feat(traces): expose client resource policy
 ### Task 5: Propagate Policy Through Schema Registry
 
 **Files:**
+
 - Modify: `crates/schema-registry/src/bin/schema-registry.rs`
 - Modify: `crates/schema-registry/src/kafkastore/writer.rs`
 - Modify: `crates/schema-registry/src/kafkastore/reader.rs`
 - Modify: the existing Kafka-store configuration and tests
 
 - [ ] Write failing tests proving the writer producer and reader
-  `ConnectionOptions` receive one non-default pair.
+      `ConnectionOptions` receive one non-default pair.
 - [ ] Add process CLI/environment parsing and early validation.
 - [ ] Carry typed values through the existing Kafka-store config into writer,
-  reader, and reader reconstruction paths.
+      reader, and reader reconstruction paths.
 - [ ] Keep unrelated HTTP `reqwest::Client` builders out of scope.
 - [ ] Run `cargo test -p krabka-schema-registry --all-targets --locked` and
-  commit.
+      commit.
 
 ---
 
 ### Task 6: Propagate Policy Through Replicator and Remote Storage
 
 **Files:**
+
 - Modify: `crates/replicator/src/main.rs`
 - Modify: `crates/replicator/src/tasks/checkpoint.rs`
 - Modify: replicator config/tests
@@ -173,13 +179,13 @@ feat(traces): expose client resource policy
 - Modify: the existing caller/config that constructs `KafkaLog`
 
 - [ ] Trace ownership before editing: determine whether every
-  `remote-storage-topic` production client is owned exclusively by broker,
-  replicator, or another listed deployment.
+      `remote-storage-topic` production client is owned exclusively by broker,
+      replicator, or another listed deployment.
 - [ ] Write failing propagation tests at each real deployment owner.
 - [ ] Add no standalone environment parsing to `remote-storage-topic`; accept
-  typed values from its owner.
+      typed values from its owner.
 - [ ] Ensure its producer, metadata client, and raw connection all reuse the
-  pair.
+      pair.
 - [ ] Run affected package tests and commit by owner.
 
 ---
@@ -187,6 +193,7 @@ feat(traces): expose client resource policy
 ### Task 7: Propagate Policy Through Broker
 
 **Files:**
+
 - Modify: `crates/broker/src/bin/broker.rs`
 - Modify: broker runtime config carrying outbound client policy
 - Modify: `crates/raft/src/network.rs`
@@ -195,21 +202,22 @@ feat(traces): expose client resource policy
 - Modify: focused broker/raft parser and propagation tests
 
 - [ ] Write failing parser tests and non-default propagation tests for broker
-  inter-broker, controller/raft, and broker-owned remote-storage clients.
+      inter-broker, controller/raft, and broker-owned remote-storage clients.
 - [ ] Validate the process pair before listener bind.
 - [ ] Carry typed policy through existing broker and controller configs.
 - [ ] Do not expose broker-side accepted-frame settings under these client
-  names; this pair applies only to outbound Kafka client connections.
+      names; this pair applies only to outbound Kafka client connections.
 - [ ] Re-scan broker/raft production sites and document fixed protocol/test
-  defaults separately.
+      defaults separately.
 - [ ] Run broker and raft all-target tests, including the secured inter-broker
-  test, then commit.
+      test, then commit.
 
 ---
 
 ### Task 8: Propagate Gres Process Policy and Fetch Minima
 
 **Files:**
+
 - Modify: `crates/gres/src/lib.rs`
 - Modify: existing Gres CLI/environment parser tests
 - Modify: construction of `KafkaFdw`, `LiveRecoveryConfig`, and
@@ -223,29 +231,30 @@ feat(traces): expose client resource policy
   - existing role restrictions.
 - [ ] Validate all raw values before listener bind.
 - [ ] Apply the process queue/frame pair to FDW, WAL recovery, and registry
-  owners using the library setters added in the previous phase.
+      owners using the library setters added in the previous phase.
 - [ ] Apply each fetch minimum only to its named owner.
 - [ ] Reject supplied role-specific settings when that role cannot consume
-  them, preserving existing Gres validation behavior.
+      them, preserving existing Gres validation behavior.
 - [ ] Ensure Gres-local direct `ConnectionOptions` and `IsolatedFetch` sites
-  reuse the corresponding typed policies.
+      reuse the corresponding typed policies.
 - [ ] Run `cargo test -p krabka-gres --all-targets --locked` and the affected
-  Gres library packages, then commit.
+      Gres library packages, then commit.
 
 ---
 
 ### Task 9: Propagate Observability Demo Streams Policy
 
 **Files:**
+
 - Modify: `crates/observability-demo-app/src/main.rs`
 - Modify: role/config tests
 
 - [ ] Add the process queue/frame pair plus
-  `--streams-fetch-min` / `KRABKA_DEMO_STREAMS_FETCH_MIN`.
+      `--streams-fetch-min` / `KRABKA_DEMO_STREAMS_FETCH_MIN`.
 - [ ] Validate before role startup.
 - [ ] Pass values to `KafkaStreams::builder()` only for the Stream role.
 - [ ] Preserve or add explicit rejection when the fetch-minimum is supplied to
-  a role without streams.
+      a role without streams.
 - [ ] Run package all-target tests and commit.
 
 ---
@@ -264,7 +273,7 @@ rg -n 'Client::builder\(|Producer::builder\(|ConnectionOptions \{|IsolatedFetch 
   - a CRD rendering path deferred to the final plan; or
   - fixed protocol/test behavior documented in the audit.
 - [x] Update `docs/configuration-audit.md` with exact CLI/environment names and
-  remaining CRD-only work.
+      remaining CRD-only work.
 - [x] Run:
 
 ```bash

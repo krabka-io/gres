@@ -17,7 +17,7 @@ The churn-prone surface (the `gimli`/`object`/`addr2line` DWARF API + the debugi
 ## Global Constraints
 
 - **No backwards compatibility.** Greenfield/undeployed. Change the `Symbolizer`/cache/config shapes, the `Frame` "needs-resolution" sentinel, and the role flag freely; no shims, no migration code, no `#[serde(default)]` gates. (Only Kafka wire compat matters — this slice touches no Kafka bytes.)
-- **`unsafe_code = "forbid"`** workspace-wide. No `unsafe`. (Note: `memmap2` is *not* used — debuginfo files are read into an owned `Vec<u8>` and parsed via `object::File::parse(&[u8])`, keeping the crate `unsafe`-free. `Mmap` would require `unsafe`.)
+- **`unsafe_code = "forbid"`** workspace-wide. No `unsafe`. (Note: `memmap2` is _not_ used — debuginfo files are read into an owned `Vec<u8>` and parsed via `object::File::parse(&[u8])`, keeping the crate `unsafe`-free. `Mmap` would require `unsafe`.)
 - **Lints:** `clippy::pedantic` is `warn`. New code clippy-pedantic clean (`module_name_repetitions`/`missing_errors_doc`/`missing_panics_doc` allowed workspace-wide). Run `cargo clippy -p krabka-profiles --all-targets` before each commit.
 - **Formatting:** `cargo fmt -p krabka-profiles` before every commit (never `cargo +nightly fmt --all` — OS error 206 / path-too-long in deep worktrees on Windows; always `-p`).
 - **Assertions:** `assert2::assert!` / `assert2::check!` in tests.
@@ -31,9 +31,10 @@ The churn-prone surface (the `gimli`/`object`/`addr2line` DWARF API + the debugi
 ## Dependency & slice roadmap
 
 **Depends on:**
+
 - **Slice 2 (`krabka-pprof`)** — `pub trait SymbolSource: Send + Sync { fn resolve(&self, partition: u64, id: u32) -> Vec<Frame>; }`; `Frame { pub function: String, pub file: String, pub line: i32 }`; `enum ProfileError { Decode, Plan, Exec, Store, Unsupported, Symbolize(String), … }`; `SymbolDb` (the in-block source this slice wraps). **Consumed via contract** (see Shared contract). If `SymbolDb` does not yet emit a "needs native resolution" sentinel, this slice adds the minimal accessor in `krabka-pprof` (one method) and notes it — never a silent stub.
-- **Slice 1 (`krabka-blockstore` `ProfileIndex` / symbol-DB artifact)** — the per-mapping fields `address`, `build_id` (string), `has_functions: bool` carried in the symbol-DB so the wrapper knows *which* frames need native resolution and *which* `(build_id, address)` to resolve. **Consumed via contract.**
-- **Slice 5 (querier) / Slice 6 (query-frontend)** — the querier constructs the `ProfileScan { symbols: Arc<dyn SymbolSource> }`; this slice provides the `Arc<dyn SymbolSource>` it plugs in (the `Symbolizer` wrapping the block's `SymbolDb`). The query-frontend merges **partial symbolized trees**, so resolution always happens *before* a cross-block merge — this slice's resolver therefore only ever sees one block's partition space at a time.
+- **Slice 1 (`krabka-blockstore` `ProfileIndex` / symbol-DB artifact)** — the per-mapping fields `address`, `build_id` (string), `has_functions: bool` carried in the symbol-DB so the wrapper knows _which_ frames need native resolution and _which_ `(build_id, address)` to resolve. **Consumed via contract.**
+- **Slice 5 (querier) / Slice 6 (query-frontend)** — the querier constructs the `ProfileScan { symbols: Arc<dyn SymbolSource> }`; this slice provides the `Arc<dyn SymbolSource>` it plugs in (the `Symbolizer` wrapping the block's `SymbolDb`). The query-frontend merges **partial symbolized trees**, so resolution always happens _before_ a cross-block merge — this slice's resolver therefore only ever sees one block's partition space at a time.
 
 **Shared contract (consume exactly — do not redefine).** From `krabka-pprof` (Slice 2):
 
@@ -47,9 +48,10 @@ pub trait SymbolSource: Send + Sync {
 pub enum ProfileError { /* … */ Symbolize(String) /* … */ }
 ```
 
-> **Verify-before-use (do not fabricate):** the exact field names of `Frame`, the `SymbolSource::resolve` signature, and the `ProfileError::Symbolize` variant are owned by Slice 2. Before Task 4, read `crates/pprof/src/lib.rs` re-exports (or `cargo doc -p krabka-pprof --no-deps`) and reconcile. If a name differs, adapt the **wrapper + tests together** — keep the asserted *frame resolution behavior* (the contract this slice owns) exact; the Rust field names bend to pprof.
+> **Verify-before-use (do not fabricate):** the exact field names of `Frame`, the `SymbolSource::resolve` signature, and the `ProfileError::Symbolize` variant are owned by Slice 2. Before Task 4, read `crates/pprof/src/lib.rs` re-exports (or `cargo doc -p krabka-pprof --no-deps`) and reconcile. If a name differs, adapt the **wrapper + tests together** — keep the asserted _frame resolution behavior_ (the contract this slice owns) exact; the Rust field names bend to pprof.
 
 **Contract gap — the "needs native resolution" signal.** The `Symbolizer` must know, per `(partition, id)`, which locations came from an unsymbolized mapping (`has_functions == false`) and what their raw `(build_id, address)` are. Two acceptable shapes, decided in Task 4:
+
 - **(preferred)** `SymbolDb` exposes `fn unresolved_locations(&self, partition: u64, id: u32) -> Vec<(String /*build_id*/, u64 /*address*/, usize /*frame slot*/)>` (added in Slice 2 if missing — a 1-method addition, flagged).
 - **(fallback)** `SymbolDb::resolve` returns `Frame`s where an unresolved frame is encoded as `function == ""`, `file == "<build_id>"`, `line == <address as i32-truncated>` — a sentinel the wrapper decodes. **Brittle (i32 truncates a u64 address)**; use only if the preferred accessor cannot land. The Task-4 "Contract gap" note records which was used.
 
@@ -59,19 +61,19 @@ pub enum ProfileError { /* … */ Symbolize(String) /* … */ }
 
 ## File structure (`crates/profiles/`)
 
-| File | Responsibility |
-|---|---|
-| `Cargo.toml` | add `addr2line`/`gimli`/`object`/`rustc-demangle`/`cpp_demangle`/`reqwest` deps + dev-dep `wiremock`; (crate already exists from Slices 4–6) |
-| `src/lib.rs` | add `pub mod symbolize;` + re-exports (existing modules unchanged) |
-| `src/symbolize/mod.rs` | `Symbolizer` (`impl krabka_pprof::SymbolSource`) + `SymbolizerConfig` + `SymbolizeError` + module decls |
-| `src/symbolize/fetch.rs` | `DebuginfodClient` — debuginfod HTTP + on-disk content-addressed cache + `BuildIdCache` |
-| `src/symbolize/dwarf.rs` | `ElfModule` — `object` + `addr2line` DWARF context, `.symtab`/`.dynsym` fallback, `.gopclntab` reader, demangle, inline expansion |
-| `src/symbolize/role.rs` | `--target symbolizer` role wiring (config from env/flags → a serve loop / in-querier stage handle) |
-| `src/bin/krabka-profiles.rs` | add the `symbolizer` arm to the existing `--target` match (Slices 4–6 own the binary) |
-| `tests/support/fixture_elf.rs` | synthesize a tiny ELF+DWARF with known symbols + an inline frame (path-included by integration tests) |
-| `tests/symbolize_dwarf.rs` | headline: address→frame against the fixture ELF (symbol + DWARF line + inline expansion) |
-| `tests/symbolize_debuginfod.rs` | headline: build-id lookup + on-disk cache (hit/miss) against a `wiremock` server |
-| `tests/symbolize_lazy.rs` | headline: `Symbolizer` wraps a fake inner `SymbolSource`; never-viewed id ⇒ never fetched; viewed id ⇒ native frames substituted |
+| File                            | Responsibility                                                                                                                               |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Cargo.toml`                    | add `addr2line`/`gimli`/`object`/`rustc-demangle`/`cpp_demangle`/`reqwest` deps + dev-dep `wiremock`; (crate already exists from Slices 4–6) |
+| `src/lib.rs`                    | add `pub mod symbolize;` + re-exports (existing modules unchanged)                                                                           |
+| `src/symbolize/mod.rs`          | `Symbolizer` (`impl krabka_pprof::SymbolSource`) + `SymbolizerConfig` + `SymbolizeError` + module decls                                      |
+| `src/symbolize/fetch.rs`        | `DebuginfodClient` — debuginfod HTTP + on-disk content-addressed cache + `BuildIdCache`                                                      |
+| `src/symbolize/dwarf.rs`        | `ElfModule` — `object` + `addr2line` DWARF context, `.symtab`/`.dynsym` fallback, `.gopclntab` reader, demangle, inline expansion            |
+| `src/symbolize/role.rs`         | `--target symbolizer` role wiring (config from env/flags → a serve loop / in-querier stage handle)                                           |
+| `src/bin/krabka-profiles.rs`    | add the `symbolizer` arm to the existing `--target` match (Slices 4–6 own the binary)                                                        |
+| `tests/support/fixture_elf.rs`  | synthesize a tiny ELF+DWARF with known symbols + an inline frame (path-included by integration tests)                                        |
+| `tests/symbolize_dwarf.rs`      | headline: address→frame against the fixture ELF (symbol + DWARF line + inline expansion)                                                     |
+| `tests/symbolize_debuginfod.rs` | headline: build-id lookup + on-disk cache (hit/miss) against a `wiremock` server                                                             |
+| `tests/symbolize_lazy.rs`       | headline: `Symbolizer` wraps a fake inner `SymbolSource`; never-viewed id ⇒ never fetched; viewed id ⇒ native frames substituted             |
 
 `dwarf.rs` (DWARF/object/addr2line) and `fetch.rs` (reqwest/debuginfod) are the only churn-prone files; each is pinned by a behavior test.
 
@@ -80,12 +82,14 @@ pub enum ProfileError { /* … */ Symbolize(String) /* … */ }
 ### Task 1: Crate deps + `symbolize` module scaffold
 
 **Files:**
+
 - Modify: `crates/profiles/Cargo.toml`
 - Modify: `crates/profiles/src/lib.rs`
 - Create: `crates/profiles/src/symbolize/mod.rs`
 - Modify: root `Cargo.toml` (add `addr2line`/`gimli`/`object`/`rustc-demangle`/`cpp_demangle`/`reqwest`/`wiremock` to `[workspace.dependencies]`)
 
 **Interfaces:**
+
 - Produces: a compiling `krabka-profiles` with a `symbolize` module exposing `pub struct SymbolizerConfig` + `pub enum SymbolizeError` + a placeholder `pub fn symbolize_smoke() -> bool`.
 
 - [ ] **Step 1: Add workspace deps**
@@ -110,7 +114,7 @@ reqwest = { version = "0.13", default-features = false, features = ["rustls-tls"
 wiremock = "0.6"
 ```
 
-> **Verify-against-version note (addr2line 0.24 / gimli 0.31 / object 0.36):** these three crates version-lock as a family (`addr2line` 0.24 re-exports `gimli` 0.31 and depends on `object` 0.36). If `cargo update` resolves a different `gimli` major *inside* `addr2line` than the one pinned here, the `gimli` types will not cross the boundary — keep the direct `gimli` pin equal to `addr2line`'s re-exported `gimli` (read `addr2line::gimli::*` instead of the direct `gimli` crate where types must unify). Confirm with `cargo tree -p krabka-profiles -i gimli` (one version only).
+> **Verify-against-version note (addr2line 0.24 / gimli 0.31 / object 0.36):** these three crates version-lock as a family (`addr2line` 0.24 re-exports `gimli` 0.31 and depends on `object` 0.36). If `cargo update` resolves a different `gimli` major _inside_ `addr2line` than the one pinned here, the `gimli` types will not cross the boundary — keep the direct `gimli` pin equal to `addr2line`'s re-exported `gimli` (read `addr2line::gimli::*` instead of the direct `gimli` crate where types must unify). Confirm with `cargo tree -p krabka-profiles -i gimli` (one version only).
 
 - [ ] **Step 2: Wire `crates/profiles/Cargo.toml`**
 
@@ -258,10 +262,12 @@ git commit -m "feat(profiles): scaffold symbolize module + DWARF/debuginfod deps
 ### Task 2: `DebuginfodClient` — fetch + on-disk content-addressed cache
 
 **Files:**
+
 - Modify: `crates/profiles/src/symbolize/fetch.rs`
 - Create: `crates/profiles/tests/symbolize_debuginfod.rs`
 
 **Interfaces:**
+
 - Consumes: `SymbolizeError`, `SymbolizerConfig`.
 - Produces:
   - `pub struct DebuginfodClient { http: reqwest::Client, servers: Vec<String>, cache: BuildIdCache, timeout: Duration }`
@@ -486,11 +492,13 @@ git commit -m "feat(profiles): debuginfod client + on-disk build-id cache"
 ### Task 3: `ElfModule` — DWARF/ELF/.gopclntab resolve + demangle + inline expansion
 
 **Files:**
+
 - Modify: `crates/profiles/src/symbolize/dwarf.rs`
 - Create: `crates/profiles/tests/support/fixture_elf.rs`
 - Create: `crates/profiles/tests/symbolize_dwarf.rs`
 
 **Interfaces:**
+
 - Consumes: `SymbolizeError`, `krabka_pprof::Frame`.
 - Produces:
   - `pub struct ElfModule { /* owned debuginfo bytes + addr2line::Context + symtab index */ }`
@@ -832,11 +840,13 @@ git commit -m "feat(profiles): ElfModule DWARF/symtab/gopclntab resolve + demang
 ### Task 4: `Symbolizer` — the `SymbolSource` wrapper with lazy resolve + module/frame caches
 
 **Files:**
+
 - Modify: `crates/profiles/src/symbolize/mod.rs`
 - Create: `crates/profiles/tests/symbolize_lazy.rs`
 - (possibly) Modify: `crates/pprof/src/symbols.rs` — add `unresolved_locations` accessor (see Contract gap)
 
 **Interfaces:**
+
 - Consumes: `krabka_pprof::{SymbolSource, Frame}`, `DebuginfodClient`, `ElfModule`, `SymbolizerConfig`.
 - Produces:
   - `pub struct Symbolizer { inner: Arc<dyn SymbolSource>, client: Arc<DebuginfodClient>, modules: Mutex<HashMap<String, ModuleSlot>>, resolved: Mutex<LruCache<(String,u64), Vec<Frame>>>, rt: tokio::runtime::Handle }`
@@ -1146,10 +1156,12 @@ git commit -m "feat(profiles): Symbolizer SymbolSource wrapper — lazy native r
 ### Task 5: `--target symbolizer` role + in-querier stage wiring
 
 **Files:**
+
 - Modify: `crates/profiles/src/symbolize/role.rs`
 - Modify: `crates/profiles/src/bin/krabka-profiles.rs` (add the `symbolizer` arm)
 
 **Interfaces:**
+
 - Consumes: `Symbolizer`, `SymbolizerConfig`, the existing `--target` `clap` enum + serve scaffold (Slices 4–6).
 - Produces:
   - `pub struct SymbolizerRole { cfg: SymbolizerConfig }` with `pub fn from_env() -> Result<Self, SymbolizeError>` (reads `DEBUGINFOD_URLS` / `KRABKA_DEBUGINFOD_CACHE`) and `pub async fn run(self, shutdown: tokio_util::sync::CancellationToken) -> Result<(), SymbolizeError>`.
@@ -1327,6 +1339,7 @@ git commit -m "feat(profiles): --target symbolizer role + in-querier stage facto
 ## Self-review
 
 **Spec coverage (against §8 native symbolization + §11 Slice 7):**
+
 - **`(build_id, address) → Frame`s** for `has_functions == false` mappings, resolved **lazily at query time** → Task 4 `Symbolizer` (the never-viewed-id ⇒ no-fetch headline). ✅
 - **debuginfod fetch by `build_id`** (default `https://debuginfod.elfutils.org/`, configurable; `reqwest` + **on-disk cache**) → Task 2 `DebuginfodClient`/`BuildIdCache` (cache-hit-avoids-HTTP headline). ✅
 - **ELF `.symtab`/`.dynsym` + DWARF (gimli/object/addr2line) + Go `.gopclntab` + demangle (C++/Rust) + inline-frame expansion** → Task 3 `ElfModule` (address→demangled-function + inline-chain headlines). ✅
@@ -1337,11 +1350,13 @@ git commit -m "feat(profiles): --target symbolizer role + in-querier stage facto
 - **New deps `gimli`/`object`/`addr2line`/`reqwest`** → Task 1, each with a verify-against-version note. ✅
 
 **Honest scope flagged (per spec §8 / Pyroscope #3715), not hidden:**
-- **System/OSS-binary path shipped**; **customer-code symbolization** (executable upload + `addr2line` over user binaries debuginfod does not host) is the **`exec-upload` follow-on** — wired as the injectable `ModuleResolver`/`with_resolver` seam (so the exec path drops in without touching the engine), explicitly *not* claimed complete. Every scope-touching doc-comment says so.
-- **`go_frame` is a flagged PLACEHOLDER** — the full `.gopclntab` pcHeader/funcnametab/pctab decode (~150 LOC, Go 1.18+ magic `0xFFFFFFF1`) is mechanical follow-on; non-stripped Go binaries are already covered by the `.symtab` path, and the placeholder returns `None` (never *wrong* frames). Flagged here and at the call site.
+
+- **System/OSS-binary path shipped**; **customer-code symbolization** (executable upload + `addr2line` over user binaries debuginfod does not host) is the **`exec-upload` follow-on** — wired as the injectable `ModuleResolver`/`with_resolver` seam (so the exec path drops in without touching the engine), explicitly _not_ claimed complete. Every scope-touching doc-comment says so.
+- **`go_frame` is a flagged PLACEHOLDER** — the full `.gopclntab` pcHeader/funcnametab/pctab decode (~150 LOC, Go 1.18+ magic `0xFFFFFFF1`) is mechanical follow-on; non-stripped Go binaries are already covered by the `.symtab` path, and the placeholder returns `None` (never _wrong_ frames). Flagged here and at the call site.
 - **`SymbolizerRole::run` standalone service surface is a flagged PLACEHOLDER** — the in-querier stage (`build_query_symbolizer`) is the shipped, fully-tested default; the standalone Connect `Resolve(build_id, addrs[])` service is a deployment-topology follow-on. The role binary is wireable (warms client + idles until shutdown), not faked.
 
 **Churn-prone surfaces — structured + behavior-pinned, not fabricated (CLAUDE.md):**
+
 - **addr2line 0.24 / object 0.36 / gimli 0.31 DWARF API** (Task 3) — every method used (`Context::new`, `find_frames(addr).skip_all_loads()`, `FrameIter::next`, `Frame::{function,location}`, `FunctionName::raw_name`, `object::File::parse`/`symbols`/`section_by_name`) carries an explicit **verify-against-0.24** checklist with the family-version-lock warning (`cargo tree -i gimli` must show one version); pinned by the fixture-ELF resolved-name test, not by trusting the listing. The self-referential-borrow trap (`Context` borrows `File` borrows bytes) is sidestepped `unsafe`-free by rebuilding `Context` per call from `Arc<Vec<u8>>`, with the `self_cell`/owned-context optimization flagged-not-done.
 - **reqwest 0.13 debuginfod wire** (Task 2) — `Client::builder().timeout`, `get().send()`, `status()`, `bytes()` flagged with a verify-note; pinned by the **wiremock** behavior test (cache-hit ⇒ `hits == 1`; all-404 ⇒ `NotFound`) — no real network in `cargo test`.
 - **object 0.36 write side** (Task 3 fixture) — the `object::write` builder is the one place the fixture is synthesized; flagged with a **vendor-a-tiny-`.debug`-instead** fallback (the spec's sanctioned alternative) recorded in the Self-review if synthesis proves fiddly.

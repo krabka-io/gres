@@ -12,7 +12,7 @@
 
 - Preserve the exact default capacity of `64` for both interactive-query queues.
 - Use `refined_type::rule::MinMaxUsize<1, {
-  tokio::sync::Semaphore::MAX_PERMITS }>` for the new validated newtype.
+tokio::sync::Semaphore::MAX_PERMITS }>` for the new validated newtype.
 - Accept `1..=tokio::sync::Semaphore::MAX_PERMITS`; reject values outside that
   inclusive range.
 - Use one capacity for both `IqRequest` and `Iq2Request` channels.
@@ -34,12 +34,14 @@
 ### Task 1: Validate and route the shared queue capacity
 
 **Files:**
+
 - Modify: `crates/client-streams/src/runtime/app.rs`
 - Modify: `crates/client-streams/src/runtime/mod.rs`
 - Modify: `crates/client-streams/src/streams_app.rs`
 - Modify: `crates/client-streams/src/lib.rs`
 
 **Interfaces:**
+
 - Produces: `pub const DEFAULT_STREAMS_INTERACTIVE_QUERY_QUEUE_CAPACITY: usize`
 - Produces: `pub struct StreamsInteractiveQueryQueueCapacity(usize)`
 - Produces: `StreamsInteractiveQueryQueueCapacity::new(usize) -> Result<Self, String>`
@@ -263,12 +265,14 @@ git commit -m "feat(streams): configure query queue capacity"
 ### Task 2: Expose the demo CLI, environment, and Compose setting
 
 **Files:**
+
 - Modify: `crates/observability-demo-app/src/main.rs`
 - Create: `crates/observability-demo-app/tests/streams_query_queue_config.rs`
 - Modify: `crates/observability-demo-app/tests/observability_demo_config.rs`
 - Modify: `demo/observability/docker-compose.yml`
 
 **Interfaces:**
+
 - Consumes: `StreamsInteractiveQueryQueueCapacity`
 - Produces: `--streams-interactive-query-queue-capacity`
 - Produces: `KRABKA_DEMO_STREAMS_INTERACTIVE_QUERY_QUEUE_CAPACITY`
@@ -515,9 +519,11 @@ git commit -m "feat(demo): expose Streams query queue"
 ### Task 3: Record audit closure and verify the slice
 
 **Files:**
+
 - Modify: `docs/configuration-audit.md`
 
 **Interfaces:**
+
 - Consumes: Tasks 1 and 2 committed behavior
 - Produces: reproducible scanner totals, exclusive focused-reference classification, final gate evidence, and one concrete next unresolved operational owner
 

@@ -89,8 +89,8 @@ Re-export both types and defaults from `lib.rs`; retain existing public constant
 aliases for compatibility.
 
 - [ ] Change the crate-private shared snapshot writer to accept
-`IndexSnapshotRetain` and remove the defensive `.max(1)`, because validation
-now enforces that invariant.
+      `IndexSnapshotRetain` and remove the defensive `.max(1)`, because validation
+      now enforces that invariant.
 
 - [ ] Add only these public method variants to both index types:
 
@@ -103,7 +103,7 @@ save_latest_snapshot_with_retain(...)
 Keep existing public methods as wrappers using the typed defaults.
 
 - [ ] Route trace loads through `krabka_object_store::read_capped`, matching the
-existing profile implementation. Do not cap serialization or writes.
+      existing profile implementation. Do not cap serialization or writes.
 
 - [ ] Verify GREEN and package quality:
 
@@ -132,7 +132,7 @@ git commit -m "feat(blockstore): expose snapshot policy"
 ### Task 2: Thread settings through traces
 
 - [ ] Add failing CLI tests for both defaults, invalid values, environment
-values, and command-line precedence:
+      values, and command-line precedence:
 
 ```text
 KRABKA_TRACES_INDEX_SNAPSHOT_MAX_BYTES=1024
@@ -144,7 +144,7 @@ KRABKA_TRACES_INDEX_SNAPSHOT_RETAIN=3
 Use the existing hermetic child-process pattern for environment mutation.
 
 - [ ] Add a failing block-builder test showing the configured retention value
-reaches its snapshot save.
+      reaches its snapshot save.
 
 - [ ] Verify RED:
 
@@ -169,7 +169,7 @@ CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
   - compactor startup.
 
 - [ ] Add only `index_snapshot_retain` to `BlockBuilderConfig`, because its loop
-only saves. Use it in `flush_partition_windows`.
+      only saves. Use it in `flush_partition_windows`.
 
 - [ ] Use configured retention in the one-shot compactor save.
 
@@ -209,7 +209,7 @@ KRABKA_PROFILES_INDEX_SNAPSHOT_RETAIN
 ```
 
 - [ ] Add a failing `BlockBuilderConfig` test showing both configured values
-reach block-builder load/save behavior.
+      reach block-builder load/save behavior.
 
 - [ ] Verify RED:
 
@@ -219,11 +219,11 @@ CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
 ```
 
 - [ ] Add typed CLI fields and use the configured maximum in querier,
-query-frontend, periodic refresh, compactor, and block-builder load paths.
+      query-frontend, periodic refresh, compactor, and block-builder load paths.
 
 - [ ] Add `index_snapshot_max_bytes` and `index_snapshot_retain` to
-`BlockBuilderConfig`, preserve typed defaults in `new`, and use them in its
-load/save loop.
+      `BlockBuilderConfig`, preserve typed defaults in `new`, and use them in its
+      load/save loop.
 
 - [ ] Use configured retention in the profiles compactor save.
 
@@ -270,7 +270,7 @@ CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
 ```
 
 - [ ] Add only the relevant signal-specific environment entries to each
-Compose role. Do not pass retention to read-only queriers.
+      Compose role. Do not pass retention to read-only queriers.
 
 - [ ] Verify GREEN and rendered Compose:
 
@@ -313,8 +313,8 @@ are configured defaults, compatibility aliases, propagation, deployment,
 tests, or audit evidence rather than unresolved production owners.
 
 - [ ] Append a snapshot-policy section to `docs/configuration-audit.md` with
-the defaults, validation, precedence, complete runtime/deployment flow, trace
-cap correction, exact counts, and verification evidence.
+      the defaults, validation, precedence, complete runtime/deployment flow, trace
+      cap correction, exact counts, and verification evidence.
 
 - [ ] Run final gates:
 

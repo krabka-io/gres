@@ -40,12 +40,14 @@
 ### Task 1: Expose and propagate the topic-mutation timeout
 
 **Files:**
+
 - Modify: `crates/admin-ui/src/config.rs`
 - Modify: `crates/admin-ui/src/main.rs`
 - Modify: `crates/admin-ui/src/server_fns.rs`
 - Modify: `crates/admin-ui/tests/config.rs`
 
 **Interfaces:**
+
 - Produces: `pub const DEFAULT_TOPIC_MUTATION_TIMEOUT_MS: i32`
 - Produces: `pub struct TopicMutationTimeoutMs(i32)`
 - Produces: `TopicMutationTimeoutMs::new(i32) -> Result<TopicMutationTimeoutMs, String>`
@@ -333,9 +335,11 @@ git commit -m "feat(admin-ui): expose topic mutation timeout"
 ### Task 2: Close the audit slice
 
 **Files:**
+
 - Modify: `docs/configuration-audit.md`
 
 **Interfaces:**
+
 - Consumes: the implemented `TopicMutationTimeoutMs` configuration flow.
 - Produces: exact audit evidence and the next unresolved repository owner.
 

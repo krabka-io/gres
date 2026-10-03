@@ -58,6 +58,7 @@ Four phases. The current phase is persisted to `{data_dir}/in_flight.json` after
 ```
 
 Failure semantics:
+
 - If `ApplyThrottle` fails, we **do not** start `Submit` — proposal goes to `Failed` and `ClearThrottle` still runs to undo any partial set.
 - If `Submit` fails (broker rejects e.g. `INVALID_REPLICA_ASSIGNMENT`), `ClearThrottle` runs and proposal goes to `Failed`.
 - If `Wait` times out (per-execution deadline, default 30 minutes, configurable via `--execute-deadline-secs`), in-flight reassignments are cancelled (KIP-455 with `null` replicas), `ClearThrottle` runs, proposal goes to `Failed`.
@@ -204,6 +205,7 @@ message ExecuteProposalRequest {
 Response: `{proposal}` — already transitioned to `Executing`, fields `started_at_ms` and `throttle_bytes_per_sec` populated.
 
 Errors:
+
 - `NotFound` — no proposal with that id
 - `FailedPrecondition` — another execution in-flight, OR proposal in terminal state, OR proposal has zero movements
 - `Internal` — could not persist `in_flight.json` (disk error)
@@ -225,6 +227,7 @@ message CancelExecutionResponse {
 ```
 
 Errors:
+
 - `NotFound` — no execution in-flight
 - `FailedPrecondition` — in-flight id doesn't match request id (defends against racing a stale operator UI)
 
@@ -244,12 +247,12 @@ New on `krabka-rebalancer`:
 
 Four config keys, set via `IncrementalAlterConfigs`:
 
-| Config | Resource type | Value |
-|--------|---------------|-------|
-| `leader.replication.throttled.rate` | BROKER (per broker id) | bytes/sec |
-| `follower.replication.throttled.rate` | BROKER (per broker id) | bytes/sec |
-| `leader.replication.throttled.replicas` | TOPIC | `partition:broker,partition:broker,...` |
-| `follower.replication.throttled.replicas` | TOPIC | `partition:broker,partition:broker,...` |
+| Config                                    | Resource type          | Value                                   |
+| ----------------------------------------- | ---------------------- | --------------------------------------- |
+| `leader.replication.throttled.rate`       | BROKER (per broker id) | bytes/sec                               |
+| `follower.replication.throttled.rate`     | BROKER (per broker id) | bytes/sec                               |
+| `leader.replication.throttled.replicas`   | TOPIC                  | `partition:broker,partition:broker,...` |
+| `follower.replication.throttled.replicas` | TOPIC                  | `partition:broker,partition:broker,...` |
 
 Computation from `Proposal.movements`:
 
@@ -325,7 +328,7 @@ Five test files under `charts/krabka-rebalancer/tests/` listed above. Run by `he
 ## Risks
 
 - **KIP-73 throttle on dynamic-config-immutable brokers.** If the Crabka broker rejects dynamic config writes for the throttle keys (regression or unimplemented), `ApplyThrottle` fails the proposal at the first phase. Defensive: capture the broker's error response in `failure_reason` so operators can diagnose. Pre-check during implementation: verify slice 15b actually wires the four keys.
-- **Resume race.** If the rebalancer restarts during the brief window between writing `in_flight.json` and issuing the AlterPartitionReassignments, `Execution::resume(Submit)` will issue the request. If it restarts in the *other* direction (the request was issued but the persist did not happen), resume will re-issue. Both are idempotent against KIP-455. We need to ensure persist happens **before** the network call for every phase transition (current design does this).
+- **Resume race.** If the rebalancer restarts during the brief window between writing `in_flight.json` and issuing the AlterPartitionReassignments, `Execution::resume(Submit)` will issue the request. If it restarts in the _other_ direction (the request was issued but the persist did not happen), resume will re-issue. Both are idempotent against KIP-455. We need to ensure persist happens **before** the network call for every phase transition (current design does this).
 - **Mid-execution cluster topology change.** A broker death between `Submit` and `Wait` may leave a movement unable to complete. The deadline (`--execute-deadline-secs`) catches this; the proposal goes to `Failed` with `failure_reason = "deadline exceeded"`. Operator must manually re-create a proposal against the new topology.
 
 ## Acceptance criteria

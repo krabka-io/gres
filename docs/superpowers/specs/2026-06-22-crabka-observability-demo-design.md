@@ -89,7 +89,7 @@ SOURCE A: crabka components                 SOURCE B: orders-analytics demo app
 pull/collector-shaped: metrics need a scraper to remote-write, logs are stdout
 JSON that needs tailing, profiles need `pyroscope.scrape`. Only traces push
 directly (broker OTLP). Routing everything through one Alloy keeps a single
-mental model — *everything → Alloy → Crabka backends → Grafana* — and lets Alloy
+mental model — _everything → Alloy → Crabka backends → Grafana_ — and lets Alloy
 attach uniform resource attributes.
 
 ## 4. Components
@@ -113,12 +113,12 @@ attach uniform resource attributes.
 Each backend runs its faithful role graph from a single shared Crabka image,
 selecting the role via `command:`. WAL = broker Kafka topics; blocks = MinIO.
 
-| Signal | Binary | Roles run | Ingest API | Query API (Grafana datasource) |
-|---|---|---|---|---|
-| Metrics | `krabka-metrics` (+ `krabka-metrics-service` for read path) | distributor, compactor, querier | Prometheus remote-write `POST /api/v1/push`; OTLP `/otlp/v1/metrics` | Prometheus HTTP API `/api/v1/query*` → **Prometheus** DS |
-| Traces | `krabka-traces` | distributor, block-builder, querier | OTLP `/v1/traces` (gRPC 4317 / HTTP 4318) | Tempo HTTP `/api/v2/traces/{id}`, `/api/search` → **Tempo** DS |
-| Logs | `krabka-logs` (**new binary**, §5.1) over `krabka-observability` | distributor, compactor, querier | Loki push `POST /loki/api/v1/push`; OTLP `/v1/logs` | Loki HTTP `/loki/api/v1/query_range`, `/labels` → **Loki** DS |
-| Profiles | `krabka-profiles` | distributor, block-builder, querier | Pyroscope `push.v1.PusherService/Push`, legacy `/ingest` | Pyroscope `querier.v1.QuerierService` + `/pyroscope/render` → **Pyroscope** DS |
+| Signal   | Binary                                                           | Roles run                           | Ingest API                                                           | Query API (Grafana datasource)                                                 |
+| -------- | ---------------------------------------------------------------- | ----------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Metrics  | `krabka-metrics` (+ `krabka-metrics-service` for read path)      | distributor, compactor, querier     | Prometheus remote-write `POST /api/v1/push`; OTLP `/otlp/v1/metrics` | Prometheus HTTP API `/api/v1/query*` → **Prometheus** DS                       |
+| Traces   | `krabka-traces`                                                  | distributor, block-builder, querier | OTLP `/v1/traces` (gRPC 4317 / HTTP 4318)                            | Tempo HTTP `/api/v2/traces/{id}`, `/api/search` → **Tempo** DS                 |
+| Logs     | `krabka-logs` (**new binary**, §5.1) over `krabka-observability` | distributor, compactor, querier     | Loki push `POST /loki/api/v1/push`; OTLP `/v1/logs`                  | Loki HTTP `/loki/api/v1/query_range`, `/labels` → **Loki** DS                  |
+| Profiles | `krabka-profiles`                                                | distributor, block-builder, querier | Pyroscope `push.v1.PusherService/Push`, legacy `/ingest`             | Pyroscope `querier.v1.QuerierService` + `/pyroscope/render` → **Pyroscope** DS |
 
 Role enums confirmed in code: metrics `Target::{Distributor,Compactor,Querier,
 QueryFrontend,Ruler}` (`crates/metrics/src/bin/krabka-metrics.rs`); traces
@@ -247,12 +247,12 @@ The broker, the four backend services, and the demo app are instrumented
 **identically**, using Crabka's own libraries. This is the design's unifying
 idea and keeps Alloy's config uniform.
 
-| Signal | Mechanism | Surface |
-|---|---|---|
-| Traces | `krabka-telemetry` OTLP exporter, enabled by `KRABKA_OTLP_ENDPOINT` | OTLP push → Alloy `:4317` |
-| Logs | `krabka-telemetry` structured-JSON `fmt` layer | stdout → Alloy `loki.source` |
-| Metrics | `prometheus-client` (broker's existing pattern) | `GET /metrics` on an admin port |
-| Profiles | in-process profiler (new, §5.2) | `GET /debug/pprof/profile` (CPU), `GET /debug/pprof/heap` (heap) |
+| Signal   | Mechanism                                                           | Surface                                                          |
+| -------- | ------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Traces   | `krabka-telemetry` OTLP exporter, enabled by `KRABKA_OTLP_ENDPOINT` | OTLP push → Alloy `:4317`                                        |
+| Logs     | `krabka-telemetry` structured-JSON `fmt` layer                      | stdout → Alloy `loki.source`                                     |
+| Metrics  | `prometheus-client` (broker's existing pattern)                     | `GET /metrics` on an admin port                                  |
+| Profiles | in-process profiler (new, §5.2)                                     | `GET /debug/pprof/profile` (CPU), `GET /debug/pprof/heap` (heap) |
 
 ### 5.1 New `krabka-logs` binary
 
@@ -327,7 +327,7 @@ explicit. Dependency direction was checked so no publishable product crate
   `krabka-traces`, `krabka-traceql`, `krabka-profiles`, `krabka-pprof`,
   `krabka-blockstore`.
 - **Deliberately kept publishable** — shared instrumentation/util/core libs that
-  publishable product binaries depend on, *not* observability backends:
+  publishable product binaries depend on, _not_ observability backends:
   - `krabka-telemetry` — `krabka-broker` + `krabka-grpc-gateway` depend on it.
   - `krabka-logfmt` — "structured-JSON tracing log formatter shared across Crabka
     services"; `operator`/`replicator`/`schema-registry`/`telemetry` depend on it.
@@ -339,12 +339,12 @@ shared libs product binaries rely on stay intact.
 
 ## 6. Signal routing (end to end)
 
-| Signal | Source emits | Alloy stage | Backend ingest | Backend query | Grafana DS |
-|---|---|---|---|---|---|
-| Metrics | `/metrics` (Prom) | `prometheus.scrape` → `remote_write` | `krabka-metrics` `/api/v1/push` | `/api/v1/query*` | Prometheus |
-| Traces | OTLP push | `otelcol.receiver.otlp` → `exporter.otlp` | `krabka-traces` `:4317` `/v1/traces` | `/api/v2/traces`, `/api/search` | Tempo |
-| Logs | JSON stdout | `loki.source.docker` → `loki.write` | `krabka-logs` `/loki/api/v1/push` | `/loki/api/v1/query_range` | Loki |
-| Profiles | `/debug/pprof/*` | `pyroscope.scrape` → `pyroscope.write` | `krabka-profiles` Push/`/ingest` | `querier.v1` / `/pyroscope/render` | Pyroscope |
+| Signal   | Source emits      | Alloy stage                               | Backend ingest                       | Backend query                      | Grafana DS |
+| -------- | ----------------- | ----------------------------------------- | ------------------------------------ | ---------------------------------- | ---------- |
+| Metrics  | `/metrics` (Prom) | `prometheus.scrape` → `remote_write`      | `krabka-metrics` `/api/v1/push`      | `/api/v1/query*`                   | Prometheus |
+| Traces   | OTLP push         | `otelcol.receiver.otlp` → `exporter.otlp` | `krabka-traces` `:4317` `/v1/traces` | `/api/v2/traces`, `/api/search`    | Tempo      |
+| Logs     | JSON stdout       | `loki.source.docker` → `loki.write`       | `krabka-logs` `/loki/api/v1/push`    | `/loki/api/v1/query_range`         | Loki       |
+| Profiles | `/debug/pprof/*`  | `pyroscope.scrape` → `pyroscope.write`    | `krabka-profiles` Push/`/ingest`     | `querier.v1` / `/pyroscope/render` | Pyroscope  |
 
 ## 7. Repository layout
 

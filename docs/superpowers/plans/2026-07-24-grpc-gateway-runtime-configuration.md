@@ -21,18 +21,18 @@
 
 ## Runtime Field Table
 
-| Field | Type | Default | Constraint |
-|---|---:|---:|---|
-| `internal_topic_replication_factor` | `i16` | `3` | `>= 1` |
-| `internal_topic_allow_replication_fallback` | bool | `true` | boolean |
-| `internal_topic_create_timeout_ms` | `i32` | `10000` | `>= 1` |
-| `internal_topic_segment_ms` | `i64` | `60000` | `>= 1` |
-| `internal_topic_min_cleanable_dirty_ratio_basis_points` | `u32` | `100` | `0..=10000` |
-| `consumer_poll_timeout_ms` | `u64` | `500` | `>= 1` |
-| `ownership_warmup_empty_polls` | `u32` | `2` | `>= 1` |
-| `readiness_poll_interval_ms` | `u64` | `250` | `>= 1` |
-| `schema_registry_latest_cache_ttl_ms` | `u64` | `5000` | `>= 1` |
-| `schema_registry_frame_raw` | bool | `false` | boolean |
+| Field                                                   |  Type | Default | Constraint  |
+| ------------------------------------------------------- | ----: | ------: | ----------- |
+| `internal_topic_replication_factor`                     | `i16` |     `3` | `>= 1`      |
+| `internal_topic_allow_replication_fallback`             |  bool |  `true` | boolean     |
+| `internal_topic_create_timeout_ms`                      | `i32` | `10000` | `>= 1`      |
+| `internal_topic_segment_ms`                             | `i64` | `60000` | `>= 1`      |
+| `internal_topic_min_cleanable_dirty_ratio_basis_points` | `u32` |   `100` | `0..=10000` |
+| `consumer_poll_timeout_ms`                              | `u64` |   `500` | `>= 1`      |
+| `ownership_warmup_empty_polls`                          | `u32` |     `2` | `>= 1`      |
+| `readiness_poll_interval_ms`                            | `u64` |   `250` | `>= 1`      |
+| `schema_registry_latest_cache_ttl_ms`                   | `u64` |  `5000` | `>= 1`      |
+| `schema_registry_frame_raw`                             |  bool | `false` | boolean     |
 
 Existing fields gaining missing surfaces:
 

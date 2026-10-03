@@ -4,7 +4,7 @@
 
 **Goal:** Install the `WalStore` seam behind the partition writer and move a diskless-mode topic's `acks=all` durability off the ISR high-watermark onto a WAL durable-commit (`fsync`), reusing `ReplicaState` as the client-facing watermark — plus the Delta A stateright proof (`wal_acked` never lost).
 
-**Architecture:** Everything lands behind the existing `writer_tx` mpsc channel. The wire handler (`process_partition`) and the `acks=all` gate (`finalize_ack`/`await_hw_at_least`) are untouched. The partition writer's Produce arm branches on a per-topic `diskless` flag: the classic path is unchanged; the diskless path appends to the local `Log` (offsets stay local), `fsync`s via a new `WalStore`, then advances `ReplicaState`'s HW from the *durable* offset. A single-node `LocalFsyncWal` is the Slice-1 medium; later slices swap it for a replicated/object-store WAL without touching callers.
+**Architecture:** Everything lands behind the existing `writer_tx` mpsc channel. The wire handler (`process_partition`) and the `acks=all` gate (`finalize_ack`/`await_hw_at_least`) are untouched. The partition writer's Produce arm branches on a per-topic `diskless` flag: the classic path is unchanged; the diskless path appends to the local `Log` (offsets stay local), `fsync`s via a new `WalStore`, then advances `ReplicaState`'s HW from the _durable_ offset. A single-node `LocalFsyncWal` is the Slice-1 medium; later slices swap it for a replicated/object-store WAL without touching callers.
 
 **Tech Stack:** Rust 2024 (pinned stable 1.96.0), `tokio`, `async-trait`, `stateright` (dev, model checking), `assert2`, `mockall` where a seam needs mocking, `cargo +nightly fmt`, `clippy::pedantic` (`unsafe_code = "forbid"`).
 
@@ -17,7 +17,7 @@
 1. **Wire path untouched.** Nothing above `writer_tx` changes: `crates/broker/src/handlers/produce.rs` (`finalize_ack`, `:778-784`), `await_hw_at_least` (`partition.rs:538`), and Fetch/Metadata handlers stay byte-identical. Guaranteed by only editing the writer, `ReplicaState`, and new files.
 2. **Classic path byte-identical.** The writer's Produce arm keeps its exact existing behavior when the topic is not diskless (`wal: None`). The diskless branch is additive.
 3. **Offsets stay local.** Slice 1 assigns offsets via `Log::log_end_offset()` (through the existing `append_produce_batch`). No KRaft offsets (Slice 2).
-4. **Durability ordering.** For a diskless partition, the HW must advance only *after* the `fsync` completes — never before. This is the crux of Delta A.
+4. **Durability ordering.** For a diskless partition, the HW must advance only _after_ the `fsync` completes — never before. This is the crux of Delta A.
 5. **`acks=1` latency preserved.** The offset oneshot is resolved right after append (before `fsync`), so `acks=0/1` do not wait for durability; only the `acks=all` HW-gate does.
 6. **Single-node medium only.** `LocalFsyncWal` survives crash-restart, NOT node/disk loss. The spec and proof scope say so; do not claim more.
 7. **Every task ends green** before its commit.
@@ -48,6 +48,7 @@
 `Log` exposes no public durability call today; the diskless WAL needs one it controls (independent of `flush_on_append`). Mirror the flush the append path already performs at `crates/log/src/log.rs:579`.
 
 **Files:**
+
 - Modify: `crates/log/src/log.rs`
 
 - [ ] **Step 1: Write the failing test**
@@ -111,6 +112,7 @@ git commit -m "feat(log): add Log::sync() to fsync the active segment on demand"
 ## Task 2: The `WalStore` seam + `LocalFsyncWal`
 
 **Files:**
+
 - Create: `crates/broker/src/wal/mod.rs`
 - Create: `crates/broker/src/wal/local_fsync.rs`
 - Modify: `crates/broker/src/lib.rs`
@@ -286,6 +288,7 @@ impl WalStore for LocalFsyncWal {
 ```
 
 Notes for the implementer:
+
 - `run_produce_append_batch` and `storage_failure_error` are currently private to `partition_writer.rs` (`:138`, `:87`). Make them `pub(crate)` so the WAL module can reuse the exact append + error-shaping logic (do not duplicate them).
 - `Log::sync()` is Task 1. `blocking_lock()` is `tokio::sync::Mutex`'s sync lock, valid inside `block_in_place`/`spawn_blocking`.
 
@@ -308,6 +311,7 @@ git commit -m "feat(broker): add WalStore seam + LocalFsyncWal (single-node fsyn
 A durability-gated HW advance, distinct in name from the append-driven one so the diskless call site documents that the advance follows an `fsync`. Same HW math (`compute_hw`).
 
 **Files:**
+
 - Modify: `crates/broker/src/replica_state.rs`
 
 - [ ] **Step 1: Write the failing test**
@@ -366,6 +370,7 @@ git commit -m "feat(broker): add ReplicaState::recompute_hw_for_wal_durable"
 Add an optional `wal` to `partition_writer::run` and to `Partition`; read the `diskless` topic-config flag in the production constructor. This task only wires the plumbing (no behavior change yet — the writer ignores `wal` until Task 5), so the workspace stays green.
 
 **Files:**
+
 - Modify: `crates/broker/src/partition_writer.rs`
 - Modify: `crates/broker/src/partition.rs`
 - Modify: the production `Partition` constructor (find it: `grep -rn "partition_writer::run" crates/broker/src` — every call site takes the new arg).
@@ -422,6 +427,7 @@ git commit -m "feat(broker): thread optional WalStore + diskless flag into parti
 Insert the diskless durability path: append → resolve offsets → `append_notify` → `wal.sync_durable` (fsync) → `recompute_hw_for_wal_durable` → notify. The classic path (`wal: None`) is byte-identical.
 
 **Files:**
+
 - Modify: `crates/broker/src/partition_writer.rs`
 
 - [ ] **Step 1: Write the failing test**
@@ -493,7 +499,7 @@ In `crates/broker/src/partition_writer.rs`, in the `WriterMessage::Produce` arm,
                 }
 ```
 
-Remove the temporary `let _ = &wal;` from Task 4. Note the ack fan-out (`:238-248`) is unchanged and still runs *before* this block, so `acks=0/1` are already resolved.
+Remove the temporary `let _ = &wal;` from Task 4. Note the ack fan-out (`:238-248`) is unchanged and still runs _before_ this block, so `acks=0/1` are already resolved.
 
 - [ ] **Step 4: Run to verify it passes**
 
@@ -519,6 +525,7 @@ git commit -m "feat(broker): diskless writer path — fsync then durable HW adva
 Prove the one new observable behavior: a diskless `RF=1, acks=all` record whose produce was acknowledged survives a crash-restart (reopen the log from disk), where a classic `RF=1` produce (page-cache only, `flush_on_append=false`) would not be guaranteed to.
 
 **Files:**
+
 - Modify: `crates/broker/src/partition_writer.rs` (or a broker integration test module — place it where `Partition`/writer scaffolding is reachable).
 
 - [ ] **Step 1: Write the test**
@@ -564,6 +571,7 @@ git commit -m "test(broker): diskless acks=all record survives crash-restart"
 Extend the durability model with a diskless mode: a `wal_acked` ghost (records the fsync-durable prefix, mirroring how `committed` tracks the HWM prefix) and an always-property that a `wal_acked` record is never lost. This is the Slice-1 shipping-gate check.
 
 **Files:**
+
 - Modify: `crates/broker/src/data_path_model.rs`
 
 - [ ] **Step 1: Add the ghost field + a diskless model flag**
@@ -696,6 +704,7 @@ git commit -m "style(broker): cargo +nightly fmt"
 ## Self-Review
 
 **1. Spec coverage:**
+
 - `WalStore` seam behind `writer_tx` → Task 2. ✅
 - `acks=all` off ISR-HW onto WAL durable-commit → Task 5 (fsync before HW advance) + Task 3 (`recompute_hw_for_wal_durable`). ✅
 - `fsync`-durability-not-replication semantic (diskless `RF=1 acks=all` crash-safe) → Task 6 (survives reopen). ✅

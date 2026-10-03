@@ -5,7 +5,7 @@
 
 ## Summary
 
-SASL/GSSAPI (Kerberos) is fully implemented in the broker *library* (commit
+SASL/GSSAPI (Kerberos) is fully implemented in the broker _library_ (commit
 `701bea7`, #295) but is unreachable through the configuration surfaces the
 Kubernetes operator drives. The broker can accept GSSAPI from clients and
 initiate GSSAPI to peer brokers only when its in-process `BrokerConfig` is
@@ -25,28 +25,28 @@ fixes stale documentation.
 
 ## The gap
 
-| Layer | Client-listener GSSAPI | Inter-broker GSSAPI |
-|---|---|---|
-| Broker handshake logic | ✅ `network/auth.rs` accept path | ✅ `network/client.rs` initiate path (`run_gssapi_client`) |
-| Broker programmatic config | ✅ `BrokerConfig.gssapi` | ✅ `BrokerConfig.inter_broker_credentials` (`InterBrokerCredentials::Gssapi`) |
-| Broker **TOML** (`FileConfig`) | ❌ no `[gssapi]` block | ❌ no inter-broker credentials at all |
-| Operator **CRD** | ❌ no enum variant | ❌ no field |
-| Operator **render / mount** | ❌ | ❌ |
-| README feature tables | ❌ stale (`SASL/GSSAPI … ❌`) | partial |
+| Layer                          | Client-listener GSSAPI           | Inter-broker GSSAPI                                                           |
+| ------------------------------ | -------------------------------- | ----------------------------------------------------------------------------- |
+| Broker handshake logic         | ✅ `network/auth.rs` accept path | ✅ `network/client.rs` initiate path (`run_gssapi_client`)                    |
+| Broker programmatic config     | ✅ `BrokerConfig.gssapi`         | ✅ `BrokerConfig.inter_broker_credentials` (`InterBrokerCredentials::Gssapi`) |
+| Broker **TOML** (`FileConfig`) | ❌ no `[gssapi]` block           | ❌ no inter-broker credentials at all                                         |
+| Operator **CRD**               | ❌ no enum variant               | ❌ no field                                                                   |
+| Operator **render / mount**    | ❌                               | ❌                                                                            |
+| README feature tables          | ❌ stale (`SASL/GSSAPI … ❌`)    | partial                                                                       |
 
 Verified facts the design relies on:
 
 - `InterBrokerCredentials::Gssapi` has exactly `{ keytab_path, client_principal,
-  service_name, kdc_url }` (`crates/broker/src/config.rs`). The dialed peer host
+service_name, kdc_url }` (`crates/broker/src/config.rs`). The dialed peer host
   is supplied separately at connect time and combined into the target SPN
   `service_name/host` inside `run_gssapi_client` — it is **not** a config field.
 - `GssapiConfig` (`crates/security/src/gssapi/mod.rs`) is
   `{ keytab_path, service_name, principal_to_local_rules: Vec<name::Rule>, realm:
-  Option<String>, kdc: Option<String> }`.
+Option<String>, kdc: Option<String> }`.
 - `FileConfig` (`crates/broker/src/file_config.rs`) has `inter_broker_listener_name`
-  but no inter-broker *credentials* field of any kind (not PLAIN, SCRAM, or
+  but no inter-broker _credentials_ field of any kind (not PLAIN, SCRAM, or
   GSSAPI). This `[inter_broker_credentials]` block is the first such surface.
-- The server *accept* path does not require KDC contact (the broker decrypts the
+- The server _accept_ path does not require KDC contact (the broker decrypts the
   AP-REQ with its own service key from the keytab); `kdc`/`realm` are carried for
   parity and for the initiate path.
 
@@ -61,7 +61,7 @@ Verified facts the design relies on:
   listener's keytab Secret for initiating.
 - **Client principal:** a single shared principal cluster-wide (no per-broker
   host-templated SPNs).
-- **KDC discovery:** explicit `kdcUrl` by default, with an *optional*
+- **KDC discovery:** explicit `kdcUrl` by default, with an _optional_
   process-wide `krb5.conf` mount for advanced setups.
 
 ## 1. Broker TOML surface — `crates/broker/src/file_config.rs`
@@ -114,10 +114,10 @@ Full `GssapiConfig` parity. New variant on the `ListenerAuthentication` enum
 authentication:
   type: gssapi
   keytabSecretRef: { secretName: kafka-keytab, key: kafka.keytab }
-  serviceName: kafka                    # default "kafka"
+  serviceName: kafka # default "kafka"
   principalToLocalRules: ["RULE:[1:$1@$0](.*@EXAMPLE.COM)s/@.*//", "DEFAULT"]
-  realm: EXAMPLE.COM                    # optional
-  kdc: tcp://kdc:88                     # optional
+  realm: EXAMPLE.COM # optional
+  kdc: tcp://kdc:88 # optional
 ```
 
 - `keytabSecretRef` is a `{ secretName, key }` reference (same shape as the OAuth
@@ -133,9 +133,9 @@ listener's GSSAPI config; this block supplies only the initiate-specific bits.
 
 ```yaml
 spec:
-  interBrokerKerberos:                  # required iff the IB listener is type:gssapi
-    clientPrincipal: kafka@EXAMPLE.COM  # single shared principal
-    serviceName: kafka                  # default "kafka"
+  interBrokerKerberos: # required iff the IB listener is type:gssapi
+    clientPrincipal: kafka@EXAMPLE.COM # single shared principal
+    serviceName: kafka # default "kafka"
     kdcUrl: tcp://kdc:88
 ```
 
@@ -147,7 +147,7 @@ auth struct.
 
 ```yaml
 spec:
-  krb5ConfSecretRef: { secretName: krb5-conf, key: krb5.conf }   # optional
+  krb5ConfSecretRef: { secretName: krb5-conf, key: krb5.conf } # optional
 ```
 
 A single cluster-level reference because `krb5.conf` is process-global and serves
@@ -247,7 +247,7 @@ New error reason strings follow the existing `ListenerOauth*` naming convention
 - No PLAIN/SCRAM inter-broker TOML surface — only the `gssapi`
   `[inter_broker_credentials]` variant.
 - No per-broker host-templated SPNs — a single shared client principal only.
-- No operator-managed keytab *generation* — the admin supplies the keytab
+- No operator-managed keytab _generation_ — the admin supplies the keytab
   Secret (and any krb5.conf).
 - No changes to broker GSSAPI handshake logic — it already works.
 

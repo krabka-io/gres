@@ -33,11 +33,11 @@ records directly can also use it.
 
 ## Schema Formats
 
-| Feature | Type | Schema source |
-| --- | --- | --- |
-| `avro` | `AvroSerde<T>` | `apache-avro::AvroSchema` plus serde |
+| Feature    | Type               | Schema source                                |
+| ---------- | ------------------ | -------------------------------------------- |
+| `avro`     | `AvroSerde<T>`     | `apache-avro::AvroSchema` plus serde         |
 | `protobuf` | `ProtobufSerde<T>` | `prost` plus `prost-reflect::ReflectMessage` |
-| `json` | `JsonSerde<T>` | `schemars::JsonSchema` plus serde JSON |
+| `json`     | `JsonSerde<T>`     | `schemars::JsonSchema` plus serde JSON       |
 
 No schema format is on by default.
 

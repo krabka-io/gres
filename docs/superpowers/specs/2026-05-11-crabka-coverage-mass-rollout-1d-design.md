@@ -139,6 +139,7 @@ safety net real.
 ### PR CI: one default-fixture case per pair
 
 For each `(api_key, version)`:
+
 - Build the typed struct's `Default::default()`.
 - Encode in Rust.
 - Send the equivalent JSON (oracle's `MessageDataJsonConverter` accepts
@@ -378,7 +379,7 @@ The sub-plan ships when **all** of the following hold:
 ### General
 
 14. `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D
-    warnings`, `cargo test --workspace -- --include-ignored` all green.
+warnings`, `cargo test --workspace -- --include-ignored` all green.
 15. CI matrix green on Linux/macOS/Windows.
 16. `cargo doc --no-deps -p krabka-protocol` passes with no warnings.
 17. `KNOWN_ISSUES.md` documents the captured-traffic corpus deviation.

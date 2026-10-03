@@ -23,17 +23,17 @@
 
 ### Out (deferred)
 
-| Concern | Slice |
-|---|---|
-| Multi-replica per pool | 20a |
-| Controller-only / broker-only role separation | 20b |
-| Container-level customization (extra env vars, sidecar containers, `securityContext` overrides) | future |
-| Per-container resource overrides distinct from `spec.resources` | future |
-| `Kafka.spec.template` (cluster-level fallback applied to all pools) | future |
-| `template.podSecurityContext` override | future (the renderer's hardened defaults are non-negotiable in slice 20c) |
-| `template.serviceAccount` | future (slice 36 KafkaUser may need this) |
-| `template.imagePullSecrets` | future |
-| Validation of conflicting selectors (e.g. operator label vs user label of the same key) | enforced silently by precedence today; a warning condition can come later |
+| Concern                                                                                         | Slice                                                                     |
+| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Multi-replica per pool                                                                          | 20a                                                                       |
+| Controller-only / broker-only role separation                                                   | 20b                                                                       |
+| Container-level customization (extra env vars, sidecar containers, `securityContext` overrides) | future                                                                    |
+| Per-container resource overrides distinct from `spec.resources`                                 | future                                                                    |
+| `Kafka.spec.template` (cluster-level fallback applied to all pools)                             | future                                                                    |
+| `template.podSecurityContext` override                                                          | future (the renderer's hardened defaults are non-negotiable in slice 20c) |
+| `template.serviceAccount`                                                                       | future (slice 36 KafkaUser may need this)                                 |
+| `template.imagePullSecrets`                                                                     | future                                                                    |
+| Validation of conflicting selectors (e.g. operator label vs user label of the same key)         | enforced silently by precedence today; a warning condition can come later |
 
 ### Constraints
 
@@ -93,18 +93,18 @@ The fields are flat (no `pod` indirection à la Strimzi) — Crabka's CRD doesn'
 
 1. After building operator-managed `labels` (existing call to `common_labels`), merge user `template.metadata.labels` UNDERNEATH:
 
-    ```rust
-    let mut pod_labels = labels.clone();  // operator-managed
-    if let Some(user_labels) = pool.spec.template.as_ref()
-        .and_then(|t| t.metadata.as_ref())
-        .map(|m| &m.labels)
-    {
-        for (k, v) in user_labels {
-            // user labels never override operator labels
-            pod_labels.entry(k.clone()).or_insert_with(|| v.clone());
-        }
-    }
-    ```
+   ```rust
+   let mut pod_labels = labels.clone();  // operator-managed
+   if let Some(user_labels) = pool.spec.template.as_ref()
+       .and_then(|t| t.metadata.as_ref())
+       .map(|m| &m.labels)
+   {
+       for (k, v) in user_labels {
+           // user labels never override operator labels
+           pod_labels.entry(k.clone()).or_insert_with(|| v.clone());
+       }
+   }
+   ```
 
    Note: the StatefulSet's own `metadata.labels` (used for `kubectl get sts` UI) stays operator-only — user pod labels are pod-template-only.
 
@@ -112,39 +112,39 @@ The fields are flat (no `pod` indirection à la Strimzi) — Crabka's CRD doesn'
 
 3. The rendered `template.spec` gains three optional fields when `template` is set:
 
-    ```rust
-    let mut pod_spec = json!({
-        "securityContext": { ... existing hardened defaults ... },
-        "initContainers": [init],
-        "containers": [main],
-        "volumes": [{ "name": "data", "emptyDir": {} }],
-    });
-    if let Some(tpl) = pool.spec.template.as_ref() {
-        if let Some(affinity) = tpl.affinity.as_ref() {
-            pod_spec["affinity"] = serde_json::to_value(affinity)?;
-        }
-        if !tpl.tolerations.is_empty() {
-            pod_spec["tolerations"] = serde_json::to_value(&tpl.tolerations)?;
-        }
-        if let Some(ns) = tpl.node_selector.as_ref() {
-            if !ns.is_empty() {
-                pod_spec["nodeSelector"] = serde_json::to_value(ns)?;
-            }
-        }
-    }
-    ```
+   ```rust
+   let mut pod_spec = json!({
+       "securityContext": { ... existing hardened defaults ... },
+       "initContainers": [init],
+       "containers": [main],
+       "volumes": [{ "name": "data", "emptyDir": {} }],
+   });
+   if let Some(tpl) = pool.spec.template.as_ref() {
+       if let Some(affinity) = tpl.affinity.as_ref() {
+           pod_spec["affinity"] = serde_json::to_value(affinity)?;
+       }
+       if !tpl.tolerations.is_empty() {
+           pod_spec["tolerations"] = serde_json::to_value(&tpl.tolerations)?;
+       }
+       if let Some(ns) = tpl.node_selector.as_ref() {
+           if !ns.is_empty() {
+               pod_spec["nodeSelector"] = serde_json::to_value(ns)?;
+           }
+       }
+   }
+   ```
 
 4. Pod-template metadata becomes:
 
-    ```rust
-    "template": {
-        "metadata": {
-            "labels": pod_labels,
-            "annotations": pod_annotations,
-        },
-        "spec": pod_spec,
-    },
-    ```
+   ```rust
+   "template": {
+       "metadata": {
+           "labels": pod_labels,
+           "annotations": pod_annotations,
+       },
+       "spec": pod_spec,
+   },
+   ```
 
    When `pod_annotations` is empty, the `annotations` key is omitted (server-side apply otherwise tracks ownership of an empty map and clobbers any field-manager-foreign annotations on subsequent applies).
 
@@ -196,19 +196,19 @@ spec:
 After the existing `Smoke — broker binary launched in pod` step, add:
 
 ```yaml
-      - name: Smoke — pod template values applied
-        run: |
-          team=$(kubectl get pod demo-brokers-0 -n default -o jsonpath='{.metadata.labels.team}')
-          [ "$team" = "platform" ] || { echo "::error::team label missing, got '$team'"; exit 1; }
+- name: Smoke — pod template values applied
+  run: |
+    team=$(kubectl get pod demo-brokers-0 -n default -o jsonpath='{.metadata.labels.team}')
+    [ "$team" = "platform" ] || { echo "::error::team label missing, got '$team'"; exit 1; }
 
-          anno=$(kubectl get pod demo-brokers-0 -n default -o jsonpath='{.metadata.annotations.crabka\.io/test-anno}')
-          [ "$anno" = "yes" ] || { echo "::error::annotation missing, got '$anno'"; exit 1; }
+    anno=$(kubectl get pod demo-brokers-0 -n default -o jsonpath='{.metadata.annotations.crabka\.io/test-anno}')
+    [ "$anno" = "yes" ] || { echo "::error::annotation missing, got '$anno'"; exit 1; }
 
-          ns=$(kubectl get pod demo-brokers-0 -n default -o jsonpath='{.spec.nodeSelector.kubernetes\.io/os}')
-          [ "$ns" = "linux" ] || { echo "::error::nodeSelector missing, got '$ns'"; exit 1; }
+    ns=$(kubectl get pod demo-brokers-0 -n default -o jsonpath='{.spec.nodeSelector.kubernetes\.io/os}')
+    [ "$ns" = "linux" ] || { echo "::error::nodeSelector missing, got '$ns'"; exit 1; }
 
-          tol_key=$(kubectl get pod demo-brokers-0 -n default -o jsonpath='{.spec.tolerations[?(@.key=="dedicated")].key}')
-          [ "$tol_key" = "dedicated" ] || { echo "::error::toleration missing"; exit 1; }
+    tol_key=$(kubectl get pod demo-brokers-0 -n default -o jsonpath='{.spec.tolerations[?(@.key=="dedicated")].key}')
+    [ "$tol_key" = "dedicated" ] || { echo "::error::toleration missing"; exit 1; }
 ```
 
 ---

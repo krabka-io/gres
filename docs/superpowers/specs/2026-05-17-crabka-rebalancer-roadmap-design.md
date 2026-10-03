@@ -73,51 +73,51 @@ One binary, `krabka-rebalancer`. Single-replica by default; the operator can dep
 
 ### Phase A — Foundation
 
-| Slice | Title | Summary |
-|------:|-------|---------|
-| 43a | Foundation: REST skeleton + replica/leader balance | Crate scaffold, REST API skeleton (state / propose / dryrun / status — **no execute**), periodic cluster-state ingest, optimizer + two soft goals (replica count, leader count) + one hard goal (preferred-leader idempotency). Proposals returned as JSON. Helm chart placeholder; full chart in 43b. |
+| Slice | Title                                              | Summary                                                                                                                                                                                                                                                                                                |
+| ----: | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+|   43a | Foundation: REST skeleton + replica/leader balance | Crate scaffold, REST API skeleton (state / propose / dryrun / status — **no execute**), periodic cluster-state ingest, optimizer + two soft goals (replica count, leader count) + one hard goal (preferred-leader idempotency). Proposals returned as JSON. Helm chart placeholder; full chart in 43b. |
 
 ### Phase B — Execution
 
-| Slice | Title | Summary |
-|------:|-------|---------|
-| 43b | Execute path | Wire `executor` module to `AlterPartitionReassignments` (KIP-455) and `IncrementalAlterConfigs` for KIP-73 throttle apply / clear. Poll `ListPartitionReassignments` + image to surface progress in proposal status. Persist running-plan state to local disk (`{data_dir}/in_flight.json`). Ships the production Helm chart. |
+| Slice | Title        | Summary                                                                                                                                                                                                                                                                                                                       |
+| ----: | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+|   43b | Execute path | Wire `executor` module to `AlterPartitionReassignments` (KIP-455) and `IncrementalAlterConfigs` for KIP-73 throttle apply / clear. Poll `ListPartitionReassignments` + image to surface progress in proposal status. Persist running-plan state to local disk (`{data_dir}/in_flight.json`). Ships the production Helm chart. |
 
 ### Phase C — Topology goals
 
-| Slice | Title | Summary |
-|------:|-------|---------|
-| 43c | Topology goals | Hard: `RackAware` (reads `broker.rack` labels from `MetadataImage`). Soft: `TopicReplicaDistribution`, `MinTopicLeadersPerBroker`. |
+| Slice | Title          | Summary                                                                                                                            |
+| ----: | -------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+|   43c | Topology goals | Hard: `RackAware` (reads `broker.rack` labels from `MetadataImage`). Soft: `TopicReplicaDistribution`, `MinTopicLeadersPerBroker`. |
 
 ### Phase D — Capacity (static limits)
 
-| Slice | Title | Summary |
-|------:|-------|---------|
-| 43d | Capacity goals | Hard: `ReplicaCapacity`, `DiskCapacity`, `NetworkInCapacity`, `NetworkOutCapacity`, `CpuCapacity`. Adds a per-broker capacity config (YAML loaded from `--broker-capacity-file`); no metric scraping yet — capacities are static operator-supplied limits. |
+| Slice | Title          | Summary                                                                                                                                                                                                                                                    |
+| ----: | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+|   43d | Capacity goals | Hard: `ReplicaCapacity`, `DiskCapacity`, `NetworkInCapacity`, `NetworkOutCapacity`, `CpuCapacity`. Adds a per-broker capacity config (YAML loaded from `--broker-capacity-file`); no metric scraping yet — capacities are static operator-supplied limits. |
 
 ### Phase E — Usage goals (live metrics)
 
-| Slice | Title | Summary |
-|------:|-------|---------|
-| 43e | Usage goals + metric scraping | `metrics_scraper` module scrapes broker `/metrics` (slice 39) for per-partition bytes-in / bytes-out. Ring-buffer history at 5min / 1h / 12h windows. Soft goals: `DiskUsage`, `LeaderBytesIn`, `NetworkInUsage`, `NetworkOutUsage`. **Likely needs a slice-39 follow-up to expose per-partition byte counters that aren't on the slice-39 surface yet** — flagged as a Crabka-core sub-slice (`43e-core`) if so. |
+| Slice | Title                         | Summary                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ----: | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+|   43e | Usage goals + metric scraping | `metrics_scraper` module scrapes broker `/metrics` (slice 39) for per-partition bytes-in / bytes-out. Ring-buffer history at 5min / 1h / 12h windows. Soft goals: `DiskUsage`, `LeaderBytesIn`, `NetworkInUsage`, `NetworkOutUsage`. **Likely needs a slice-39 follow-up to expose per-partition byte counters that aren't on the slice-39 surface yet** — flagged as a Crabka-core sub-slice (`43e-core`) if so. |
 
 ### Phase F — CPU + remaining goals
 
-| Slice | Title | Summary |
-|------:|-------|---------|
-| 43f | CPU usage + leftovers | `CpuUsage` goal — needs CPU metrics on the broker's `/metrics` endpoint (Crabka-core sub-slice `43f-core` if not already covered by 39 / 43e). Plus any leftover Cruise-Control goals (e.g. `PreferredLeaderElection` as a soft goal, beyond the slice-43a idempotency variant). |
+| Slice | Title                 | Summary                                                                                                                                                                                                                                                                          |
+| ----: | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+|   43f | CPU usage + leftovers | `CpuUsage` goal — needs CPU metrics on the broker's `/metrics` endpoint (Crabka-core sub-slice `43f-core` if not already covered by 39 / 43e). Plus any leftover Cruise-Control goals (e.g. `PreferredLeaderElection` as a soft goal, beyond the slice-43a idempotency variant). |
 
 ### Phase G — Anomaly detection
 
-| Slice | Title | Summary |
-|------:|-------|---------|
-| 43g | Anomaly detector | Background `detector` module that watches metric history + cluster state for anomalies (broker death, sustained under-replicated partitions, disk pressure, slow broker / outlier). Auto-triggers self-healing proposals via the existing optimizer path. Anomaly history persisted; surfaced via `GET /api/v1/anomalies`. Configurable per-anomaly mute windows. |
+| Slice | Title            | Summary                                                                                                                                                                                                                                                                                                                                                           |
+| ----: | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+|   43g | Anomaly detector | Background `detector` module that watches metric history + cluster state for anomalies (broker death, sustained under-replicated partitions, disk pressure, slow broker / outlier). Auto-triggers self-healing proposals via the existing optimizer path. Anomaly history persisted; surfaced via `GET /api/v1/anomalies`. Configurable per-anomaly mute windows. |
 
 ### Operator-side follow-up
 
-| Slice | Title | Summary |
-|------:|-------|---------|
-| 44 | `KafkaRebalance` CRD | Operator translates `KafkaRebalance` specs into REST calls against the rebalancer service. Surfaces proposal status back through the CRD's `status` subresource. Lands after 43b. |
+| Slice | Title                | Summary                                                                                                                                                                           |
+| ----: | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+|    44 | `KafkaRebalance` CRD | Operator translates `KafkaRebalance` specs into REST calls against the rebalancer service. Surfaces proposal status back through the CRD's `status` subresource. Lands after 43b. |
 
 ## Sequencing & dependencies
 
@@ -134,14 +134,14 @@ One binary, `krabka-rebalancer`. Single-replica by default; the operator can dep
 
 ## Crabka-core dependency map
 
-| Slice | Capability | Required by rebalancer phase |
-|------:|------------|------------------------------|
-| 14    | Preferred-leader election | 43a (idempotency goal) |
-| 15    | KIP-455 `AlterPartitionReassignments` / `ListPartitionReassignments` | 43b (execute) |
-| 15b   | KIP-73 throttled replication configs | 43b (execute throttle) |
-| 39    | Prometheus `/metrics` endpoint | 43e (usage), 43f (CPU), 43g (anomaly detection) |
-| 43e-core (TBD) | Per-partition byte counters on `/metrics` (if not already there) | 43e |
-| 43f-core (TBD) | CPU usage metric on `/metrics` (if not already there) | 43f |
+|          Slice | Capability                                                           | Required by rebalancer phase                    |
+| -------------: | -------------------------------------------------------------------- | ----------------------------------------------- |
+|             14 | Preferred-leader election                                            | 43a (idempotency goal)                          |
+|             15 | KIP-455 `AlterPartitionReassignments` / `ListPartitionReassignments` | 43b (execute)                                   |
+|            15b | KIP-73 throttled replication configs                                 | 43b (execute throttle)                          |
+|             39 | Prometheus `/metrics` endpoint                                       | 43e (usage), 43f (CPU), 43g (anomaly detection) |
+| 43e-core (TBD) | Per-partition byte counters on `/metrics` (if not already there)     | 43e                                             |
+| 43f-core (TBD) | CPU usage metric on `/metrics` (if not already there)                | 43f                                             |
 
 **Already shipped** — no Crabka-core work blocks 43a, 43b, 43c, 43d. The first four sub-slices can land back-to-back without dropping back into broker work.
 
@@ -152,6 +152,7 @@ The implementation plan that follows this design covers slice 43a only.
 ### Goal
 
 Land a standalone `krabka-rebalancer` binary that:
+
 - Connects to a Crabka cluster as an admin client.
 - Periodically snapshots cluster state.
 - Exposes a versioned REST API for "what should I do to balance this cluster?" — but **does not execute anything**.

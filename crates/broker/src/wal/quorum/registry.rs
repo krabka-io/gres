@@ -5,8 +5,8 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use krabka_ids::PartitionIndex;
 use dashmap::DashMap;
+use krabka_ids::PartitionIndex;
 
 use super::{
     engine::WalShardEngine,

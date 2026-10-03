@@ -25,8 +25,8 @@
 use std::{cell::Cell, fmt::Write as _};
 
 use bigdecimal::{BigDecimal, One, RoundingMode, ToPrimitive, Zero};
-use krabka_pgtypes::{ArrayValue, Datum, ElemType, JsonbValue, TypeError};
 use jiff::ToSpan;
+use krabka_pgtypes::{ArrayValue, Datum, ElemType, JsonbValue, TypeError};
 
 use crate::error::{ExecError, SqlJsonError};
 

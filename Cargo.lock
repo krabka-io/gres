@@ -1184,8 +1184,7 @@ dependencies = [
 [[package]]
 name = "connectrpc-axum-core"
 version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d0b89fba278ac1a3843300fc3dc65cd9a4598f26ae29f1d2923ef5a8c17d75e5"
+source = "git+https://github.com/krabka-io/connectrpc-axum?rev=f2134f4124c4cde58b404923934220d8b2e8122b#f2134f4124c4cde58b404923934220d8b2e8122b"
 dependencies = [
  "base64 0.22.1",
  "bytes",
@@ -1249,1263 +1248,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b2a41393f66f16b0823bb79094d54ac5fbd34ab292ddafb9a0456ac9f87d201"
 dependencies = [
  "libc",
-]
-
-[[package]]
-name = "krabka-audit"
-version = "0.4.2"
-dependencies = [
- "arc-swap",
- "assert2",
- "async-trait",
- "bytes",
- "clap",
- "krabka-ids",
- "krabka-log",
- "krabka-protocol",
- "krabka-units",
- "derive_more",
- "mutants",
- "qubit-clock",
- "ring",
- "serde",
- "serde_json",
- "sha2 0.11.0",
- "tempfile",
- "thiserror 2.0.20",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "krabka-authz"
-version = "0.4.2"
-dependencies = [
- "assert2",
- "krabka-metadata",
- "krabka-security",
- "proptest",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "krabka-broker"
-version = "0.4.2"
-dependencies = [
- "arc-swap",
- "assert2",
- "async-trait",
- "axum",
- "base64 0.23.1",
- "bytes",
- "clap",
- "krabka-audit",
- "krabka-authz",
- "krabka-broker-test-helpers",
- "krabka-client-consumer",
- "krabka-client-core",
- "krabka-client-producer",
- "krabka-compression",
- "krabka-ids",
- "krabka-kraft-core",
- "krabka-log",
- "krabka-metadata",
- "krabka-object-store",
- "krabka-protocol",
- "krabka-raft",
- "krabka-records-legacy",
- "krabka-remote-storage",
- "krabka-remote-storage-topic",
- "krabka-security",
- "krabka-telemetry",
- "krabka-throttle",
- "krabka-units",
- "krabka-verified",
- "krabka-voters",
- "crc32c",
- "dashmap",
- "exponential-backoff",
- "futures-util",
- "hex",
- "java_regex",
- "jsonpath-rust",
- "ktls",
- "lru",
- "mockall",
- "mutants",
- "nix 0.31.3",
- "num-traits",
- "object_store",
- "opentelemetry-proto",
- "pbkdf2",
- "prometheus-client",
- "proptest",
- "prost 0.14.4",
- "qubit-clock",
- "rcgen",
- "refined_type",
- "regex",
- "reqwest 0.13.4",
- "ring",
- "rustix 1.1.4",
- "rustls",
- "rustls-pki-types",
- "schemars 1.2.2",
- "serde",
- "serde-wincode",
- "serde_json",
- "sha2 0.11.0",
- "socket2",
- "stateright",
- "temp-env",
- "tempfile",
- "thiserror 2.0.20",
- "tikv-jemallocator",
- "tokio",
- "tokio-metrics",
- "tokio-rustls",
- "tokio-util",
- "toml",
- "tonic",
- "tower",
- "tracing",
- "tracing-subscriber",
- "uuid",
- "wincode",
- "wiremock",
- "zerocopy",
-]
-
-[[package]]
-name = "krabka-broker-test-helpers"
-version = "0.4.1"
-dependencies = [
- "krabka-broker",
-]
-
-[[package]]
-name = "krabka-cli"
-version = "0.4.2"
-dependencies = [
- "assert2",
- "clap",
- "krabka-broker",
- "krabka-client-admin",
- "krabka-client-core",
- "krabka-gres-balancer",
- "krabka-gres-control",
- "krabka-metadata",
- "krabka-raft",
- "krabka-security",
- "krabka-units",
- "derive_more",
- "ring",
- "serde",
- "serde-wincode",
- "serde_json",
- "tempfile",
- "thiserror 2.0.20",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "uuid",
- "wincode",
-]
-
-[[package]]
-name = "krabka-client-admin"
-version = "0.4.2"
-dependencies = [
- "assert2",
- "async-trait",
- "bytes",
- "krabka-broker",
- "krabka-client-consumer",
- "krabka-client-core",
- "krabka-client-producer",
- "krabka-ids",
- "krabka-metadata",
- "krabka-protocol",
- "krabka-security",
- "krabka-units",
- "futures-util",
- "ring",
- "tempfile",
- "thiserror 2.0.20",
- "tokio",
- "tokio-util",
- "tracing",
- "tracing-subscriber",
- "uuid",
-]
-
-[[package]]
-name = "krabka-client-consumer"
-version = "0.4.2"
-dependencies = [
- "assert2",
- "bon",
- "bytes",
- "krabka-broker",
- "krabka-client-core",
- "krabka-client-producer",
- "krabka-ids",
- "krabka-protocol",
- "krabka-security",
- "krabka-units",
- "futures-util",
- "mutants",
- "proptest",
- "refined_type",
- "stateright",
- "tempfile",
- "thiserror 2.0.20",
- "tokio",
- "tokio-util",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "krabka-client-core"
-version = "0.4.2"
-dependencies = [
- "assert2",
- "async-trait",
- "bon",
- "bytes",
- "krabka-ids",
- "krabka-protocol",
- "krabka-security",
- "krabka-units",
- "crc32c",
- "dashmap",
- "futures-util",
- "hex",
- "mockall",
- "mutants",
- "proptest",
- "refined_type",
- "rustls",
- "rustls-pki-types",
- "serde",
- "serde_json",
- "tempfile",
- "testcontainers",
- "testcontainers-modules",
- "thiserror 2.0.20",
- "tokio",
- "tokio-rustls",
- "tokio-util",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "krabka-client-producer"
-version = "0.4.2"
-dependencies = [
- "assert2",
- "async-trait",
- "bon",
- "bytes",
- "krabka-client-consumer",
- "krabka-client-core",
- "krabka-compression",
- "krabka-protocol",
- "krabka-security",
- "krabka-units",
- "dashmap",
- "futures",
- "mutants",
- "refined_type",
- "stateright",
- "tempfile",
- "thiserror 2.0.20",
- "tokio",
- "tokio-util",
- "tracing",
-]
-
-[[package]]
-name = "krabka-compression"
-version = "0.4.2"
-dependencies = [
- "assert2",
- "bytes",
- "codspeed-criterion-compat",
- "krabka-units",
- "flate2",
- "hex",
- "lz4_flex 0.14.0",
- "once_cell",
- "proptest",
- "refined_type",
- "serde",
- "serde_json",
- "snap",
- "thiserror 2.0.20",
- "zstd",
-]
-
-[[package]]
-name = "krabka-gres"
-version = "0.4.2"
-dependencies = [
- "assert2",
- "async-trait",
- "bytes",
- "clap",
- "krabka-broker",
- "krabka-client-admin",
- "krabka-client-core",
- "krabka-client-producer",
- "krabka-gres-control",
- "krabka-gres-fdw",
- "krabka-gres-ranges",
- "krabka-gres-substrate",
- "krabka-object-store",
- "krabka-operator",
- "krabka-pgcatalog",
- "krabka-pgexec",
- "krabka-pgkv",
- "krabka-pgmvcc",
- "krabka-pgtypes",
- "krabka-pgwire",
- "krabka-protocol",
- "krabka-security",
- "krabka-telemetry",
- "krabka-units",
- "futures-util",
- "rand 0.10.2",
- "refined_type",
- "rustls",
- "rustls-pki-types",
- "serde",
- "serde_json",
- "sha2 0.11.0",
- "tempfile",
- "tokio",
- "tokio-postgres",
- "tokio-rustls",
- "tokio-util",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "krabka-gres-activator"
-version = "0.4.2"
-dependencies = [
- "assert2",
- "async-trait",
- "bytes",
- "clap",
- "krabka-client-core",
- "krabka-gres",
- "krabka-gres-control",
- "krabka-gres-substrate",
- "krabka-pgkv",
- "krabka-pgwire",
- "krabka-units",
- "futures-util",
- "refined_type",
- "temp-env",
- "thiserror 2.0.20",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "krabka-gres-balancer"
-version = "0.4.2"
-dependencies = [
- "assert2",
- "krabka-gres-control",
- "krabka-gres-substrate",
- "krabka-units",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "krabka-gres-conformance"
-version = "0.4.2"
-dependencies = [
- "assert2",
- "bytes",
- "clap",
- "krabka-pgcatalog",
- "krabka-pgexec",
- "krabka-pgparser",
- "krabka-pgtypes",
- "krabka-pgwire",
- "krabka-units",
- "futures-util",
- "native-tls",
- "postgres-native-tls",
- "serde",
- "serde_json",
- "sqlx",
- "tempfile",
- "thiserror 2.0.20",
- "tokio",
- "tokio-postgres",
-]
-
-[[package]]
-name = "krabka-gres-control"
-version = "0.4.2"
-dependencies = [
- "assert2",
- "bytes",
- "krabka-broker",
- "krabka-client-admin",
- "krabka-client-core",
- "krabka-client-producer",
- "krabka-protocol",
- "krabka-units",
- "proptest",
- "refined_type",
- "serde",
- "serde_json",
- "static_assertions",
- "tempfile",
- "thiserror 2.0.20",
- "tokio",
- "toml",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "krabka-gres-fdw"
-version = "0.4.2"
-dependencies = [
- "apache-avro",
- "assert2",
- "bigdecimal",
- "bytes",
- "krabka-broker",
- "krabka-client-admin",
- "krabka-client-core",
- "krabka-client-producer",
- "krabka-pgcatalog",
- "krabka-pgexec",
- "krabka-pgkv",
- "krabka-pgtypes",
- "krabka-pgwire",
- "krabka-protocol",
- "krabka-schema-registry",
- "krabka-schema-serde",
- "krabka-security",
- "krabka-units",
- "jiff",
- "num-bigint 0.5.1",
- "prost-reflect",
- "protox",
- "rustls",
- "serde_json",
- "tempfile",
- "thiserror 2.0.20",
- "tokio",
- "tokio-postgres",
- "tokio-util",
-]
-
-[[package]]
-name = "krabka-gres-loadtest"
-version = "0.4.2"
-dependencies = [
- "anyhow",
- "assert2",
- "async-trait",
- "clap",
- "krabka-client-admin",
- "krabka-client-core",
- "krabka-gres-control",
- "krabka-security",
- "krabka-units",
- "futures",
- "hdrhistogram",
- "opentelemetry-proto",
- "rand 0.10.2",
- "refined_type",
- "rustix 1.1.4",
- "serde",
- "serde_json",
- "serde_yaml",
- "tempfile",
- "thiserror 2.0.20",
- "tokio",
- "tokio-postgres",
- "tonic",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "krabka-gres-ranges"
-version = "0.4.2"
-dependencies = [
- "arc-swap",
- "assert2",
- "async-trait",
- "krabka-broker",
- "krabka-client-admin",
- "krabka-gres-control",
- "krabka-pgcatalog",
- "krabka-pgexec",
- "krabka-pgkv",
- "krabka-pgmvcc",
- "krabka-pgparser",
- "krabka-pgtypes",
- "krabka-pgwire",
- "krabka-security",
- "krabka-trace-context",
- "krabka-units",
- "derive_more",
- "futures",
- "opentelemetry",
- "opentelemetry_sdk",
- "proptest",
- "refined_type",
- "rustls",
- "serde",
- "serde_json",
- "sha2 0.11.0",
- "stateright",
- "tempfile",
- "thiserror 2.0.20",
- "tokio",
- "tokio-postgres",
- "tokio-rustls",
- "tracing",
- "tracing-opentelemetry",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "krabka-gres-substrate"
-version = "0.4.2"
-dependencies = [
- "assert2",
- "async-trait",
- "bytes",
- "krabka-broker",
- "krabka-client-admin",
- "krabka-client-core",
- "krabka-client-producer",
- "krabka-gres-ranges",
- "krabka-object-store",
- "krabka-pgcatalog",
- "krabka-pgexec",
- "krabka-pgkv",
- "krabka-pgmvcc",
- "krabka-pgtypes",
- "krabka-protocol",
- "krabka-raft",
- "krabka-security",
- "krabka-trace-context",
- "krabka-units",
- "hex",
- "object_store",
- "opentelemetry",
- "opentelemetry_sdk",
- "proptest",
- "refined_type",
- "rustix 1.1.4",
- "serde",
- "serde_json",
- "sha2 0.11.0",
- "stateright",
- "tempfile",
- "thiserror 2.0.20",
- "tokio",
- "tracing",
- "tracing-opentelemetry",
- "tracing-subscriber",
- "uuid",
-]
-
-[[package]]
-name = "krabka-ids"
-version = "0.4.2"
-dependencies = [
- "assert2",
- "derive_more",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "krabka-kafka-tap"
-version = "0.4.2"
-dependencies = [
- "assert2",
- "krabka-ids",
-]
-
-[[package]]
-name = "krabka-kraft-core"
-version = "0.4.2"
-dependencies = [
- "assert2",
- "bytes",
- "krabka-units",
- "krabka-verified",
- "krabka-voters",
- "refined_type",
- "serde",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "krabka-log"
-version = "0.4.2"
-dependencies = [
- "assert2",
- "bytes",
- "codspeed-criterion-compat",
- "krabka-compression",
- "krabka-ids",
- "krabka-protocol",
- "krabka-units",
- "krabka-verified",
- "crc32c",
- "hex",
- "mutants",
- "proptest",
- "stateright",
- "tempfile",
- "testcontainers",
- "testcontainers-modules",
- "thiserror 2.0.20",
- "tokio",
- "tracing",
- "zerocopy",
-]
-
-[[package]]
-name = "krabka-logfmt"
-version = "0.4.2"
-dependencies = [
- "assert2",
- "serde_json",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "krabka-metadata"
-version = "0.4.2"
-dependencies = [
- "assert2",
- "bytes",
- "codspeed-criterion-compat",
- "krabka-ids",
- "krabka-protocol",
- "krabka-security",
- "krabka-units",
- "krabka-voters",
- "mutants",
- "proptest",
- "serde",
- "serde-wincode",
- "thiserror 2.0.20",
- "tracing",
- "uuid",
- "wincode",
-]
-
-[[package]]
-name = "krabka-object-store"
-version = "0.4.2"
-dependencies = [
- "assert2",
- "async-trait",
- "bytes",
- "futures",
- "mockall",
- "object_store",
- "tempfile",
- "thiserror 2.0.20",
- "tokio",
-]
-
-[[package]]
-name = "krabka-operator"
-version = "0.4.2"
-dependencies = [
- "anyhow",
- "assert2",
- "async-trait",
- "axum",
- "base64 0.23.1",
- "bytes",
- "chrono",
- "clap",
- "krabka-broker",
- "krabka-client-admin",
- "krabka-client-core",
- "krabka-client-producer",
- "krabka-compression",
- "krabka-gres-control",
- "krabka-gres-ranges",
- "krabka-gres-substrate",
- "krabka-kraft-core",
- "krabka-logfmt",
- "krabka-metadata",
- "krabka-object-store",
- "krabka-pgexec",
- "krabka-pgkv",
- "krabka-rebalancer",
- "krabka-schema-serde",
- "krabka-security",
- "krabka-units",
- "derive_more",
- "futures",
- "hex",
- "http",
- "http-body-util",
- "hyper",
- "jsonpath-rust",
- "k8s-openapi",
- "kube",
- "mutants",
- "native-tls",
- "object_store",
- "postgres-native-tls",
- "prometheus-client",
- "refined_type",
- "reqwest 0.13.4",
- "ring",
- "rustls",
- "schemars 1.2.2",
- "serde",
- "serde_json",
- "serde_yaml",
- "sha2 0.11.0",
- "strum 0.28.0",
- "tempfile",
- "thiserror 2.0.20",
- "time",
- "tokio",
- "tokio-postgres",
- "toml",
- "tower",
- "tracing",
- "tracing-subscriber",
- "uuid",
- "x509-parser",
-]
-
-[[package]]
-name = "krabka-pgcatalog"
-version = "0.4.2"
-dependencies = [
- "assert2",
- "krabka-pgkv",
- "krabka-pgmvcc",
- "krabka-pgtypes",
- "proptest",
- "tempfile",
- "thiserror 2.0.20",
- "zerocopy",
-]
-
-[[package]]
-name = "krabka-pgexec"
-version = "0.4.2"
-dependencies = [
- "assert2",
- "async-trait",
- "base64 0.23.1",
- "bigdecimal",
- "bytes",
- "krabka-pgcatalog",
- "krabka-pgkv",
- "krabka-pgmvcc",
- "krabka-pgparser",
- "krabka-pgtypes",
- "krabka-pgwire",
- "krabka-trace-context",
- "krabka-units",
- "encoding_rs",
- "hex",
- "jiff",
- "libm",
- "md-5 0.11.0",
- "opentelemetry",
- "opentelemetry_sdk",
- "pglz",
- "regex",
- "rust-stemmers",
- "sha2 0.11.0",
- "shlex 2.0.1",
- "tempfile",
- "thiserror 2.0.20",
- "tokio",
- "tokio-postgres",
- "tracing",
- "tracing-opentelemetry",
- "tracing-subscriber",
- "unicode-general-category",
- "unicode-normalization",
- "zerocopy",
- "zstd",
-]
-
-[[package]]
-name = "krabka-pgkv"
-version = "0.4.2"
-dependencies = [
- "assert2",
- "krabka-pgtypes",
- "krabka-units",
- "fjall",
- "jiff",
- "proptest",
- "refined_type",
- "serde",
- "tempfile",
- "thiserror 2.0.20",
- "zerocopy",
-]
-
-[[package]]
-name = "krabka-pgmvcc"
-version = "0.4.2"
-dependencies = [
- "assert2",
- "krabka-pgkv",
- "krabka-pgtypes",
- "proptest",
- "thiserror 2.0.20",
- "zerocopy",
-]
-
-[[package]]
-name = "krabka-pgparser"
-version = "0.4.2"
-dependencies = [
- "assert2",
- "krabka-pgtypes",
- "pg_query",
- "proptest",
- "thiserror 2.0.20",
-]
-
-[[package]]
-name = "krabka-pgtypes"
-version = "0.4.2"
-dependencies = [
- "assert2",
- "bigdecimal",
- "dashu-float",
- "jiff",
- "proptest",
- "quick-xml 0.41.0",
- "thiserror 2.0.20",
-]
-
-[[package]]
-name = "krabka-pgwire"
-version = "0.4.2"
-dependencies = [
- "assert2",
- "async-trait",
- "base64 0.23.1",
- "bytes",
- "krabka-trace-context",
- "hmac",
- "num-traits",
- "opentelemetry",
- "opentelemetry_sdk",
- "pbkdf2",
- "proptest",
- "rand 0.10.2",
- "rustls",
- "sha2 0.11.0",
- "sqlx",
- "subtle",
- "thiserror 2.0.20",
- "tokio",
- "tokio-postgres",
- "tokio-rustls",
- "tokio-util",
- "tracing",
- "tracing-opentelemetry",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "krabka-protocol"
-version = "0.4.2"
-dependencies = [
- "arbitrary",
- "assert2",
- "bytes",
- "codspeed-criterion-compat",
- "krabka-compression",
- "krabka-kafka-tap",
- "krabka-units",
- "crc32c",
- "datatest-stable",
- "hex",
- "proptest",
- "serde",
- "serde_json",
- "strum 0.28.0",
- "tempfile",
- "thiserror 2.0.20",
- "toml",
- "zerocopy",
-]
-
-[[package]]
-name = "krabka-raft"
-version = "0.4.2"
-dependencies = [
- "assert2",
- "async-trait",
- "base64 0.23.1",
- "bytes",
- "krabka-client-core",
- "krabka-ids",
- "krabka-kraft-core",
- "krabka-log",
- "krabka-metadata",
- "krabka-protocol",
- "krabka-security",
- "krabka-units",
- "krabka-verified",
- "dashmap",
- "futures-util",
- "mockall",
- "mutants",
- "refined_type",
- "serde",
- "serde-wincode",
- "stateright",
- "tempfile",
- "thiserror 2.0.20",
- "tokio",
- "tokio-util",
- "tracing",
- "uuid",
- "wincode",
-]
-
-[[package]]
-name = "krabka-rebalancer"
-version = "0.4.2"
-dependencies = [
- "anyhow",
- "arc-swap",
- "assert2",
- "async-trait",
- "axum",
- "bytes",
- "clap",
- "connectrpc-axum",
- "connectrpc-axum-build",
- "krabka-broker",
- "krabka-client-admin",
- "krabka-client-core",
- "krabka-metadata",
- "krabka-protocol",
- "krabka-units",
- "mutants",
- "num-traits",
- "parking_lot",
- "pbjson",
- "prometheus-client",
- "prost 0.14.4",
- "protoc-bin-vendored",
- "refined_type",
- "reqwest 0.13.4",
- "serde",
- "serde_json",
- "serde_yaml",
- "strum 0.28.0",
- "temp-env",
- "tempfile",
- "thiserror 2.0.20",
- "tokio",
- "tokio-util",
- "tower",
- "tracing",
- "tracing-subscriber",
- "uuid",
-]
-
-[[package]]
-name = "krabka-records-legacy"
-version = "0.4.2"
-dependencies = [
- "assert2",
- "bytes",
- "krabka-compression",
- "krabka-ids",
- "krabka-protocol",
- "krabka-units",
- "crc32fast",
- "hex",
- "proptest",
- "thiserror 2.0.20",
-]
-
-[[package]]
-name = "krabka-remote-storage"
-version = "0.4.2"
-dependencies = [
- "assert2",
- "base64 0.23.1",
- "bytes",
- "krabka-ids",
- "krabka-log",
- "krabka-object-store",
- "krabka-protocol",
- "krabka-units",
- "object_store",
- "sha2 0.11.0",
- "tempfile",
- "thiserror 2.0.20",
- "tokio",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "krabka-remote-storage-topic"
-version = "0.4.2"
-dependencies = [
- "assert2",
- "async-trait",
- "bytes",
- "krabka-client-admin",
- "krabka-client-core",
- "krabka-client-producer",
- "krabka-ids",
- "krabka-protocol",
- "krabka-remote-storage",
- "krabka-security",
- "krabka-units",
- "futures-util",
- "mutants",
- "refined_type",
- "serde_json",
- "thiserror 2.0.20",
- "tokio",
- "tokio-util",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "krabka-schema-registry"
-version = "0.4.2"
-dependencies = [
- "anyhow",
- "apache-avro",
- "arc-swap",
- "assert2",
- "axum",
- "base64 0.23.1",
- "bcrypt",
- "bytes",
- "clap",
- "krabka-authz",
- "krabka-broker",
- "krabka-client-admin",
- "krabka-client-consumer",
- "krabka-client-core",
- "krabka-client-producer",
- "krabka-logfmt",
- "krabka-metadata",
- "krabka-protocol",
- "krabka-security",
- "krabka-telemetry",
- "krabka-units",
- "datatest-stable",
- "derive_more",
- "hex",
- "hyper",
- "hyper-util",
- "parking_lot",
- "percent-encoding",
- "prost-reflect",
- "protox-parse",
- "refined_type",
- "reqwest 0.13.4",
- "ring",
- "rustls",
- "serde",
- "serde_json",
- "temp-env",
- "tempfile",
- "testcontainers",
- "testcontainers-modules",
- "thiserror 2.0.20",
- "tikv-jemallocator",
- "tokio",
- "tokio-rustls",
- "tokio-util",
- "tower",
- "tracing",
- "tracing-subscriber",
- "uuid",
-]
-
-[[package]]
-name = "krabka-schema-serde"
-version = "0.4.2"
-dependencies = [
- "apache-avro",
- "assert2",
- "bytes",
- "krabka-units",
- "hex",
- "jsonschema",
- "prost 0.14.4",
- "prost-reflect",
- "reqwest 0.13.4",
- "schemars 1.2.2",
- "serde",
- "serde_json",
- "thiserror 2.0.20",
- "tokio",
- "wiremock",
-]
-
-[[package]]
-name = "krabka-security"
-version = "0.4.2"
-dependencies = [
- "arc-swap",
- "assert2",
- "async-trait",
- "base64 0.23.1",
- "bytes",
- "codspeed-criterion-compat",
- "krabka-units",
- "hex",
- "hmac",
- "jsonpath-rust",
- "mutants",
- "pbkdf2",
- "rcgen",
- "refined_type",
- "regex",
- "ring",
- "rustls",
- "rustls-pki-types",
- "rustls-webpki",
- "serde",
- "serde_json",
- "sha2 0.11.0",
- "sspi",
- "strum 0.28.0",
- "subtle",
- "tempfile",
- "thiserror 2.0.20",
- "time",
- "tokio",
- "tracing",
- "x509-parser",
-]
-
-[[package]]
-name = "krabka-telemetry"
-version = "0.4.2"
-dependencies = [
- "assert2",
- "axum",
- "clap",
- "krabka-logfmt",
- "krabka-trace-context",
- "krabka-units",
- "flate2",
- "jemalloc_pprof",
- "mutants",
- "opentelemetry",
- "opentelemetry-appender-tracing",
- "opentelemetry-otlp",
- "opentelemetry_sdk",
- "pprof",
- "refined_type",
- "serde",
- "thiserror 2.0.20",
- "tokio",
- "tower",
- "tracing",
- "tracing-opentelemetry",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "krabka-throttle"
-version = "0.4.2"
-dependencies = [
- "assert2",
- "krabka-units",
- "creusot-std",
- "derive_more",
- "proptest",
- "qubit-clock",
- "stateright",
-]
-
-[[package]]
-name = "krabka-trace-context"
-version = "0.4.2"
-dependencies = [
- "assert2",
- "krabka-pgparser",
- "opentelemetry",
- "opentelemetry_sdk",
- "serde",
- "serde_json",
- "thiserror 2.0.20",
- "tracing",
- "tracing-opentelemetry",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "krabka-units"
-version = "0.4.2"
-dependencies = [
- "assert2",
- "num-traits",
- "proptest",
- "serde",
- "serde_json",
- "thiserror 2.0.20",
- "uom",
-]
-
-[[package]]
-name = "krabka-verified"
-version = "0.4.2"
-dependencies = [
- "assert2",
- "creusot-std",
- "proptest",
-]
-
-[[package]]
-name = "krabka-voters"
-version = "0.4.2"
-dependencies = [
- "assert2",
- "krabka-ids",
- "serde",
- "uuid",
 ]
 
 [[package]]
@@ -4512,6 +3254,1263 @@ checksum = "9e24a010dd405bd7ed803e5253182815b41bf2e6a80cc3bfc066658e03a198aa"
 dependencies = [
  "cfg-if",
  "cpufeatures 0.3.0",
+]
+
+[[package]]
+name = "krabka-audit"
+version = "0.4.2"
+dependencies = [
+ "arc-swap",
+ "assert2",
+ "async-trait",
+ "bytes",
+ "clap",
+ "derive_more",
+ "krabka-ids",
+ "krabka-log",
+ "krabka-protocol",
+ "krabka-units",
+ "mutants",
+ "qubit-clock",
+ "ring",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "krabka-authz"
+version = "0.4.2"
+dependencies = [
+ "assert2",
+ "krabka-metadata",
+ "krabka-security",
+ "proptest",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "krabka-broker"
+version = "0.4.2"
+dependencies = [
+ "arc-swap",
+ "assert2",
+ "async-trait",
+ "axum",
+ "base64 0.23.1",
+ "bytes",
+ "clap",
+ "crc32c",
+ "dashmap",
+ "exponential-backoff",
+ "futures-util",
+ "hex",
+ "java_regex",
+ "jsonpath-rust",
+ "krabka-audit",
+ "krabka-authz",
+ "krabka-broker-test-helpers",
+ "krabka-client-consumer",
+ "krabka-client-core",
+ "krabka-client-producer",
+ "krabka-compression",
+ "krabka-ids",
+ "krabka-kraft-core",
+ "krabka-log",
+ "krabka-metadata",
+ "krabka-object-store",
+ "krabka-protocol",
+ "krabka-raft",
+ "krabka-records-legacy",
+ "krabka-remote-storage",
+ "krabka-remote-storage-topic",
+ "krabka-security",
+ "krabka-telemetry",
+ "krabka-throttle",
+ "krabka-units",
+ "krabka-verified",
+ "krabka-voters",
+ "ktls",
+ "lru",
+ "mockall",
+ "mutants",
+ "nix 0.31.3",
+ "num-traits",
+ "object_store",
+ "opentelemetry-proto",
+ "pbkdf2",
+ "prometheus-client",
+ "proptest",
+ "prost 0.14.4",
+ "qubit-clock",
+ "rcgen",
+ "refined_type",
+ "regex",
+ "reqwest 0.13.4",
+ "ring",
+ "rustix 1.1.4",
+ "rustls",
+ "rustls-pki-types",
+ "schemars 1.2.2",
+ "serde",
+ "serde-wincode",
+ "serde_json",
+ "sha2 0.11.0",
+ "socket2",
+ "stateright",
+ "temp-env",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tikv-jemallocator",
+ "tokio",
+ "tokio-metrics",
+ "tokio-rustls",
+ "tokio-util",
+ "toml",
+ "tonic",
+ "tower",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+ "wincode",
+ "wiremock",
+ "zerocopy",
+]
+
+[[package]]
+name = "krabka-broker-test-helpers"
+version = "0.4.2"
+dependencies = [
+ "krabka-broker",
+]
+
+[[package]]
+name = "krabka-cli"
+version = "0.4.2"
+dependencies = [
+ "assert2",
+ "clap",
+ "derive_more",
+ "krabka-broker",
+ "krabka-client-admin",
+ "krabka-client-core",
+ "krabka-gres-balancer",
+ "krabka-gres-control",
+ "krabka-metadata",
+ "krabka-raft",
+ "krabka-security",
+ "krabka-units",
+ "ring",
+ "serde",
+ "serde-wincode",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+ "wincode",
+]
+
+[[package]]
+name = "krabka-client-admin"
+version = "0.4.2"
+dependencies = [
+ "assert2",
+ "async-trait",
+ "bytes",
+ "futures-util",
+ "krabka-broker",
+ "krabka-client-consumer",
+ "krabka-client-core",
+ "krabka-client-producer",
+ "krabka-ids",
+ "krabka-metadata",
+ "krabka-protocol",
+ "krabka-security",
+ "krabka-units",
+ "ring",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
+name = "krabka-client-consumer"
+version = "0.4.2"
+dependencies = [
+ "assert2",
+ "bon",
+ "bytes",
+ "futures-util",
+ "krabka-broker",
+ "krabka-client-core",
+ "krabka-client-producer",
+ "krabka-ids",
+ "krabka-protocol",
+ "krabka-security",
+ "krabka-units",
+ "mutants",
+ "proptest",
+ "refined_type",
+ "stateright",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "krabka-client-core"
+version = "0.4.2"
+dependencies = [
+ "assert2",
+ "async-trait",
+ "bon",
+ "bytes",
+ "crc32c",
+ "dashmap",
+ "futures-util",
+ "hex",
+ "krabka-ids",
+ "krabka-protocol",
+ "krabka-security",
+ "krabka-units",
+ "mockall",
+ "mutants",
+ "proptest",
+ "refined_type",
+ "rustls",
+ "rustls-pki-types",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "testcontainers",
+ "testcontainers-modules",
+ "thiserror 2.0.20",
+ "tokio",
+ "tokio-rustls",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "krabka-client-producer"
+version = "0.4.2"
+dependencies = [
+ "assert2",
+ "async-trait",
+ "bon",
+ "bytes",
+ "dashmap",
+ "futures",
+ "krabka-client-consumer",
+ "krabka-client-core",
+ "krabka-compression",
+ "krabka-protocol",
+ "krabka-security",
+ "krabka-units",
+ "mutants",
+ "refined_type",
+ "stateright",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+ "tokio-util",
+ "tracing",
+]
+
+[[package]]
+name = "krabka-compression"
+version = "0.4.2"
+dependencies = [
+ "assert2",
+ "bytes",
+ "codspeed-criterion-compat",
+ "flate2",
+ "hex",
+ "krabka-units",
+ "lz4_flex 0.14.0",
+ "once_cell",
+ "proptest",
+ "refined_type",
+ "serde",
+ "serde_json",
+ "snap",
+ "thiserror 2.0.20",
+ "zstd",
+]
+
+[[package]]
+name = "krabka-gres"
+version = "0.4.2"
+dependencies = [
+ "assert2",
+ "async-trait",
+ "bytes",
+ "clap",
+ "futures-util",
+ "krabka-broker",
+ "krabka-client-admin",
+ "krabka-client-core",
+ "krabka-client-producer",
+ "krabka-gres-control",
+ "krabka-gres-fdw",
+ "krabka-gres-ranges",
+ "krabka-gres-substrate",
+ "krabka-object-store",
+ "krabka-operator",
+ "krabka-pgcatalog",
+ "krabka-pgexec",
+ "krabka-pgkv",
+ "krabka-pgmvcc",
+ "krabka-pgtypes",
+ "krabka-pgwire",
+ "krabka-protocol",
+ "krabka-security",
+ "krabka-telemetry",
+ "krabka-units",
+ "rand 0.10.2",
+ "refined_type",
+ "rustls",
+ "rustls-pki-types",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "tempfile",
+ "tokio",
+ "tokio-postgres",
+ "tokio-rustls",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "krabka-gres-activator"
+version = "0.4.2"
+dependencies = [
+ "assert2",
+ "async-trait",
+ "bytes",
+ "clap",
+ "futures-util",
+ "krabka-client-core",
+ "krabka-gres",
+ "krabka-gres-control",
+ "krabka-gres-substrate",
+ "krabka-pgkv",
+ "krabka-pgwire",
+ "krabka-units",
+ "refined_type",
+ "temp-env",
+ "thiserror 2.0.20",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "krabka-gres-balancer"
+version = "0.4.2"
+dependencies = [
+ "assert2",
+ "krabka-gres-control",
+ "krabka-gres-substrate",
+ "krabka-units",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "krabka-gres-conformance"
+version = "0.4.2"
+dependencies = [
+ "assert2",
+ "bytes",
+ "clap",
+ "futures-util",
+ "krabka-pgcatalog",
+ "krabka-pgexec",
+ "krabka-pgparser",
+ "krabka-pgtypes",
+ "krabka-pgwire",
+ "krabka-units",
+ "native-tls",
+ "postgres-native-tls",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+ "tokio-postgres",
+]
+
+[[package]]
+name = "krabka-gres-control"
+version = "0.4.2"
+dependencies = [
+ "assert2",
+ "bytes",
+ "krabka-broker",
+ "krabka-client-admin",
+ "krabka-client-core",
+ "krabka-client-producer",
+ "krabka-protocol",
+ "krabka-units",
+ "proptest",
+ "refined_type",
+ "serde",
+ "serde_json",
+ "static_assertions",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+ "toml",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "krabka-gres-fdw"
+version = "0.4.2"
+dependencies = [
+ "apache-avro",
+ "assert2",
+ "bigdecimal",
+ "bytes",
+ "jiff",
+ "krabka-broker",
+ "krabka-client-admin",
+ "krabka-client-core",
+ "krabka-client-producer",
+ "krabka-pgcatalog",
+ "krabka-pgexec",
+ "krabka-pgkv",
+ "krabka-pgtypes",
+ "krabka-pgwire",
+ "krabka-protocol",
+ "krabka-schema-registry",
+ "krabka-schema-serde",
+ "krabka-security",
+ "krabka-units",
+ "num-bigint 0.5.1",
+ "prost-reflect",
+ "protox",
+ "rustls",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+ "tokio-postgres",
+ "tokio-util",
+]
+
+[[package]]
+name = "krabka-gres-loadtest"
+version = "0.4.2"
+dependencies = [
+ "anyhow",
+ "assert2",
+ "async-trait",
+ "clap",
+ "futures",
+ "hdrhistogram",
+ "krabka-client-admin",
+ "krabka-client-core",
+ "krabka-gres-control",
+ "krabka-security",
+ "krabka-units",
+ "opentelemetry-proto",
+ "rand 0.10.2",
+ "refined_type",
+ "rustix 1.1.4",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+ "tokio-postgres",
+ "tonic",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "krabka-gres-ranges"
+version = "0.4.2"
+dependencies = [
+ "arc-swap",
+ "assert2",
+ "async-trait",
+ "derive_more",
+ "futures",
+ "krabka-broker",
+ "krabka-client-admin",
+ "krabka-gres-control",
+ "krabka-pgcatalog",
+ "krabka-pgexec",
+ "krabka-pgkv",
+ "krabka-pgmvcc",
+ "krabka-pgparser",
+ "krabka-pgtypes",
+ "krabka-pgwire",
+ "krabka-security",
+ "krabka-trace-context",
+ "krabka-units",
+ "opentelemetry",
+ "opentelemetry_sdk",
+ "proptest",
+ "refined_type",
+ "rustls",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "stateright",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+ "tokio-postgres",
+ "tokio-rustls",
+ "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "krabka-gres-substrate"
+version = "0.4.2"
+dependencies = [
+ "assert2",
+ "async-trait",
+ "bytes",
+ "hex",
+ "krabka-broker",
+ "krabka-client-admin",
+ "krabka-client-core",
+ "krabka-client-producer",
+ "krabka-gres-ranges",
+ "krabka-object-store",
+ "krabka-pgcatalog",
+ "krabka-pgexec",
+ "krabka-pgkv",
+ "krabka-pgmvcc",
+ "krabka-pgtypes",
+ "krabka-protocol",
+ "krabka-raft",
+ "krabka-security",
+ "krabka-trace-context",
+ "krabka-units",
+ "object_store",
+ "opentelemetry",
+ "opentelemetry_sdk",
+ "proptest",
+ "refined_type",
+ "rustix 1.1.4",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "stateright",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+ "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
+name = "krabka-ids"
+version = "0.4.2"
+dependencies = [
+ "assert2",
+ "derive_more",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "krabka-kafka-tap"
+version = "0.4.2"
+dependencies = [
+ "assert2",
+ "krabka-ids",
+]
+
+[[package]]
+name = "krabka-kraft-core"
+version = "0.4.2"
+dependencies = [
+ "assert2",
+ "bytes",
+ "krabka-units",
+ "krabka-verified",
+ "krabka-voters",
+ "refined_type",
+ "serde",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "krabka-log"
+version = "0.4.2"
+dependencies = [
+ "assert2",
+ "bytes",
+ "codspeed-criterion-compat",
+ "crc32c",
+ "hex",
+ "krabka-compression",
+ "krabka-ids",
+ "krabka-protocol",
+ "krabka-units",
+ "krabka-verified",
+ "mutants",
+ "proptest",
+ "stateright",
+ "tempfile",
+ "testcontainers",
+ "testcontainers-modules",
+ "thiserror 2.0.20",
+ "tokio",
+ "tracing",
+ "zerocopy",
+]
+
+[[package]]
+name = "krabka-logfmt"
+version = "0.4.2"
+dependencies = [
+ "assert2",
+ "serde_json",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "krabka-metadata"
+version = "0.4.2"
+dependencies = [
+ "assert2",
+ "bytes",
+ "codspeed-criterion-compat",
+ "krabka-ids",
+ "krabka-protocol",
+ "krabka-security",
+ "krabka-units",
+ "krabka-voters",
+ "mutants",
+ "proptest",
+ "serde",
+ "serde-wincode",
+ "thiserror 2.0.20",
+ "tracing",
+ "uuid",
+ "wincode",
+]
+
+[[package]]
+name = "krabka-object-store"
+version = "0.4.2"
+dependencies = [
+ "assert2",
+ "async-trait",
+ "bytes",
+ "futures",
+ "mockall",
+ "object_store",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+]
+
+[[package]]
+name = "krabka-operator"
+version = "0.4.2"
+dependencies = [
+ "anyhow",
+ "assert2",
+ "async-trait",
+ "axum",
+ "base64 0.23.1",
+ "bytes",
+ "chrono",
+ "clap",
+ "derive_more",
+ "futures",
+ "hex",
+ "http",
+ "http-body-util",
+ "hyper",
+ "jsonpath-rust",
+ "k8s-openapi",
+ "krabka-broker",
+ "krabka-client-admin",
+ "krabka-client-core",
+ "krabka-client-producer",
+ "krabka-compression",
+ "krabka-gres-control",
+ "krabka-gres-ranges",
+ "krabka-gres-substrate",
+ "krabka-kraft-core",
+ "krabka-logfmt",
+ "krabka-metadata",
+ "krabka-object-store",
+ "krabka-pgexec",
+ "krabka-pgkv",
+ "krabka-rebalancer",
+ "krabka-schema-serde",
+ "krabka-security",
+ "krabka-units",
+ "kube",
+ "mutants",
+ "native-tls",
+ "object_store",
+ "postgres-native-tls",
+ "prometheus-client",
+ "refined_type",
+ "reqwest 0.13.4",
+ "ring",
+ "rustls",
+ "schemars 1.2.2",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "sha2 0.11.0",
+ "strum 0.28.0",
+ "tempfile",
+ "thiserror 2.0.20",
+ "time",
+ "tokio",
+ "tokio-postgres",
+ "toml",
+ "tower",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+ "x509-parser",
+]
+
+[[package]]
+name = "krabka-pgcatalog"
+version = "0.4.2"
+dependencies = [
+ "assert2",
+ "krabka-pgkv",
+ "krabka-pgmvcc",
+ "krabka-pgtypes",
+ "proptest",
+ "tempfile",
+ "thiserror 2.0.20",
+ "zerocopy",
+]
+
+[[package]]
+name = "krabka-pgexec"
+version = "0.4.2"
+dependencies = [
+ "assert2",
+ "async-trait",
+ "base64 0.23.1",
+ "bigdecimal",
+ "bytes",
+ "encoding_rs",
+ "hex",
+ "jiff",
+ "krabka-pgcatalog",
+ "krabka-pgkv",
+ "krabka-pgmvcc",
+ "krabka-pgparser",
+ "krabka-pgtypes",
+ "krabka-pgwire",
+ "krabka-trace-context",
+ "krabka-units",
+ "libm",
+ "md-5 0.11.0",
+ "opentelemetry",
+ "opentelemetry_sdk",
+ "pglz",
+ "regex",
+ "rust-stemmers",
+ "sha2 0.11.0",
+ "shlex 2.0.1",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+ "tokio-postgres",
+ "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
+ "unicode-general-category",
+ "unicode-normalization",
+ "zerocopy",
+ "zstd",
+]
+
+[[package]]
+name = "krabka-pgkv"
+version = "0.4.2"
+dependencies = [
+ "assert2",
+ "fjall",
+ "jiff",
+ "krabka-pgtypes",
+ "krabka-units",
+ "proptest",
+ "refined_type",
+ "serde",
+ "tempfile",
+ "thiserror 2.0.20",
+ "zerocopy",
+]
+
+[[package]]
+name = "krabka-pgmvcc"
+version = "0.4.2"
+dependencies = [
+ "assert2",
+ "krabka-pgkv",
+ "krabka-pgtypes",
+ "proptest",
+ "thiserror 2.0.20",
+ "zerocopy",
+]
+
+[[package]]
+name = "krabka-pgparser"
+version = "0.4.2"
+dependencies = [
+ "assert2",
+ "krabka-pgtypes",
+ "pg_query",
+ "proptest",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "krabka-pgtypes"
+version = "0.4.2"
+dependencies = [
+ "assert2",
+ "bigdecimal",
+ "dashu-float",
+ "jiff",
+ "proptest",
+ "quick-xml 0.41.0",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "krabka-pgwire"
+version = "0.4.2"
+dependencies = [
+ "assert2",
+ "async-trait",
+ "base64 0.23.1",
+ "bytes",
+ "hmac",
+ "krabka-trace-context",
+ "num-traits",
+ "opentelemetry",
+ "opentelemetry_sdk",
+ "pbkdf2",
+ "proptest",
+ "rand 0.10.2",
+ "rustls",
+ "sha2 0.11.0",
+ "sqlx",
+ "subtle",
+ "thiserror 2.0.20",
+ "tokio",
+ "tokio-postgres",
+ "tokio-rustls",
+ "tokio-util",
+ "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "krabka-protocol"
+version = "0.4.2"
+dependencies = [
+ "arbitrary",
+ "assert2",
+ "bytes",
+ "codspeed-criterion-compat",
+ "crc32c",
+ "datatest-stable",
+ "hex",
+ "krabka-compression",
+ "krabka-kafka-tap",
+ "krabka-units",
+ "proptest",
+ "serde",
+ "serde_json",
+ "strum 0.28.0",
+ "tempfile",
+ "thiserror 2.0.20",
+ "toml",
+ "zerocopy",
+]
+
+[[package]]
+name = "krabka-raft"
+version = "0.4.2"
+dependencies = [
+ "assert2",
+ "async-trait",
+ "base64 0.23.1",
+ "bytes",
+ "dashmap",
+ "futures-util",
+ "krabka-client-core",
+ "krabka-ids",
+ "krabka-kraft-core",
+ "krabka-log",
+ "krabka-metadata",
+ "krabka-protocol",
+ "krabka-security",
+ "krabka-units",
+ "krabka-verified",
+ "mockall",
+ "mutants",
+ "refined_type",
+ "serde",
+ "serde-wincode",
+ "stateright",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "uuid",
+ "wincode",
+]
+
+[[package]]
+name = "krabka-rebalancer"
+version = "0.4.2"
+dependencies = [
+ "anyhow",
+ "arc-swap",
+ "assert2",
+ "async-trait",
+ "axum",
+ "bytes",
+ "clap",
+ "connectrpc-axum",
+ "connectrpc-axum-build",
+ "krabka-broker",
+ "krabka-client-admin",
+ "krabka-client-core",
+ "krabka-metadata",
+ "krabka-protocol",
+ "krabka-units",
+ "mutants",
+ "num-traits",
+ "parking_lot",
+ "pbjson",
+ "prometheus-client",
+ "prost 0.14.4",
+ "protoc-bin-vendored",
+ "refined_type",
+ "reqwest 0.13.4",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "strum 0.28.0",
+ "temp-env",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+ "tokio-util",
+ "tower",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
+name = "krabka-records-legacy"
+version = "0.4.2"
+dependencies = [
+ "assert2",
+ "bytes",
+ "crc32fast",
+ "hex",
+ "krabka-compression",
+ "krabka-ids",
+ "krabka-protocol",
+ "krabka-units",
+ "proptest",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "krabka-remote-storage"
+version = "0.4.2"
+dependencies = [
+ "assert2",
+ "base64 0.23.1",
+ "bytes",
+ "krabka-ids",
+ "krabka-log",
+ "krabka-object-store",
+ "krabka-protocol",
+ "krabka-units",
+ "object_store",
+ "sha2 0.11.0",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "krabka-remote-storage-topic"
+version = "0.4.2"
+dependencies = [
+ "assert2",
+ "async-trait",
+ "bytes",
+ "futures-util",
+ "krabka-client-admin",
+ "krabka-client-core",
+ "krabka-client-producer",
+ "krabka-ids",
+ "krabka-protocol",
+ "krabka-remote-storage",
+ "krabka-security",
+ "krabka-units",
+ "mutants",
+ "refined_type",
+ "serde_json",
+ "thiserror 2.0.20",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "krabka-schema-registry"
+version = "0.4.2"
+dependencies = [
+ "anyhow",
+ "apache-avro",
+ "arc-swap",
+ "assert2",
+ "axum",
+ "base64 0.23.1",
+ "bcrypt",
+ "bytes",
+ "clap",
+ "datatest-stable",
+ "derive_more",
+ "hex",
+ "hyper",
+ "hyper-util",
+ "krabka-authz",
+ "krabka-broker",
+ "krabka-client-admin",
+ "krabka-client-consumer",
+ "krabka-client-core",
+ "krabka-client-producer",
+ "krabka-logfmt",
+ "krabka-metadata",
+ "krabka-protocol",
+ "krabka-security",
+ "krabka-telemetry",
+ "krabka-units",
+ "parking_lot",
+ "percent-encoding",
+ "prost-reflect",
+ "protox-parse",
+ "refined_type",
+ "reqwest 0.13.4",
+ "ring",
+ "rustls",
+ "serde",
+ "serde_json",
+ "temp-env",
+ "tempfile",
+ "testcontainers",
+ "testcontainers-modules",
+ "thiserror 2.0.20",
+ "tikv-jemallocator",
+ "tokio",
+ "tokio-rustls",
+ "tokio-util",
+ "tower",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
+name = "krabka-schema-serde"
+version = "0.4.2"
+dependencies = [
+ "apache-avro",
+ "assert2",
+ "bytes",
+ "hex",
+ "jsonschema",
+ "krabka-units",
+ "prost 0.14.4",
+ "prost-reflect",
+ "reqwest 0.13.4",
+ "schemars 1.2.2",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "tokio",
+ "wiremock",
+]
+
+[[package]]
+name = "krabka-security"
+version = "0.4.2"
+dependencies = [
+ "arc-swap",
+ "assert2",
+ "async-trait",
+ "base64 0.23.1",
+ "bytes",
+ "codspeed-criterion-compat",
+ "hex",
+ "hmac",
+ "jsonpath-rust",
+ "krabka-units",
+ "mutants",
+ "pbkdf2",
+ "rcgen",
+ "refined_type",
+ "regex",
+ "ring",
+ "rustls",
+ "rustls-pki-types",
+ "rustls-webpki",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "sspi",
+ "strum 0.28.0",
+ "subtle",
+ "tempfile",
+ "thiserror 2.0.20",
+ "time",
+ "tokio",
+ "tracing",
+ "x509-parser",
+]
+
+[[package]]
+name = "krabka-telemetry"
+version = "0.4.2"
+dependencies = [
+ "assert2",
+ "axum",
+ "clap",
+ "flate2",
+ "jemalloc_pprof",
+ "krabka-logfmt",
+ "krabka-trace-context",
+ "krabka-units",
+ "mutants",
+ "opentelemetry",
+ "opentelemetry-appender-tracing",
+ "opentelemetry-otlp",
+ "opentelemetry_sdk",
+ "pprof",
+ "refined_type",
+ "serde",
+ "thiserror 2.0.20",
+ "tokio",
+ "tower",
+ "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "krabka-throttle"
+version = "0.4.2"
+dependencies = [
+ "assert2",
+ "creusot-std",
+ "derive_more",
+ "krabka-units",
+ "proptest",
+ "qubit-clock",
+ "stateright",
+]
+
+[[package]]
+name = "krabka-trace-context"
+version = "0.4.2"
+dependencies = [
+ "assert2",
+ "krabka-pgparser",
+ "opentelemetry",
+ "opentelemetry_sdk",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "krabka-units"
+version = "0.4.2"
+dependencies = [
+ "assert2",
+ "num-traits",
+ "proptest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "uom",
+]
+
+[[package]]
+name = "krabka-verified"
+version = "0.4.2"
+dependencies = [
+ "assert2",
+ "creusot-std",
+ "proptest",
+]
+
+[[package]]
+name = "krabka-voters"
+version = "0.4.2"
+dependencies = [
+ "assert2",
+ "krabka-ids",
+ "serde",
+ "uuid",
 ]
 
 [[package]]
@@ -9722,3 +9721,18 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
+
+[[patch.unused]]
+name = "connectrpc-axum"
+version = "0.2.4"
+source = "git+https://github.com/krabka-io/connectrpc-axum?rev=f2134f4124c4cde58b404923934220d8b2e8122b#f2134f4124c4cde58b404923934220d8b2e8122b"
+
+[[patch.unused]]
+name = "connectrpc-axum-build"
+version = "0.2.4"
+source = "git+https://github.com/krabka-io/connectrpc-axum?rev=f2134f4124c4cde58b404923934220d8b2e8122b#f2134f4124c4cde58b404923934220d8b2e8122b"
+
+[[patch.unused]]
+name = "connectrpc-axum-client"
+version = "0.2.3"
+source = "git+https://github.com/krabka-io/connectrpc-axum?rev=f2134f4124c4cde58b404923934220d8b2e8122b#f2134f4124c4cde58b404923934220d8b2e8122b"

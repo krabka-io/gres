@@ -49,7 +49,7 @@ Wraps `krabka_log::Log` plus an in-memory `hwm: i64`:
   which validates `offset == log_end_offset`).
 - `read_committed(&self, offset: i64, max_bytes: usize) -> Result<RawRead, RaftError>`
   — serves KIP-595 `Fetch`: `log.read_raw(offset, self.hwm.min(log_end),
-  max_bytes)`. Verbatim wire bytes, never beyond the committed (HWM) range.
+max_bytes)`. Verbatim wire bytes, never beyond the committed (HWM) range.
 - `truncate_to(&mut self, offset: i64) -> Result<(), RaftError>` —
   `log.truncate_to(offset)`, then `hwm = hwm.min(offset)`.
 - `advance_hwm(&mut self, new_hwm: i64)` — `hwm = hwm.max(new_hwm).min(log_end)`
@@ -87,8 +87,8 @@ core reads          ->  LogView {end_offset,last_epoch,  ->  log_end_offset,
 - **Standalone unit tests (`KraftLog`):** append varied-epoch batches → read
   back → `LogView` queries (`end_offset`, `last_epoch`, `end_offset_for_epoch`
   including unknown→`None`) → `truncate_to` at an epoch boundary (assert log-end
-  + hwm both drop) → `read_committed` never returns bytes past HWM →
-  `advance_hwm` monotonic + clamped to log end.
+  - hwm both drop) → `read_committed` never returns bytes past HWM →
+    `advance_hwm` monotonic + clamped to log end.
 - **Core-over-real-log integration (headline):** generalize the 3a simulation
   harness so each node's log is a real `KraftLog` on a tempdir. The harness maps
   the core's log-related `Action`s onto the real log (`AppendLeaderChange` /

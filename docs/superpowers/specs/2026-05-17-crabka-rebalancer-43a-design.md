@@ -58,12 +58,14 @@ crates/rebalancer/
 ### Crate dependencies (additions to the workspace)
 
 Workspace-level (`Cargo.toml`):
+
 - `connectrpc = "0.4"`
 - `connectrpc-axum = "0.1"`
 - `connectrpc-axum-build = "0.1"`
 - `prost = "0.13"` (matches `connectrpc`'s expected version when this lands)
 
 `crates/rebalancer/Cargo.toml`:
+
 - `krabka-client-core` (admin client)
 - `krabka-protocol` (typed requests for Metadata / DescribeCluster / ListPartitionReassignments)
 - `krabka-metadata` (`NodeId`)
@@ -87,6 +89,7 @@ One binary, `krabka-rebalancer`. Single-replica only in 43a. CLI flags (mirrorin
 ```
 
 Operational endpoints (plain axum routes, not Connect):
+
 - `GET /healthz` — 200 always
 - `GET /readyz` — 200 after first successful state snapshot; 503 before
 - `GET /metrics` — OpenMetrics text (own `prometheus-client` registry; metrics surface starts small: `krabka_rebalancer_snapshot_at_ms`, `krabka_rebalancer_snapshots_total`, `krabka_rebalancer_proposals_created_total`)
@@ -177,14 +180,14 @@ message ExecuteProposalResponse {}                              // empty in 43a
 
 Method behaviors specific to 43a:
 
-| RPC               | 43a behavior |
-|-------------------|--------------|
-| `GetState`        | Returns the current snapshot; `Code::Unavailable` until the first successful snapshot. |
+| RPC               | 43a behavior                                                                                                                                                                                        |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GetState`        | Returns the current snapshot; `Code::Unavailable` until the first successful snapshot.                                                                                                              |
 | `CreateProposal`  | Runs the optimizer over the current snapshot; stores the result; returns it. Empty `goals` field = all goals; unknown goal names → `Code::InvalidArgument`. `Code::Unavailable` if no snapshot yet. |
-| `DryRunProposal`  | Returns the stored proposal's summary with `estimated_bytes_moved = 0`. Idempotent. `Code::NotFound` for unknown id. |
-| `GetProposal`     | Returns one stored proposal. `Code::NotFound` for unknown id. |
-| `ListProposals`   | Most-recent-first, ring-buffer-bounded. `limit == 0` → 20; otherwise capped at `min(limit, ring_buffer_size)`. |
-| `ExecuteProposal` | `Code::Unimplemented` with message `"execute path lands in slice 43b"`. |
+| `DryRunProposal`  | Returns the stored proposal's summary with `estimated_bytes_moved = 0`. Idempotent. `Code::NotFound` for unknown id.                                                                                |
+| `GetProposal`     | Returns one stored proposal. `Code::NotFound` for unknown id.                                                                                                                                       |
+| `ListProposals`   | Most-recent-first, ring-buffer-bounded. `limit == 0` → 20; otherwise capped at `min(limit, ring_buffer_size)`.                                                                                      |
+| `ExecuteProposal` | `Code::Unimplemented` with message `"execute path lands in slice 43b"`.                                                                                                                             |
 
 Wire format: clients pick JSON (`Content-Type: application/json`) or protobuf (`application/proto`) per request — Connect handles content negotiation. `curl` + JSON workflows are supported out of the box.
 
@@ -210,13 +213,14 @@ pub struct GoalContext {
 Optimizer flow (`optimizer::optimize`):
 
 1. Sort goals: Hard first, then Soft. Ties broken by registration order.
-2. Apply each goal's `propose` against an in-memory mutable clone of `ClusterState`. Each `Movement` updates the clone *before* the next goal sees it — so soft goals see post-hard-goal counts.
+2. Apply each goal's `propose` against an in-memory mutable clone of `ClusterState`. Each `Movement` updates the clone _before_ the next goal sees it — so soft goals see post-hard-goal counts.
 3. Accumulate every `Movement` in a `Vec`; coalesce duplicates per `(topic, partition)` — last writer wins.
 4. Truncate to `max_movements_per_proposal`. If a `Hard` goal still reports unfulfilled movements after the cap is hit, return `OptimizeError::HardGoalUnsatisfied`.
 5. Compute `ProposalSummary` (before / after counts).
 6. Return `Proposal { id: Uuid::new_v4().to_string(), status: Computed, ... }`.
 
 Movement-validity invariants the optimizer enforces (any violation drops the movement):
+
 - `new_replicas.len() == old_replicas.len()` (RF unchanged in 43a)
 - `new_leader ∈ new_replicas`
 - `new_replicas` has no duplicates
@@ -228,7 +232,7 @@ The three slice-43a goals:
 
 2. **`ReplicaDistribution`** (Soft) — compute `replicas_per_broker`. If `(max - min) * 100 / total > imbalance_threshold_pct`, move replicas from the most-loaded broker to the least-loaded. Greedy: pick the most-loaded broker → pick one of its replicas whose partition currently lacks a replica on the least-loaded broker → swap. Repeat until threshold satisfied OR no valid swap remains.
 
-3. **`LeaderDistribution`** (Soft) — compute `leaders_per_broker` over the *post-replica-balance* clone. Same imbalance heuristic; movements are leader-only (no replica change). For partitions where the new-leader candidate isn't already in the replica set, skip — leader-only movements can only target existing replicas.
+3. **`LeaderDistribution`** (Soft) — compute `leaders_per_broker` over the _post-replica-balance_ clone. Same imbalance heuristic; movements are leader-only (no replica change). For partitions where the new-leader candidate isn't already in the replica set, skip — leader-only movements can only target existing replicas.
 
 ### Cluster-state ingest
 
@@ -253,7 +257,7 @@ Combine into one `ClusterState` with `snapshot_at_ms = now_ms()`. On error: log 
 
 Snapshot storage: `ArcSwap<Option<ClusterState>>` — lock-free reads from RPC handlers, atomic swap on tick. `GetState` derefs and either returns the snapshot or maps `None` → `Code::Unavailable`.
 
-**Behavior under in-flight reassignments:** if `in_flight_reassignments` is non-empty when `CreateProposal` runs, the proposal is computed against the *current* (transition-state) placement. The response includes the in-flight list in the prior `GetState` (operators can check themselves). Slice 43a does not gate proposal creation on in-flight reassignments; slice 43b adds that gate alongside the execute path.
+**Behavior under in-flight reassignments:** if `in_flight_reassignments` is non-empty when `CreateProposal` runs, the proposal is computed against the _current_ (transition-state) placement. The response includes the in-flight list in the prior `GetState` (operators can check themselves). Slice 43a does not gate proposal creation on in-flight reassignments; slice 43b adds that gate alongside the execute path.
 
 ### `ClusterState` data model
 

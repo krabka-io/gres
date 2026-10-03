@@ -25,11 +25,13 @@
 ### Task 1: Add validated pprof debuginfod configuration
 
 **Files:**
+
 - Modify: `crates/pprof/Cargo.toml`
 - Modify: `crates/pprof/src/symbolizer.rs`
 - Modify: `Cargo.lock`
 
 **Interfaces:**
+
 - Produces: `DEFAULT_DEBUGINFOD_MAX_ARTIFACT_SIZE: ByteSize`
 - Produces: `DEFAULT_DEBUGINFOD_CONNECT_TIMEOUT: Time`
 - Produces: `DEFAULT_DEBUGINFOD_REQUEST_TIMEOUT: Time`
@@ -138,10 +140,12 @@ Expected: configuration and explicit-cap tests pass.
 ### Task 2: Propagate configuration through all Profiles roles
 
 **Files:**
+
 - Modify: `crates/profiles/src/cold_store.rs`
 - Modify: `crates/profiles/src/symbolizer.rs`
 
 **Interfaces:**
+
 - Consumes: `krabka_pprof::DebuginfodConfig`
 - Produces: `ColdProfileStore::new_with_debuginfod_config`
 - Produces: `native_resolver_from_debuginfod_config`
@@ -198,10 +202,12 @@ Expected: explicit propagation and compatibility tests pass.
 ### Task 3: Add Profiles CLI and environment overrides
 
 **Files:**
+
 - Modify: `crates/profiles/Cargo.toml`
 - Modify: `crates/profiles/src/bin/krabka-profiles.rs`
 
 **Interfaces:**
+
 - Produces: `--debuginfod-max-artifact-size`
 - Produces: `--debuginfod-connect-timeout`
 - Produces: `--debuginfod-request-timeout`
@@ -264,6 +270,7 @@ Expected: all CLI, environment, relation, and existing URL tests pass.
 ### Task 4: Close the pprof audit slice and verify
 
 **Files:**
+
 - Modify: `docs/configuration-audit.md`
 - Modify: `docs/superpowers/plans/2026-07-30-pprof-debuginfod-policy.md`
 

@@ -50,9 +50,9 @@ pub(crate) fn has_newer_leader(responses: &[ReplicaLogInfo], known_leader_epoch:
 
 use std::{collections::HashSet, sync::Arc, time::Duration};
 
+use futures_util::FutureExt as _;
 use krabka_metadata::{MetadataRecord, PartitionRecord};
 use krabka_protocol::primitives::uuid::Uuid as WireUuid;
-use futures_util::FutureExt as _;
 use tokio::sync::{Mutex, mpsc, oneshot};
 use tracing::warn;
 

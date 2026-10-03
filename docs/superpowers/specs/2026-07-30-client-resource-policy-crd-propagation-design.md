@@ -28,14 +28,14 @@ process-configured because one operator instance serves many clusters.
 Add optional fields directly to each owner's existing policy structure. Do not
 introduce a shared flattened CRD type.
 
-| Owner | Fields |
-|---|---|
-| `KafkaNodePool.spec` | `clientDispatchQueueCapacity`, `clientFrameMax` |
-| `Kafka.spec.gresRegistry` | `readerFetchMin` |
-| `Gres.spec.activator` | `clientDispatchQueueCapacity`, `clientFrameMax` |
-| `Gres.spec.compute` | `clientDispatchQueueCapacity`, `clientFrameMax`, `fdwFetchMin`, `walRecoveryFetchMin` |
-| `KafkaGrpcGateway.spec.tuning` | `clientDispatchQueueCapacity`, `clientFrameMax` |
-| `SchemaRegistry.spec.runtime` | `clientDispatchQueueCapacity`, `clientFrameMax` |
+| Owner                          | Fields                                                                                |
+| ------------------------------ | ------------------------------------------------------------------------------------- |
+| `KafkaNodePool.spec`           | `clientDispatchQueueCapacity`, `clientFrameMax`                                       |
+| `Kafka.spec.gresRegistry`      | `readerFetchMin`                                                                      |
+| `Gres.spec.activator`          | `clientDispatchQueueCapacity`, `clientFrameMax`                                       |
+| `Gres.spec.compute`            | `clientDispatchQueueCapacity`, `clientFrameMax`, `fdwFetchMin`, `walRecoveryFetchMin` |
+| `KafkaGrpcGateway.spec.tuning` | `clientDispatchQueueCapacity`, `clientFrameMax`                                       |
+| `SchemaRegistry.spec.runtime`  | `clientDispatchQueueCapacity`, `clientFrameMax`                                       |
 
 Every field is optional and omitted from serialization when absent. Queue
 capacity is dimensionless and represented as `Option<usize>` with a schema

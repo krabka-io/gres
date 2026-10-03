@@ -105,8 +105,8 @@ mod stamp_source;
 mod txn_index;
 
 pub use config::{CleanupPolicy, LogConfig};
-pub use krabka_ids::{LeaderEpoch, Offset, ProducerId};
 pub use error::LogError;
+pub use krabka_ids::{LeaderEpoch, Offset, ProducerId};
 pub use leader_epoch_checkpoint::{
     EpochEntry, LeaderEpochCheckpoint, epoch_and_offset_for_entries,
 };

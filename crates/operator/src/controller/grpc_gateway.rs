@@ -36,13 +36,6 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
-use krabka_security::ca::{SubjectAltName, issue_broker_cert};
-use krabka_units::{
-    ByteSize, Ratio, Time,
-    convert::{ByteSizeExt, RatioExt as _, TimeExt},
-    fmt::Human as _,
-    hours, millis, minutes, secs,
-};
 use futures::StreamExt as _;
 use k8s_openapi::{
     ByteString,
@@ -51,6 +44,13 @@ use k8s_openapi::{
         core::v1::{Secret, Service},
     },
     apimachinery::pkg::apis::meta::v1::ObjectMeta,
+};
+use krabka_security::ca::{SubjectAltName, issue_broker_cert};
+use krabka_units::{
+    ByteSize, Ratio, Time,
+    convert::{ByteSizeExt, RatioExt as _, TimeExt},
+    fmt::Human as _,
+    hours, millis, minutes, secs,
 };
 use kube::{
     Resource, ResourceExt as _,
@@ -1767,8 +1767,8 @@ pub async fn run(ctx: Context) -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use assert2::{assert, check};
-    use krabka_units::{millis, secs};
     use k8s_openapi::apimachinery::pkg::apis::meta::v1::OwnerReference;
+    use krabka_units::{millis, secs};
 
     use super::*;
     use crate::crd::grpc_gateway::{

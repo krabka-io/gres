@@ -9,20 +9,23 @@
 "Boot Postgres against the pageserver" decomposes into two halves with different natures:
 
 **PG-5a — pageserver readiness (Rust, on landed designs).** Four service-side pieces compute cannot run without:
+
 1. **Timeline seeding:** `initdb`'s WAL predates any replication slot, so a timeline is born by **importing** an `initdb`-produced data directory — every relation file becomes image entries @ LSN₀ in the layer store; non-relation files (control file, SLRU segments, config skeleton) are retained for basebackup. (Neon's bootstrap shape.)
 2. **Live topic ingest:** a consumer loop `__pg_wal.<cluster>` → PG-2 decoder → PG-3 ingest, advancing `last_ingested_lsn`. Pure composition of landed designs; sequential — no LSN→offset index needed (as PG-1 anticipated).
 3. **`GetPage`/`GetRelSize` LSN-wait:** compute requests pages at its flushed-WAL LSN; the pageserver **waits** (bounded, configurable timeout → clear error) until `last_ingested_lsn ≥ request.lsn` before materializing. Without this, reads race ingest.
 4. **A `Basebackup` RPC:** the minimal boot bundle at an LSN — `pg_control` (checkpoint pointing at the LSN), SLRU segments (**PG-4b's materialization** — hence the boot-gate dependency), the seeded non-relation files — as a tarball stream.
 
 **PG-5b — the compute image (the C/fork half).**
+
 - **A minimal PG-17 core patch:** upstream Postgres through 17 has **no pluggable smgr**, so a small vendored patch adds an smgr-registration hook (the shape the Neon/TDE forks use) — maintained per supported major, applied to pinned PG 17.x sources in the image build. Everything else lives in an extension.
 - **The `crabka` extension (C):** registers the smgr — reads → `GetPage(lsn = flushed WAL position)`, `nblocks` → `GetRelSize` (+ a local size cache maintained by `extend`/`truncate`), `write`/`extend` → **no-ops for data** (WAL is the truth; evicted buffers drop), `exists` via `GetRelSize`. GUCs: pageserver endpoint, tenant/timeline/cluster id.
 - **The client — the resolved crux:** **`krabka-compute-client`**, a Rust **cdylib** exposing a C ABI (`ck_get_page`, `ck_get_rel_size`, `ck_connect`, …) over a **blocking** Connect-unary HTTP/1.1 client (prost + a sync HTTP dep) — smgr calls are synchronous, so no async runtime, no h2, no streaming. Proto codegen is shared with the pageserver: the client can never drift.
-- **The write path composes what exists:** the patched compute is a stock-shaped *primary* (`wal_level=replica`, `full_page_writes=on` — FPIs remain the redo bases, as PG-3/4 assume); **PG-1's safekeeper attaches to it as a replica**, unchanged.
+- **The write path composes what exists:** the patched compute is a stock-shaped _primary_ (`wal_level=replica`, `full_page_writes=on` — FPIs remain the redo bases, as PG-3/4 assume); **PG-1's safekeeper attaches to it as a replica**, unchanged.
 
 ## The sanctioned `unsafe` boundary (user decision, encoded)
 
 The workspace forbids `unsafe`; an `extern "C"` ABI cannot exist without it. The exception is **narrow and structural**:
+
 - Exactly **one** crate (`krabka-compute-client`) declines the workspace lint set; `unsafe` code is confined to a single thin `src/ffi.rs` (pointer/CStr marshalling only — every other module remains `#![forbid(unsafe_code)]` at the module level via lint config), with `unsafe_op_in_unsafe_fn = "deny"` and every `unsafe` block carrying a `// SAFETY:` justification.
 - The FFI surface is C-header-generated (`cbindgen`) so the C side never hand-declares signatures.
 - The code style guide gains a paragraph recording this exception and its rules — the precedent is documented, not implicit.
@@ -98,7 +101,7 @@ The safekeeper leg is unchanged Kafka wire (PG-1). The compute↔pageserver leg 
 ## Risks (carried into the plan)
 
 - **The core patch is the sharpest tool:** kept minimal (a registration hook), vendored as reviewable diffs, re-verified per PG point release. A patch-drift CI check (apply-against-pinned-sources) guards it.
-- **The `unsafe` boundary:** structurally confined (one file, one crate, cbindgen, SAFETY comments, style-guide codification) — the containment *is* the mitigation.
+- **The `unsafe` boundary:** structurally confined (one file, one crate, cbindgen, SAFETY comments, style-guide codification) — the containment _is_ the mitigation.
 - **PG-4b sequencing:** the boot gate cannot pass without SLRUs; 5a/5b land everything else first, the gate task is explicitly blocked on PG-4b.
 - **LSN-wait liveness:** a stalled safekeeper stalls compute reads at fresh LSNs — bounded timeouts + clear errors v1; backpressure/HA later.
 - **`full_page_writes=on` WAL volume** — accepted v1 (bases for redo); revisit with pageserver-side image coverage evidence.

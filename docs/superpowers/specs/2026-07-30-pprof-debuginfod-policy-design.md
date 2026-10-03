@@ -41,11 +41,11 @@ passes it to the applicable role.
 
 The standalone Profiles binary exposes optional UOM overrides:
 
-| CLI | Environment |
-|---|---|
+| CLI                              | Environment                                    |
+| -------------------------------- | ---------------------------------------------- |
 | `--debuginfod-max-artifact-size` | `KRABKA_PROFILES_DEBUGINFOD_MAX_ARTIFACT_SIZE` |
-| `--debuginfod-connect-timeout` | `KRABKA_PROFILES_DEBUGINFOD_CONNECT_TIMEOUT` |
-| `--debuginfod-request-timeout` | `KRABKA_PROFILES_DEBUGINFOD_REQUEST_TIMEOUT` |
+| `--debuginfod-connect-timeout`   | `KRABKA_PROFILES_DEBUGINFOD_CONNECT_TIMEOUT`   |
+| `--debuginfod-request-timeout`   | `KRABKA_PROFILES_DEBUGINFOD_REQUEST_TIMEOUT`   |
 
 Absent overrides use `DebuginfodConfig::default`, avoiding duplicate default
 literals at the CLI boundary.

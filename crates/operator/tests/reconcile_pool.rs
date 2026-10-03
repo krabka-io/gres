@@ -17,11 +17,11 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use assert2::assert;
+use http::{Method, Response};
 use krabka_operator::{
     controller::kafka_node_pool::reconcile,
     crd::{KafkaNodePool, KafkaNodePoolSpec, NodeRole},
 };
-use http::{Method, Response};
 
 #[path = "shared/mod.rs"]
 mod shared;

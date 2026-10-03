@@ -11,13 +11,13 @@ Today the registry is **single-node always-primary**: the `KafkaStore` facade ta
 
 ## Load-bearing decisions
 
-| Decision | Choice | Rationale |
-|---|---|---|
-| **Election fidelity** | **cp-exact `"sr"` wire** — the JoinGroup metadata (`SchemaRegistryIdentity`) + SyncGroup assignment (`SchemaRegistryGroupAssignment`) match cp-schema-registry 7.4.0 byte-exactly, Docker-captured. | A mixed cp+Crabka SR cluster co-elects one primary; consistent with every prior slice matching cp. The broker coordinator is already protocol-type-generic, so this needs only the right metadata bytes. |
-| **Election client** | A **self-contained `election` module** in the schema-registry crate, implementing the `"sr"` group-membership loop directly over `client-core`'s generic `Client::send`. | Focused on the SR's needs; doesn't refactor `client-consumer` (which would risk consumer regressions). Rejected: extracting a shared group-membership crate (bigger refactor); a `_schemas`-topic leader lease (not cp-faithful). |
-| **Scope** | **Full HA in one slice** — election + forwarding + failover + multi-node conformance + the cp election capture. | The parts are coupled (election without forwarding is an unsafe multi-writer; failover falls out of a correct election client). User chose one slice. |
-| **Forwarding** | An axum **middleware** that proxies mutating REST from a secondary to the primary's advertised URL via `reqwest`. | The `grpc-gateway` `Forwarder` is a proven pattern; reads + primary-side writes pass through unchanged. |
-| **Authority** | The exact `SchemaRegistryIdentity`/assignment bytes, the protocol type/name, and the leader's primary-selection rule are **cp-captured** (Docker via `DescribeGroups`) + asserted. | Same Docker-capture fidelity discipline as slices 2–4. |
+| Decision              | Choice                                                                                                                                                                                              | Rationale                                                                                                                                                                                                                         |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Election fidelity** | **cp-exact `"sr"` wire** — the JoinGroup metadata (`SchemaRegistryIdentity`) + SyncGroup assignment (`SchemaRegistryGroupAssignment`) match cp-schema-registry 7.4.0 byte-exactly, Docker-captured. | A mixed cp+Crabka SR cluster co-elects one primary; consistent with every prior slice matching cp. The broker coordinator is already protocol-type-generic, so this needs only the right metadata bytes.                          |
+| **Election client**   | A **self-contained `election` module** in the schema-registry crate, implementing the `"sr"` group-membership loop directly over `client-core`'s generic `Client::send`.                            | Focused on the SR's needs; doesn't refactor `client-consumer` (which would risk consumer regressions). Rejected: extracting a shared group-membership crate (bigger refactor); a `_schemas`-topic leader lease (not cp-faithful). |
+| **Scope**             | **Full HA in one slice** — election + forwarding + failover + multi-node conformance + the cp election capture.                                                                                     | The parts are coupled (election without forwarding is an unsafe multi-writer; failover falls out of a correct election client). User chose one slice.                                                                             |
+| **Forwarding**        | An axum **middleware** that proxies mutating REST from a secondary to the primary's advertised URL via `reqwest`.                                                                                   | The `grpc-gateway` `Forwarder` is a proven pattern; reads + primary-side writes pass through unchanged.                                                                                                                           |
+| **Authority**         | The exact `SchemaRegistryIdentity`/assignment bytes, the protocol type/name, and the leader's primary-selection rule are **cp-captured** (Docker via `DescribeGroups`) + asserted.                  | Same Docker-capture fidelity discipline as slices 2–4.                                                                                                                                                                            |
 
 ## Architecture
 
@@ -37,6 +37,7 @@ GET ─► handlers (every node serves reads from its own replayed store)
 ### The `"sr"` election protocol (`election/protocol.rs`)
 
 cp's `SchemaRegistryProtocol` types, serialized byte-exactly (JSON; exact field set + protocol type/name **cp-captured**, expected shapes):
+
 - **`SchemaRegistryIdentity`** (the JoinGroup protocol metadata): `{ version, host, port, scheme, master_eligibility }` (cp historically keeps the `master_eligibility` wire field). This is `to_value`/`serde_json`-serialized into the JoinGroup protocol `metadata` bytes.
 - **`SchemaRegistryGroupAssignment`** (the SyncGroup assignment): `{ error, master: <SchemaRegistryIdentity | null> }`.
 - `protocol_type = "sr"`; the JoinGroup protocol `name` (the assignor name) is cp-captured.
@@ -45,6 +46,7 @@ cp's `SchemaRegistryProtocol` types, serialized byte-exactly (JSON; exact field 
 ### The group-membership client (`election/client.rs`)
 
 A loop over `krabka_client_core::Client::send` (generic over `ProtocolRequest`), using the codecs in `krabka_protocol::owned::{join_group_request, sync_group_request, heartbeat_request, leave_group_request, find_coordinator_request}`:
+
 1. `FindCoordinator(group_id)` → the group-coordinator broker.
 2. `JoinGroup{ group_id, protocol_type:"sr", protocols:[{ name, metadata: identity_bytes }], member_id, session_timeout, rebalance_timeout }` → assigned `member_id`, `generation_id`, `leader_id`, and (if leader) the members + their metadata.
 3. If **leader**: decode each member's `SchemaRegistryIdentity`, run the selection rule, encode each member's `SchemaRegistryGroupAssignment`, send them in `SyncGroup`. If **follower**: `SyncGroup` with an empty assignment list → receive our assignment.
@@ -61,6 +63,7 @@ Models the proven `client-consumer` join/sync/heartbeat loop (timing, retries, p
 ### Write-forwarding middleware (`rest/forward.rs`)
 
 An axum `from_fn`/`from_fn_with_state` layer holding `{ primary: watch::Receiver<PrimaryState>, http: reqwest::Client, my_node_id }`:
+
 - **Read** (GET) → pass through.
 - **Mutating** (POST/PUT/DELETE) on the **primary** → pass through to the handlers.
 - **Mutating** on a **secondary**: proxy to `{primary_url}{path_and_query}` (copy method + body + the vendor content-type; add `X-Forwarded-For-Registry: <my_node_id>`), relay the primary's status + body verbatim. `primary_url == None` (no primary yet) → `503`. A request that **arrives already carrying** `X-Forwarded-For-Registry` is processed locally only if `is_primary`; otherwise → a retriable status so the original forwarder re-resolves (prevents forward loops + stale-primary races).

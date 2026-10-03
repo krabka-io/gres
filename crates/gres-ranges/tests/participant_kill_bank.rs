@@ -1,7 +1,7 @@
 mod harness;
 
-use krabka_gres_ranges::RangeId;
 use harness::{FaultEvent, SystemHarness, TableAccount, process::ProcessHarness};
+use krabka_gres_ranges::RangeId;
 
 #[tokio::test]
 async fn participant_kill_bank_aborts_blocked_transfer_and_recovery_preserves_total() {

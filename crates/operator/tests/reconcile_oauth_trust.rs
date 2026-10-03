@@ -14,6 +14,7 @@ use std::sync::Arc;
 
 use assert2::assert;
 use base64::Engine as _;
+use http::Method;
 use krabka_operator::{
     controller::{
         kafka::reconcile as reconcile_kafka, kafka_node_pool::reconcile as reconcile_pool,
@@ -23,7 +24,6 @@ use krabka_operator::{
         ListenerType, TlsTrustedCertificate,
     },
 };
-use http::Method;
 
 #[path = "shared/mod.rs"]
 mod shared;

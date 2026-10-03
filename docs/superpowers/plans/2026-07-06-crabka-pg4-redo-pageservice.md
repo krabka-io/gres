@@ -46,6 +46,7 @@
 ## Task 1: `krabka-postgres-redo` scaffold — dispatch, page module, the FPI arm
 
 **Files:**
+
 - Create: `crates/postgres-redo/{Cargo.toml, src/lib.rs, src/page.rs, src/dispatch.rs, src/rm_xlog.rs, src/consts_v17.rs}`
 - Modify: `release-plz.toml`
 
@@ -103,9 +104,10 @@ git commit -m "feat(postgres-redo): scaffold, checked page module, FPI arm, loud
 ## Task 2: HEAP + HEAP2 arms
 
 **Files:**
+
 - Create: `crates/postgres-redo/src/rm_heap.rs`
 
-- [ ] **Step 1: Write the failing tests** — one per arm, each against a fixture-extracted record with a known before/after page (extract via a test helper that replays the corpus up to the record's LSN using FPI bases + already-shipped arms; where the corpus lacks isolation, craft the *before* page with `PageBuf` and take the *after* from the standby capture in Task 4 — mark those `#[ignore]` until Task 4 lands, then un-ignore):
+- [ ] **Step 1: Write the failing tests** — one per arm, each against a fixture-extracted record with a known before/after page (extract via a test helper that replays the corpus up to the record's LSN using FPI bases + already-shipped arms; where the corpus lacks isolation, craft the _before_ page with `PageBuf` and take the _after_ from the standby capture in Task 4 — mark those `#[ignore]` until Task 4 lands, then un-ignore):
 
 `insert` (place tuple at `offnum`, header from `xl_heap_header {t_infomask2, t_infomask, t_hoff}`), `delete` (set `xmax`, infomask bits from `infobits_set`, clear HOT/moved bits), `update` + `hot_update` (old page: `xmax`+ctid; new page: insert), `lock`, `inplace`; HEAP2: `multi_insert` (N tuples, `XLH_INSERT_LAST_IN_MULTI` accounting), `prune` (redirect/dead/unused line-pointer arrays), `vacuum`, `visible` (PD_ALL_VISIBLE on the heap page; the vm-fork block ref sets the vm bits).
 
@@ -127,6 +129,7 @@ git commit -m "feat(postgres-redo): HEAP/HEAP2 redo arms"
 ## Task 3: BTREE + SEQ arms
 
 **Files:**
+
 - Create: `crates/postgres-redo/src/rm_btree.rs`, `src/rm_seq.rs`
 
 - [ ] **Step 1: Tests** (same fixture-extraction pattern): btree `insert_leaf`, `insert_upper`, `split_l`/`split_r` (the dense ones: left-page truncation to `firstrightoff`, high-key install, right-page build from the record payload — the record carries the full new right page content), `dedup`, `vacuum`/`delete`; `seq_log` (the whole 1-tuple page is in the record — near-FPI).
@@ -145,6 +148,7 @@ git commit -m "feat(postgres-redo): BTREE and SEQ redo arms"
 ## Task 4: Standby capture + the differential gate
 
 **Files:**
+
 - Modify: `tools/gen-pg-wal-fixtures.sh`
 - Create: `crates/postgres-redo/tests/standby_gate.rs`; fixture additions under `crates/postgres-wal/tests/fixtures/standby/`
 
@@ -166,6 +170,7 @@ git commit -m "test(postgres-redo): byte-exact standby differential gate"
 ## Task 5: `page-store` — `Redo` seam, `get_page`, materializing compaction, GC
 
 **Files:**
+
 - Create: `crates/page-store/src/redo_seam.rs`, `src/materialize.rs`
 
 - [ ] **Step 1 (5a, parallel-safe with Task 1): the seam + `get_page`**
@@ -181,7 +186,7 @@ TDD with a `NoopRedo` (image-base pass-through) so PG-3's tests keep passing; th
 
 - [ ] **Step 2 (5b): materializing compaction + horizon GC**
 
-Image creation: when a key's delta stack above its newest image exceeds `IMAGE_CREATE_THRESHOLD`, materialize (via `Redo`) every key in the range at the stack-top LSN into an image layer; register-then-deregister as in PG-3's compaction. GC: delete layers with `lsn_range.end < gc_horizon` whose key range is fully covered by a later image. **Tests:** a probe grid of `get_page(key, lsn ≥ horizon)` results is *identical* before/after image creation and after GC; GC refuses when coverage is incomplete.
+Image creation: when a key's delta stack above its newest image exceeds `IMAGE_CREATE_THRESHOLD`, materialize (via `Redo`) every key in the range at the stack-top LSN into an image layer; register-then-deregister as in PG-3's compaction. GC: delete layers with `lsn_range.end < gc_horizon` whose key range is fully covered by a later image. **Tests:** a probe grid of `get_page(key, lsn ≥ horizon)` results is _identical_ before/after image creation and after GC; GC refuses when coverage is incomplete.
 
 - [ ] **Step 3: Verify + commit**
 
@@ -197,6 +202,7 @@ git commit -m "feat(page-store): Redo seam, get_page, image materialization + ho
 ## Task 6: `krabka-pageserver` — the Connect page service
 
 **Files:**
+
 - Create: `crates/pageserver/{Cargo.toml, build.rs, proto/crabka/pageserver/v1/pageserver.proto, src/lib.rs, src/service.rs, tests/serve.rs}`
 - Modify: `release-plz.toml`
 

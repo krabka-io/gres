@@ -28,12 +28,14 @@
 ### Task 1: Add validated transport policy to `krabka-remote-storage-topic`
 
 **Files:**
+
 - Modify: `crates/remote-storage-topic/Cargo.toml`
 - Modify: `crates/remote-storage-topic/src/kafka_log.rs`
 - Modify: `crates/remote-storage-topic/src/lib.rs`
 - Modify selected dependency hunk only: `Cargo.lock`
 
 **Interfaces:**
+
 - Produces: `DEFAULT_METADATA_TOPIC_CREATE_TIMEOUT: Time`
 - Produces: `DEFAULT_METADATA_FETCH_MAX_WAIT: Time`
 - Produces: `DEFAULT_METADATA_FETCH_MAX_BYTES: ByteSize`
@@ -195,6 +197,7 @@ git commit -m "feat(tiered): configure metadata transport"
 ### Task 2: Add broker defaults, validation, and TOML overlays
 
 **Files:**
+
 - Modify: `crates/broker/src/config.rs`
 - Modify: `crates/broker/src/file_config.rs`
 - Modify only as required for struct-literal compatibility:
@@ -204,6 +207,7 @@ git commit -m "feat(tiered): configure metadata transport"
   - `crates/broker/tests/tiered_storage_multi_broker.rs`
 
 **Interfaces:**
+
 - Extends: `KafkaRlmmConfig`
 - Extends: `FileKafkaRlmmConfig`
 - Produces: `KafkaRlmmConfig::validate(&self) -> Result<(), BrokerError>`
@@ -344,9 +348,11 @@ Stage only the broker files changed for this task.
 ### Task 3: Propagate one shared transport policy to both live logs
 
 **Files:**
+
 - Modify: `crates/broker/src/broker.rs`
 
 **Interfaces:**
+
 - Produces private helper:
   `metadata_log_config(&KafkaRlmmConfig, String, String) -> KafkaMetadataLogConfig`
 - Consumes the helper in:
@@ -414,11 +420,13 @@ git commit -m "feat(broker): apply metadata transport policy"
 ### Task 4: Expose, validate, render, and generate the Kafka CRD surface
 
 **Files:**
+
 - Modify: `crates/operator/src/crd/kafka.rs`
 - Modify: `crates/operator/src/controller/listeners.rs`
 - Regenerate only: `deploy/crds/crabka.io_kafkas.yaml`
 
 **Interfaces:**
+
 - Extends: `TopicMetadataManagerSpec`
 - Reuses: `KafkaRlmmConfig::validate`
 - Produces CRD fields:
@@ -566,6 +574,7 @@ git commit -m "feat(operator): expose metadata topic policy"
 ### Task 5: Close the audit slice and verify the repository boundary
 
 **Files:**
+
 - Modify: `docs/configuration-audit.md`
 - Modify checkboxes only: `docs/superpowers/plans/2026-07-30-remote-storage-topic-policy.md`
 

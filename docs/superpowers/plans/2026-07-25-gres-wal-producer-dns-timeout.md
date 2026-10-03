@@ -65,9 +65,11 @@ CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
 ### Task 1: Add the producer DNS input
 
 **Files:**
+
 - Modify: `crates/client-producer/src/builder.rs`
 
 **Interfaces:**
+
 - Consumes:
   `krabka_client_core::{ClientDnsTimeout, DEFAULT_CLIENT_DNS_TIMEOUT}`
 - Produces: Bon builder setter
@@ -196,12 +198,14 @@ implementer for fixes until both reviews pass.
 ### Task 2: Carry standalone Gres policy to the WAL producer
 
 **Files:**
+
 - Modify: `crates/gres/src/lib.rs`
 - Modify: `crates/gres-substrate/src/recovery.rs`
 - Modify: `crates/gres/tests/runtime.rs` only if an exhaustive
   `SubstrateRuntimeConfig` literal requires the new field
 
 **Interfaces:**
+
 - Consumes:
   `ClientDnsTimeout::new(Duration) -> Result<ClientDnsTimeout, String>`
 - Produces:
@@ -402,11 +406,13 @@ spec-compliance and quality approval and remediate every finding.
 ### Task 3: Expose the fleet CRD field
 
 **Files:**
+
 - Modify: `crates/operator/src/crd/gres.rs`
 - Modify: `crates/operator/src/controller/gres_tenant.rs`
 - Modify generated: `deploy/crds/crabka.io_greses.yaml`
 
 **Interfaces:**
+
 - Produces:
   `GresComputeSpec::wal_producer_dns_timeout_ms: Option<u64>`
 - Produces:
@@ -595,9 +601,11 @@ implementer for fixes until both reviews pass.
 ### Task 4: Audit, verify, publish, and continue
 
 **Files:**
+
 - Modify: `docs/configuration-audit.md`
 
 **Interfaces:**
+
 - Consumes: the reviewed producer, Gres, and operator implementation
 - Produces: classified audit evidence, updated draft PR #904, and the next
   unresolved configuration owner

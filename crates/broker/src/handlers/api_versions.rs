@@ -15,6 +15,7 @@
 //! returns `REBOOTSTRAP_REQUIRED` so the client discards stale metadata.
 
 use bytes::{Bytes, BytesMut};
+use futures_util::future::BoxFuture;
 use krabka_protocol::{
     Decode, Encode,
     owned::{
@@ -22,7 +23,6 @@ use krabka_protocol::{
         api_versions_response::{ApiVersionsResponse, FinalizedFeatureKey, SupportedFeatureKey},
     },
 };
-use futures_util::future::BoxFuture;
 
 use crate::{broker::Broker, codes, error::BrokerError};
 

@@ -2,29 +2,29 @@
 
 **Date:** 2026-06-18
 **Status:** Design (approved for planning)
-**Scope:** Full FedRAMP 20x *Monitoring, Logging, and Auditing* (MLA) Key Security Indicator suite, delivered as implementation slices.
+**Scope:** Full FedRAMP 20x _Monitoring, Logging, and Auditing_ (MLA) Key Security Indicator suite, delivered as implementation slices.
 
 ---
 
 ## 1. Purpose & framing
 
-FedRAMP 20x defines a set of **Key Security Indicators (KSIs)** for *Monitoring, Logging, and Auditing*. A cloud service offering (CSO) that embeds or deploys Crabka must be able to demonstrate these indicators *for the Crabka component*. This design adds the **pre-built support** a CSO needs: Crabka ships the audit-grade event trail, tamper-evidence, SIEM-ready export, log-access controls, and config-posture tooling that the KSIs depend on.
+FedRAMP 20x defines a set of **Key Security Indicators (KSIs)** for _Monitoring, Logging, and Auditing_. A cloud service offering (CSO) that embeds or deploys Crabka must be able to demonstrate these indicators _for the Crabka component_. This design adds the **pre-built support** a CSO needs: Crabka ships the audit-grade event trail, tamper-evidence, SIEM-ready export, log-access controls, and config-posture tooling that the KSIs depend on.
 
 ### The five MLA KSIs
 
-| KSI | Title | Requirement (abridged) |
-|---|---|---|
-| **KSI-MLA-LET** | Logging Event Types | Maintain a list of resources/event types to log, monitor, audit — and do so. |
-| **KSI-MLA-OSM** | Operating SIEM Capability | Centralized, **tamper-resistant** logging of events, activities, changes. |
-| **KSI-MLA-RVL** | Reviewing Logs | Persistently review and audit logs. |
-| **KSI-MLA-EVC** | Evaluating Configurations | Persistently evaluate/test configuration, especially IaC. |
-| **KSI-MLA-ALA** | Authorizing Log Access | Least-privilege, role/attribute-based, just-in-time access to log data. |
+| KSI             | Title                     | Requirement (abridged)                                                       |
+| --------------- | ------------------------- | ---------------------------------------------------------------------------- |
+| **KSI-MLA-LET** | Logging Event Types       | Maintain a list of resources/event types to log, monitor, audit — and do so. |
+| **KSI-MLA-OSM** | Operating SIEM Capability | Centralized, **tamper-resistant** logging of events, activities, changes.    |
+| **KSI-MLA-RVL** | Reviewing Logs            | Persistently review and audit logs.                                          |
+| **KSI-MLA-EVC** | Evaluating Configurations | Persistently evaluate/test configuration, especially IaC.                    |
+| **KSI-MLA-ALA** | Authorizing Log Access    | Least-privilege, role/attribute-based, just-in-time access to log data.      |
 
 ### Boundary of responsibility
 
-A *broker* cannot satisfy every KSI on its own. **Operating** the SIEM, performing **human log review**, and running the **IaC scanner** remain CSO responsibilities. Crabka's job is to provide the raw material and hooks those activities consume. This design draws that line explicitly per KSI (see §11).
+A _broker_ cannot satisfy every KSI on its own. **Operating** the SIEM, performing **human log review**, and running the **IaC scanner** remain CSO responsibilities. Crabka's job is to provide the raw material and hooks those activities consume. This design draws that line explicitly per KSI (see §11).
 
-**Out of scope (noted for operators):** FIPS-validated cryptographic *provider* selection (e.g. rustls FIPS backend) belongs to the FedRAMP **Cryptography** KSI family, not MLA — flagged but tracked separately. Audit *signing* algorithms used here are nonetheless chosen to be FIPS-approved (§5).
+**Out of scope (noted for operators):** FIPS-validated cryptographic _provider_ selection (e.g. rustls FIPS backend) belongs to the FedRAMP **Cryptography** KSI family, not MLA — flagged but tracked separately. Audit _signing_ algorithms used here are nonetheless chosen to be FIPS-approved (§5).
 
 ### Current state (baseline)
 
@@ -34,15 +34,15 @@ Crabka today has structured JSON application logs (`tracing` + `logfmt`), Promet
 
 ## 2. Design decisions (locked)
 
-| Area | Decision |
-|---|---|
-| Delivery model | **Kafka-native**: a dedicated internal `__krabka_audit` topic is the primary audit interface. |
-| Failure policy (AU-5) | **Spool + async replay** by default; **fail-closed opt-in** per event class. |
-| Event coverage (LET) | **Control-plane always**; **data-plane configurable** (`off`/`deny_only`/`all`), deny-only default when enabled. |
-| Tamper-evidence (OSM) | **Per-broker hash-chain + periodic signed checkpoints**. |
-| Record schema | **OCSF** (Open Cybersecurity Schema Framework) JSON on the topic. |
-| Config evaluation (EVC) | **Hardening baseline + `check-config` tool + runtime posture events/metric**. |
-| Log access (ALA) | **Dedicated audit roles, super-user excluded, write-locked topic, JIT via delegation tokens**. |
+| Area                    | Decision                                                                                                         |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Delivery model          | **Kafka-native**: a dedicated internal `__krabka_audit` topic is the primary audit interface.                    |
+| Failure policy (AU-5)   | **Spool + async replay** by default; **fail-closed opt-in** per event class.                                     |
+| Event coverage (LET)    | **Control-plane always**; **data-plane configurable** (`off`/`deny_only`/`all`), deny-only default when enabled. |
+| Tamper-evidence (OSM)   | **Per-broker hash-chain + periodic signed checkpoints**.                                                         |
+| Record schema           | **OCSF** (Open Cybersecurity Schema Framework) JSON on the topic.                                                |
+| Config evaluation (EVC) | **Hardening baseline + `check-config` tool + runtime posture events/metric**.                                    |
+| Log access (ALA)        | **Dedicated audit roles, super-user excluded, write-locked topic, JIT via delegation tokens**.                   |
 
 ---
 
@@ -62,21 +62,22 @@ The crate has **no dependency on broker internals**. The broker passes in an app
 
 ### 3.2 Instrumentation points (broker → `AuditLog`)
 
-| Location | Events emitted |
-|---|---|
-| `crates/broker/src/network/auth.rs` | Authentication success / failure (mechanism, principal, source endpoint). |
-| **Authorizer decorator** wrapping `authz::Authorizer::authorize` | Authorization **denies** centrally — no admin handler can forget to audit a denial. |
-| `crates/broker/src/handlers/*` (admin) | Operation semantics: topic create/delete, partition & config changes, ACL CRUD, SCRAM credentials, delegation-token ops, reassignments, quota/leadership changes — with before/after values where meaningful. |
-| Broker lifecycle | Start/stop, config apply, TLS reload. |
-| EVC subsystem (§6) | Config-posture / drift events. |
+| Location                                                         | Events emitted                                                                                                                                                                                                |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `crates/broker/src/network/auth.rs`                              | Authentication success / failure (mechanism, principal, source endpoint).                                                                                                                                     |
+| **Authorizer decorator** wrapping `authz::Authorizer::authorize` | Authorization **denies** centrally — no admin handler can forget to audit a denial.                                                                                                                           |
+| `crates/broker/src/handlers/*` (admin)                           | Operation semantics: topic create/delete, partition & config changes, ACL CRUD, SCRAM credentials, delegation-token ops, reassignments, quota/leadership changes — with before/after values where meaningful. |
+| Broker lifecycle                                                 | Start/stop, config apply, TLS reload.                                                                                                                                                                         |
+| EVC subsystem (§6)                                               | Config-posture / drift events.                                                                                                                                                                                |
 
-The authorizer decorator is the key design lever: routing *all* deny decisions through one wrapper guarantees coverage independent of per-handler discipline. Admin handlers additionally emit operation-semantic events (the *what changed*, not just *was it allowed*).
+The authorizer decorator is the key design lever: routing _all_ deny decisions through one wrapper guarantees coverage independent of per-handler discipline. Admin handlers additionally emit operation-semantic events (the _what changed_, not just _was it allowed_).
 
 ### 3.3 Kafka-native write path
 
-The `__krabka_audit` topic is partitioned by **broker affinity**: it has ≥ N partitions and **each broker leads its own partition**. A broker writes its records to *its own* partition through the **internal partition-append path** — the same path replication uses — so the common case is a **local append with no network round-trip**, then replicated to followers at `acks=all` / `min.insync.replicas=2`.
+The `__krabka_audit` topic is partitioned by **broker affinity**: it has ≥ N partitions and **each broker leads its own partition**. A broker writes its records to _its own_ partition through the **internal partition-append path** — the same path replication uses — so the common case is a **local append with no network round-trip**, then replicated to followers at `acks=all` / `min.insync.replicas=2`.
 
 Consequences:
+
 - The **hash-chain is per-broker** (one clean monotonic chain per partition) — no cross-broker ordering coordination needed.
 - The leader's local log is the **durability floor**: an appended record is never lost even before replication completes.
 - Replication provides availability + tamper-resistance (a single-host segment rewrite is detectable against replicas + the chain).
@@ -122,14 +123,14 @@ auth / authz-decorator / admin handler / lifecycle / EVC
  every N records / T seconds: signed checkpoint record anchors chain head
 ```
 
-For **fail-closed event classes**, if the record cannot be durably persisted to topic *or* spool, the **originating operation is rejected** instead of proceeding unaudited.
+For **fail-closed event classes**, if the record cannot be durably persisted to topic _or_ spool, the **originating operation is rejected** instead of proceeding unaudited.
 
 ---
 
 ## 5. Tamper-evidence (KSI-MLA-OSM)
 
 - **Per-record chaining.** Each record carries `seq` (monotonic per broker) and `prev_hash` (hash of the prior record in this broker's chain) in its Kafka record headers. Any insertion, deletion, or reorder breaks the chain and is detectable — even against on-disk segment rewrites — up to the most recent signed checkpoint. Records written after the last checkpoint (the unsigned window) are chain-continuous but not signature-attested; a cleanly-stopped broker emits a final checkpoint covering the tail. Chain-only mode (no signing key configured) provides continuity detection only, with no signature attestation over any records.
-- **Signed checkpoints.** Every *N* records or *T* seconds the broker emits a checkpoint record: a signature over `{broker_id, seq_range, chain_head_hash, timestamp, key_id}` using the broker's audit signing key.
+- **Signed checkpoints.** Every _N_ records or _T_ seconds the broker emits a checkpoint record: a signature over `{broker_id, seq_range, chain_head_hash, timestamp, key_id}` using the broker's audit signing key.
 - **Algorithm.** FIPS-approved — **Ed25519 (FIPS 186-5)** or **ECDSA P-256** (final selection in the plan).
 - **Key management.** Keys sourced from config / file / KMS. **Rotation** via `key_id` carried on each checkpoint, so a chain spans key epochs verifiably.
 - **Offline verification.** A `krabka-audit verify` CLI walks a partition, validates chain continuity and every checkpoint signature, and reports the first break (seq + reason).
@@ -171,16 +172,16 @@ Everything not flagged fail-closed stays available; the spool bounds loss to cat
 
 The maintained "list of event types" is the `AuditEvent` enum, mapped to OCSF:
 
-| Crabka event | OCSF class |
-|---|---|
-| SASL / mTLS authn success & failure | Authentication (3002) |
-| Authorization denial (any resource) | Authorize Session (3003) / activity disposition |
-| Topic create/delete, partition/config change | API Activity (6003) |
-| ACL create/delete | Account Change (3001) / API Activity |
-| SCRAM credential & delegation-token ops | Account Change (3001) |
-| Reassignments, quota/leadership changes | API Activity (6003) |
-| Broker start/stop, config apply, TLS reload | API Activity (6003) |
-| Config-posture / drift | Compliance / Config State |
+| Crabka event                                 | OCSF class                                      |
+| -------------------------------------------- | ----------------------------------------------- |
+| SASL / mTLS authn success & failure          | Authentication (3002)                           |
+| Authorization denial (any resource)          | Authorize Session (3003) / activity disposition |
+| Topic create/delete, partition/config change | API Activity (6003)                             |
+| ACL create/delete                            | Account Change (3001) / API Activity            |
+| SCRAM credential & delegation-token ops      | Account Change (3001)                           |
+| Reassignments, quota/leadership changes      | API Activity (6003)                             |
+| Broker start/stop, config apply, TLS reload  | API Activity (6003)                             |
+| Config-posture / drift                       | Compliance / Config State                       |
 
 **LET-completeness guarantee:** a conformance test asserts **every catalog entry actually emits a record**, and the catalog doc is **generated from the same source of truth** (the enum) — so the documented list and the code cannot silently drift apart.
 
@@ -222,13 +223,13 @@ Defaults are compliant out of the box; `enabled = true` is part of the hardening
 
 ## 11. KSI → NIST control → evidence
 
-| KSI | Primary NIST controls | Crabka evidence |
-|---|---|---|
-| MLA-LET | AU-2, AU-12, AC-6.9 | OCSF catalog + completeness test; data-plane toggle |
+| KSI     | Primary NIST controls          | Crabka evidence                                                                                       |
+| ------- | ------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| MLA-LET | AU-2, AU-12, AC-6.9            | OCSF catalog + completeness test; data-plane toggle                                                   |
 | MLA-OSM | AU-4, AU-5, AU-8, AU-9, SI-7.7 | Audit topic; hash-chain + signed checkpoints; `verify` CLI; spool/AU-5 policy; remote-storage tiering |
-| MLA-RVL | AU-6, SI-4 | OCSF-on-topic for SIEM review; posture/drift events |
-| MLA-EVC | CA-7, CM-2, CM-6, SI-7.7 | Hardening baseline; `check-config`; posture gauge |
-| MLA-ALA | SI-11, AC-5, AC-6 | Dedicated audit roles; super-user exclusion; JIT tokens; write-lock |
+| MLA-RVL | AU-6, SI-4                     | OCSF-on-topic for SIEM review; posture/drift events                                                   |
+| MLA-EVC | CA-7, CM-2, CM-6, SI-7.7       | Hardening baseline; `check-config`; posture gauge                                                     |
+| MLA-ALA | SI-11, AC-5, AC-6              | Dedicated audit roles; super-user exclusion; JIT tokens; write-lock                                   |
 
 ---
 
@@ -236,7 +237,7 @@ Defaults are compliant out of the box; `enabled = true` is part of the hardening
 
 Each slice gets its own plan. File sets are mostly disjoint, so several can batch in parallel (per `CLAUDE.md` parallel-subagent guidance).
 
-1. **Audit core + write path** — `crates/audit` (event model, OCSF serializer, `AuditLog`); `__krabka_audit` topic + broker-affinity append; control-plane instrumentation (authn, authorizer-decorator denies, admin handlers, lifecycle). *Foundation; everything depends on it.*
+1. **Audit core + write path** — `crates/audit` (event model, OCSF serializer, `AuditLog`); `__krabka_audit` topic + broker-affinity append; control-plane instrumentation (authn, authorizer-decorator denies, admin handlers, lifecycle). _Foundation; everything depends on it._
 2. **Tamper-evidence** — per-broker hash-chain, signed checkpoints, key management/rotation, `krabka-audit verify` CLI.
 3. **Durability / AU-5** — spool + replay, fail-closed classes, metrics/alerts.
 4. **ALA access model** — `audit-reader`/`audit-admin` roles, super-user exclusion, write-lock, audited retention/delete, JIT delegation tokens.
@@ -254,8 +255,8 @@ Each slice gets its own plan. File sets are mostly disjoint, so several can batc
 - **Integration:** each catalog event type produces the expected record; ACL enforcement on the audit topic; **super-user exclusion** (negative test); fail-closed actually rejects the originating op under simulated unavailability; spool → topic replay after recovery.
 - **Conformance:** LET-completeness (every catalog entry emits) + `check-config` golden reports.
 - **Model-checking opportunity** (fits the existing stateright program): two invariants under interleavings —
-  1. *No fail-closed operation ever commits without a durable audit record.*
-  2. *The per-broker chain stays continuous across spool / replay / failover.*
+  1. _No fail-closed operation ever commits without a durable audit record._
+  2. _The per-broker chain stays continuous across spool / replay / failover._
 
   Proposed, not mandated.
 

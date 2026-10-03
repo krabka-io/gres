@@ -23,14 +23,14 @@ stay and keep working unchanged.
 
 ### Query types
 
-| Query | Result `R` | Slice | KIP |
-|---|---|---|---|
-| `KeyQuery<K,V>` | `Option<V>` | 3a | 796 |
-| `RangeQuery<K,V>` | `Vec<(K,V)>` | 3a | 796/985 |
-| `WindowKeyQuery<K,V>` | `Vec<(i64,V)>` | 3a | 806 |
-| `WindowRangeQuery<K,V>` | `Vec<((K,i64),V)>` | 3a | 806 |
-| `VersionedKeyQuery<K,V>` | `Option<VersionedRecord<V>>` | 3b | 960 |
-| `MultiVersionedKeyQuery<K,V>` | `Vec<VersionedRecord<V>>` | 3b | 968 |
+| Query                         | Result `R`                   | Slice | KIP     |
+| ----------------------------- | ---------------------------- | ----- | ------- |
+| `KeyQuery<K,V>`               | `Option<V>`                  | 3a    | 796     |
+| `RangeQuery<K,V>`             | `Vec<(K,V)>`                 | 3a    | 796/985 |
+| `WindowKeyQuery<K,V>`         | `Vec<(i64,V)>`               | 3a    | 806     |
+| `WindowRangeQuery<K,V>`       | `Vec<((K,i64),V)>`           | 3a    | 806     |
+| `VersionedKeyQuery<K,V>`      | `Option<VersionedRecord<V>>` | 3b    | 960     |
+| `MultiVersionedKeyQuery<K,V>` | `Vec<VersionedRecord<V>>`    | 3b    | 968     |
 
 > **Window result divergence (pre-existing):** window stores persist only
 > `windowStart`, not window size, so window-query results carry `windowStart`
@@ -79,9 +79,10 @@ Mechanism:
    ```
 
    The concrete `…BytesStore<K,V>` impl downcasts the key to `&K`, serializes
-   with *its own* key serde, runs the op against its byte storage, deserializes
-   values with *its own* value serde, and returns the typed `R` boxed
+   with _its own_ key serde, runs the op against its byte storage, deserializes
+   values with _its own_ value serde, and returns the typed `R` boxed
    (e.g. `Box::new(Some(value))` for `KeyQuery`).
+
 3. `query::<Q>()` downcasts each partition's `Box<dyn Any>` back to
    `Q::Result`. `R` is fixed by the `Query` trait's associated `Result` type,
    so the call site is fully type-inferred and serde-free.
@@ -221,6 +222,7 @@ src/runtime/iqv2/result.rs    // QueryResult, StateQueryResult, FailureReason
 ```
 
 Modified:
+
 - `store/iq.rs` — `iq2_execute` hook on `IqQueryable`; window key-range default method.
 - `store/window.rs` — window key-range impl + `iq2_execute`.
 - `store/kv.rs` — `iq2_execute`.

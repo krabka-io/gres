@@ -4,9 +4,9 @@
 
 > **This slice is the largest in the profiles program and is executed as sub-batches.** It is organized into six phases (A–F). Within a phase, tasks whose **Files** sets do not overlap may be dispatched as a parallel subagent batch (per `CLAUDE.md`); tasks that share a file (`lib.rs`, `engine.rs`) or genuinely depend on an earlier task's output must run sequentially. Each phase ends at a green whole-crate gate. The recommended batching is called out at the head of each phase.
 
-**Goal:** Build the core of the **language-less** profiles engine — the perftools.profiles **pprof model + codec** (decode/encode), the deduplicated **`SymbolDb`** (parent-pointer stacktrace tree + dedup string/function/location/mapping tables + `encode`/`decode` artifact behind a `SymbolSource` trait), the 5-part **`ProfileType`** parse/`Display`, the **`ProfileStore`** query seam + an `InMemoryProfileStore` test impl (builds a samples DataFusion table + a `SymbolDb`), and — the **centerpiece** — the **MERGE→flamegraph** engine: resolve a Prometheus-matcher `label_selector` string + profile type + `[start,end]` → `ProfileStore.select` → DataFusion `GROUP BY (stacktrace_partition, stacktrace_id) → SUM(value)` (the merge-*before*-symbolize step) → Rust resolve distinct ids via `SymbolDb` (inlined frames expanded, leaf-first) → fold into one `Tree` (total-along-path, self-at-leaf) → `to_flamegraph(max_nodes)` → the 4-ints-per-bar `FlameGraph`. `SelectSeries`/`Diff`/`SelectHeatmap`/raw-profile output are **deferred to Slice 3** (signatures frozen here).
+**Goal:** Build the core of the **language-less** profiles engine — the perftools.profiles **pprof model + codec** (decode/encode), the deduplicated **`SymbolDb`** (parent-pointer stacktrace tree + dedup string/function/location/mapping tables + `encode`/`decode` artifact behind a `SymbolSource` trait), the 5-part **`ProfileType`** parse/`Display`, the **`ProfileStore`** query seam + an `InMemoryProfileStore` test impl (builds a samples DataFusion table + a `SymbolDb`), and — the **centerpiece** — the **MERGE→flamegraph** engine: resolve a Prometheus-matcher `label_selector` string + profile type + `[start,end]` → `ProfileStore.select` → DataFusion `GROUP BY (stacktrace_partition, stacktrace_id) → SUM(value)` (the merge-_before_-symbolize step) → Rust resolve distinct ids via `SymbolDb` (inlined frames expanded, leaf-first) → fold into one `Tree` (total-along-path, self-at-leaf) → `to_flamegraph(max_nodes)` → the 4-ints-per-bar `FlameGraph`. `SelectSeries`/`Diff`/`SelectHeatmap`/raw-profile output are **deferred to Slice 3** (signatures frozen here).
 
-**Architecture:** A query crate `krabka-pprof` that depends on DataFusion (same git pin as blockstore) and **no profiles query parser — there is no language**. The only thing resembling a parser is the Prometheus label-matcher string helper (reusing blockstore `LabelMatcher`/`MatchOp`). The engine is generic over a `ProfileStore` trait that yields a DataFusion `SessionContext` with a samples table registered + an `Arc<dyn SymbolSource>` for a (tenant, profile_type, matchers, time-range) scan — production wires this to the querier's hot/cold UNION (Slice 5), but this slice ships an `InMemoryProfileStore` test impl so the engine is independently testable. The **DataFusion/Rust split is the load-bearing design**: DataFusion does the cheap set-shrinking fold (`GROUP BY (partition, id) → SUM`) *before* symbolization; Rust resolves the symbol-DB tree + folds the flamegraph *only* on the distinct surviving ids. Raw `stacktrace_id`s are only meaningful within their own block's `SymbolDb` partition, so symbolization is always local-then-merge (`Tree::merge`) — never raw ids across a partition/block boundary.
+**Architecture:** A query crate `krabka-pprof` that depends on DataFusion (same git pin as blockstore) and **no profiles query parser — there is no language**. The only thing resembling a parser is the Prometheus label-matcher string helper (reusing blockstore `LabelMatcher`/`MatchOp`). The engine is generic over a `ProfileStore` trait that yields a DataFusion `SessionContext` with a samples table registered + an `Arc<dyn SymbolSource>` for a (tenant, profile_type, matchers, time-range) scan — production wires this to the querier's hot/cold UNION (Slice 5), but this slice ships an `InMemoryProfileStore` test impl so the engine is independently testable. The **DataFusion/Rust split is the load-bearing design**: DataFusion does the cheap set-shrinking fold (`GROUP BY (partition, id) → SUM`) _before_ symbolization; Rust resolves the symbol-DB tree + folds the flamegraph _only_ on the distinct surviving ids. Raw `stacktrace_id`s are only meaningful within their own block's `SymbolDb` partition, so symbolization is always local-then-merge (`Tree::merge`) — never raw ids across a partition/block boundary.
 
 **Tech Stack:** Rust 2024 · `datafusion` (git `main`, pinned — see Global Constraints) · `arrow` 59 · `prost` 0.14 (pprof wire model) · `async-trait` · `tokio` · `futures` · `regex` (matcher-string helper) · `thiserror`. Depends on `krabka-blockstore` (types: `LabelMatcher`, `MatchOp`; the `PCOL_*` samples-table column constants + schema from profiles Slice 1). Tests: `assert2`, `proptest`, `tokio` (`macros`, `rt-multi-thread`).
 
@@ -20,23 +20,24 @@
 - **Async tests:** `#[tokio::test]`. Crate dev-dep `tokio` features = `["macros", "rt-multi-thread"]`.
 - **Dependency pin (locked):** `datafusion = { git = "https://github.com/apache/datafusion", rev = "0838a4ddb902535b0e95a1c5a254be7e9c7fe9bf" }`. This `main` revision tracks arrow 59 / parquet 59 / object_store 0.13.2, which unify with the workspace pins (same major → cargo unifies to one crate instance, so arrow types cross the DataFusion boundary cleanly). Do **not** substitute a released `datafusion` (54.x is on arrow 58 and pulls a second, incompatible arrow major).
 - **Arrow version identity:** import `arrow` directly (`use arrow::...`) as blockstore does; all of arrow/parquet/object_store unify to one instance. If a type-mismatch error appears at the DataFusion boundary, switch that import to DataFusion's re-export (`datafusion::arrow`) to force identity.
-- **The pprof wire model is the perftools.profiles `Profile` proto — pin it, don't fabricate field numbers.** The decode/encode round-trip is a *contract* (we ingest real pprof from SDKs/Alloy). The `.proto` is vendored at a pinned tag and compiled with `prost` 0.14 via `build.rs` (the grpc-gateway/rebalancer codegen pattern). Where this plan shows the proto-derived types it gives the *field set + a behavior-pinning round-trip test* against a known-bytes pprof, plus a **"verify against the vendored `profile.proto` (google/pprof `master`, vendored 2026-06-18)"** note. Never hand-write field numbers as fact.
-- **The `FlameGraph` 4-ints-per-bar encoding is a byte-exact contract (spec §6.1).** `levels` is a list of `Level { values: Vec<i64> }`; each level's values are traversed in **groups of 4** `[xOffsetDelta, total, self, nameIndex]`, where `xOffsetDelta` is the delta from the *previous bar's end* (not absolute), `names[0]` is the root (`"total"`), and `nameIndex` indexes `names[]`. This grouping + the delta semantics are NOT a churn point — they are the spec's correctness contract and must be exactly as written, pinned by hand-built-profile tests.
+- **The pprof wire model is the perftools.profiles `Profile` proto — pin it, don't fabricate field numbers.** The decode/encode round-trip is a _contract_ (we ingest real pprof from SDKs/Alloy). The `.proto` is vendored at a pinned tag and compiled with `prost` 0.14 via `build.rs` (the grpc-gateway/rebalancer codegen pattern). Where this plan shows the proto-derived types it gives the _field set + a behavior-pinning round-trip test_ against a known-bytes pprof, plus a **"verify against the vendored `profile.proto` (google/pprof `master`, vendored 2026-06-18)"** note. Never hand-write field numbers as fact.
+- **The `FlameGraph` 4-ints-per-bar encoding is a byte-exact contract (spec §6.1).** `levels` is a list of `Level { values: Vec<i64> }`; each level's values are traversed in **groups of 4** `[xOffsetDelta, total, self, nameIndex]`, where `xOffsetDelta` is the delta from the _previous bar's end_ (not absolute), `names[0]` is the root (`"total"`), and `nameIndex` indexes `names[]`. This grouping + the delta semantics are NOT a churn point — they are the spec's correctness contract and must be exactly as written, pinned by hand-built-profile tests.
 - **Fold-before-symbolize is the #1 performance/correctness invariant (spec §6.1).** The `GROUP BY (stacktrace_partition, stacktrace_id) → SUM(value)` runs in DataFusion **before** any symbol-DB resolution; Rust then resolves only the distinct surviving ids. Every engine task carries a test that the merge collapses duplicate `(partition, id)` rows to one summed value before resolution.
-- **Raw ids never cross a partition boundary (spec §6.4).** A `stacktrace_id` is only meaningful within its own `SymbolDb` partition. `resolve(partition, id)` always takes the partition. `Tree::merge` combines partial *symbolized* trees, never raw ids — the load-bearing invariant of the distributed merge (exercised here within one store; enforced across blocks in Slice 6).
-- **Churn-prone DataFusion-internal traits.** `MemTable`, the `LogicalPlanBuilder` aggregate/scan builders, the `SessionContext::sql`/`execute_logical_plan` entry points, and the arrow `ListBuilder`/`StructBuilder`/dictionary builders change shape between DataFusion/arrow revisions. **Do not fabricate exact trait method signatures.** Where this plan shows DataFusion/arrow scaffolding it gives the *struct shape, column contract, and a behavior-pinning test*, plus an explicit **"verify against datafusion rev `0838a4d` / arrow 59"** note. The test pins behavior; if a method's signature differs at the pinned rev, adapt the impl to satisfy the test — never change the asserted behavior.
+- **Raw ids never cross a partition boundary (spec §6.4).** A `stacktrace_id` is only meaningful within its own `SymbolDb` partition. `resolve(partition, id)` always takes the partition. `Tree::merge` combines partial _symbolized_ trees, never raw ids — the load-bearing invariant of the distributed merge (exercised here within one store; enforced across blocks in Slice 6).
+- **Churn-prone DataFusion-internal traits.** `MemTable`, the `LogicalPlanBuilder` aggregate/scan builders, the `SessionContext::sql`/`execute_logical_plan` entry points, and the arrow `ListBuilder`/`StructBuilder`/dictionary builders change shape between DataFusion/arrow revisions. **Do not fabricate exact trait method signatures.** Where this plan shows DataFusion/arrow scaffolding it gives the _struct shape, column contract, and a behavior-pinning test_, plus an explicit **"verify against datafusion rev `0838a4d` / arrow 59"** note. The test pins behavior; if a method's signature differs at the pinned rev, adapt the impl to satisfy the test — never change the asserted behavior.
 
 ---
 
 ## Dependency & slice roadmap
 
 **Depends on:**
-- `krabka-blockstore` (generalized in profiles Slice 1): the `LabelMatcher`/`MatchOp`/`Labels` types and the **profile samples fact-table column constants + Arrow schema** (`PCOL_PROFILE_TYPE`, `PCOL_STACKTRACE_ID`, `PCOL_VALUE`, `PCOL_STACKTRACE_PARTITION`, `PCOL_TOTAL_VALUE`, `PCOL_SPAN_ID`, `PCOL_TRACE_ID` + the mandatory `COL_FINGERPRINT`/`COL_TIMESTAMP`) and the **symbol-DB on-block artifact byte layout**. **This slice consumes only the *column-name contract* + the matcher types** — the `BlockStore`-backed `ProfileStore` impl lands in Slice 5; here we ship `InMemoryProfileStore`, which emits the identical samples columns from hand-built profiles so the merge tests are trustworthy. (If Slice 1 has not landed in this tree, the `PCOL_*` constants are re-declared in this crate's `samples.rs` against the same names and the dependency is wired but not gated — see Task A6.)
+
+- `krabka-blockstore` (generalized in profiles Slice 1): the `LabelMatcher`/`MatchOp`/`Labels` types and the **profile samples fact-table column constants + Arrow schema** (`PCOL_PROFILE_TYPE`, `PCOL_STACKTRACE_ID`, `PCOL_VALUE`, `PCOL_STACKTRACE_PARTITION`, `PCOL_TOTAL_VALUE`, `PCOL_SPAN_ID`, `PCOL_TRACE_ID` + the mandatory `COL_FINGERPRINT`/`COL_TIMESTAMP`) and the **symbol-DB on-block artifact byte layout**. **This slice consumes only the _column-name contract_ + the matcher types** — the `BlockStore`-backed `ProfileStore` impl lands in Slice 5; here we ship `InMemoryProfileStore`, which emits the identical samples columns from hand-built profiles so the merge tests are trustworthy. (If Slice 1 has not landed in this tree, the `PCOL_*` constants are re-declared in this crate's `samples.rs` against the same names and the dependency is wired but not gated — see Task A6.)
 
 **The 8 profiles slices** (this plan = Slice 2; each later slice gets its own plan):
 
-1. **Blockstore `ProfileIndex` + samples schema + symbol-DB artifact** — `ProfileIndex` (`impl BlockIndex`) = label-series postings (reuse the metrics `SeriesIndex`) + profile-type index + per-block time-range + stacktrace-partition map; the `PCOL_*` samples columns + schema; the symbol-DB artifact. *(planned/built separately)*
-2. **`krabka-pprof` core** *(this plan)* — pprof model + codec, `SymbolDb` + `SymbolSource`, `ProfileType` parse/`Display`, the `ProfileStore` trait + `InMemoryProfileStore` + the pinned engine result types, and the **MERGE→flamegraph** engine (fold-before-symbolize, `Tree`, the 4-ints-per-bar `FlameGraph`). Defines the `krabka-pprof` public contract the rest interlock on. **No query parser — there is no language.**
+1. **Blockstore `ProfileIndex` + samples schema + symbol-DB artifact** — `ProfileIndex` (`impl BlockIndex`) = label-series postings (reuse the metrics `SeriesIndex`) + profile-type index + per-block time-range + stacktrace-partition map; the `PCOL_*` samples columns + schema; the symbol-DB artifact. _(planned/built separately)_
+2. **`krabka-pprof` core** _(this plan)_ — pprof model + codec, `SymbolDb` + `SymbolSource`, `ProfileType` parse/`Display`, the `ProfileStore` trait + `InMemoryProfileStore` + the pinned engine result types, and the **MERGE→flamegraph** engine (fold-before-symbolize, `Tree`, the 4-ints-per-bar `FlameGraph`). Defines the `krabka-pprof` public contract the rest interlock on. **No query parser — there is no language.**
 3. **Engine completeness** — `SelectSeries` (precomputed `total_value`, step-in-seconds, SUM/AVERAGE → `FlameGraphDiff`'s sibling `Series`), `Diff` (7-ints-per-bar `FlameGraphDiff`), `max_nodes` truncation refinements, raw-profile output (`select_merge_profile` → pprof), `SelectMergeSpanProfile` + `SelectHeatmap`. **Reuses this slice's `ProfileStore`/`SymbolSource`/`Tree`/`FlameGraph`/`FlameEngine` — those public names are frozen here.**
 4. **Ingest service** (`krabka-profiles`) — `distributor` (`push.v1` + `/ingest` + OTLP `v1development` + relabel + multi-value split) → `(tenant, series_fingerprint)`-partitioned WAL; `block-builder` consumer group → samples fact table + dedup symbol DB + `ProfileIndex` (write-then-commit, idempotent keys). **Consumes the pprof codec + `SymbolDb` interning.**
 5. **Querier + Connect `querier.v1` API + legacy render** — implement `ProfileStore` as the hot/cold UNION; serve the Connect `querier.v1` methods + legacy `/pyroscope/render`. **Replaces `InMemoryProfileStore` with a `BlockStore`-backed `ProfileStore` — the trait is frozen here.**
@@ -151,41 +152,41 @@ pub enum ProfileError { Decode(String), Plan(String), Exec(String), Store(String
 
 The `samples_table` registered by `ProfileStore::select` has **one row per SAMPLE**, with these columns (names are the contract the engine's fold groups by):
 
-| Column (constant) | Arrow type | Meaning |
-|---|---|---|
-| `COL_FINGERPRINT` (`series_fingerprint`) | `UInt64` | series identity (blockstore-mandatory) |
-| `COL_TIMESTAMP` (`timestamp`) | `Int64` (ns) | sample time, nanos |
-| `PCOL_PROFILE_TYPE` (`profile_type`) | `Dictionary<Int32, Utf8>` | the 5-part profile-type string (dict-encoded) |
-| `PCOL_STACKTRACE_ID` (`stacktrace_id`) | `UInt64` | leaf-node index into the symbol-DB partition's parent-pointer tree |
-| `PCOL_VALUE` (`value`) | `Int64` | the sample value for this profile type |
-| `PCOL_STACKTRACE_PARTITION` (`stacktrace_partition`) | `UInt64` | which symbol-DB partition resolves this id |
-| `PCOL_TOTAL_VALUE` (`total_value`) | `Int64` | precomputed per-profile total (powers SelectSeries — Slice 3) |
-| `PCOL_SPAN_ID` (`span_id`) | `UInt64` (nullable) | span association |
-| `PCOL_TRACE_ID` (`trace_id`) | `Binary` (nullable) | trace association (cross-signal join key) |
+| Column (constant)                                    | Arrow type                | Meaning                                                            |
+| ---------------------------------------------------- | ------------------------- | ------------------------------------------------------------------ |
+| `COL_FINGERPRINT` (`series_fingerprint`)             | `UInt64`                  | series identity (blockstore-mandatory)                             |
+| `COL_TIMESTAMP` (`timestamp`)                        | `Int64` (ns)              | sample time, nanos                                                 |
+| `PCOL_PROFILE_TYPE` (`profile_type`)                 | `Dictionary<Int32, Utf8>` | the 5-part profile-type string (dict-encoded)                      |
+| `PCOL_STACKTRACE_ID` (`stacktrace_id`)               | `UInt64`                  | leaf-node index into the symbol-DB partition's parent-pointer tree |
+| `PCOL_VALUE` (`value`)                               | `Int64`                   | the sample value for this profile type                             |
+| `PCOL_STACKTRACE_PARTITION` (`stacktrace_partition`) | `UInt64`                  | which symbol-DB partition resolves this id                         |
+| `PCOL_TOTAL_VALUE` (`total_value`)                   | `Int64`                   | precomputed per-profile total (powers SelectSeries — Slice 3)      |
+| `PCOL_SPAN_ID` (`span_id`)                           | `UInt64` (nullable)       | span association                                                   |
+| `PCOL_TRACE_ID` (`trace_id`)                         | `Binary` (nullable)       | trace association (cross-signal join key)                          |
 
-> The slot from `(stacktrace_partition, stacktrace_id)` into the symbol DB is *raw* — never symbolized at rest. The engine's `GROUP BY (stacktrace_partition, stacktrace_id) → SUM(value)` collapses millions of raw samples to the distinct surviving ids **before** any symbolization (spec §6.1). `InMemoryProfileStore` (Task A7) emits these columns from hand-built profiles + a populated `SymbolDb` so the merge tests run against known integer values.
+> The slot from `(stacktrace_partition, stacktrace_id)` into the symbol DB is _raw_ — never symbolized at rest. The engine's `GROUP BY (stacktrace_partition, stacktrace_id) → SUM(value)` collapses millions of raw samples to the distinct surviving ids **before** any symbolization (spec §6.1). `InMemoryProfileStore` (Task A7) emits these columns from hand-built profiles + a populated `SymbolDb` so the merge tests run against known integer values.
 
 ---
 
 ## File structure (`crates/pprof/`)
 
-| File | Responsibility |
-|---|---|
-| `Cargo.toml` | crate manifest; workspace deps; `prost` build-dep |
-| `build.rs` | compile the vendored `profile.proto` via `prost-build` (grpc-gateway pattern) |
-| `proto/profile.proto` | vendored perftools.profiles `Profile` proto (pinned tag) |
-| `src/lib.rs` | module decls + public re-exports + crate docs |
-| `src/error.rs` | `ProfileError` enum + `From` conversions |
-| `src/pprof.rs` | the prost-generated module include + `PprofProfile` decode/encode wrapper + `Frame` |
-| `src/profile_type.rs` | `ProfileType` parse/`Display` (5-part colon form) |
-| `src/symbols.rs` | `SymbolDb` (parent-pointer tree + dedup tables + `encode`/`decode`) + `SymbolSource` |
-| `src/matcher.rs` | `parse_label_selector` (Prometheus matcher string → `Vec<LabelMatcher>`) |
-| `src/samples.rs` | the `PCOL_*` column constants + `profile_samples_schema(...)` builder |
-| `src/store.rs` | `ProfileStore` trait + `ProfileScan` |
-| `src/in_memory.rs` | `InMemoryProfileStore` test impl (samples DF table + `SymbolDb`) |
-| `src/tree.rs` | `Tree` (add_stack / merge) + `FlameGraph`/`Level`/`FlameGraphDiff` + `to_flamegraph` (4-ints-per-bar) |
-| `src/series.rs` | `Series` / `SeriesAgg` (types only; bodies Slice 3) |
-| `src/engine.rs` | `FlameEngine`, `EngineOpts`, `select_merge_stacktraces` (the MERGE→flamegraph fold), frozen `select_series`/`diff`/`select_merge_profile` |
+| File                  | Responsibility                                                                                                                            |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `Cargo.toml`          | crate manifest; workspace deps; `prost` build-dep                                                                                         |
+| `build.rs`            | compile the vendored `profile.proto` via `prost-build` (grpc-gateway pattern)                                                             |
+| `proto/profile.proto` | vendored perftools.profiles `Profile` proto (pinned tag)                                                                                  |
+| `src/lib.rs`          | module decls + public re-exports + crate docs                                                                                             |
+| `src/error.rs`        | `ProfileError` enum + `From` conversions                                                                                                  |
+| `src/pprof.rs`        | the prost-generated module include + `PprofProfile` decode/encode wrapper + `Frame`                                                       |
+| `src/profile_type.rs` | `ProfileType` parse/`Display` (5-part colon form)                                                                                         |
+| `src/symbols.rs`      | `SymbolDb` (parent-pointer tree + dedup tables + `encode`/`decode`) + `SymbolSource`                                                      |
+| `src/matcher.rs`      | `parse_label_selector` (Prometheus matcher string → `Vec<LabelMatcher>`)                                                                  |
+| `src/samples.rs`      | the `PCOL_*` column constants + `profile_samples_schema(...)` builder                                                                     |
+| `src/store.rs`        | `ProfileStore` trait + `ProfileScan`                                                                                                      |
+| `src/in_memory.rs`    | `InMemoryProfileStore` test impl (samples DF table + `SymbolDb`)                                                                          |
+| `src/tree.rs`         | `Tree` (add_stack / merge) + `FlameGraph`/`Level`/`FlameGraphDiff` + `to_flamegraph` (4-ints-per-bar)                                     |
+| `src/series.rs`       | `Series` / `SeriesAgg` (types only; bodies Slice 3)                                                                                       |
+| `src/engine.rs`       | `FlameEngine`, `EngineOpts`, `select_merge_stacktraces` (the MERGE→flamegraph fold), frozen `select_series`/`diff`/`select_merge_profile` |
 
 `src/engine.rs` isolates the centerpiece DataFusion fold; `src/tree.rs` isolates the byte-exact flamegraph encoding from the storage surface.
 
@@ -198,6 +199,7 @@ The `samples_table` registered by `ProfileStore::select` has **one row per SAMPL
 ### Task A1: Crate scaffold + vendored pprof proto + `build.rs`
 
 **Files:**
+
 - Create: `crates/pprof/Cargo.toml`
 - Create: `crates/pprof/build.rs`
 - Create: `crates/pprof/proto/profile.proto`
@@ -205,6 +207,7 @@ The `samples_table` registered by `ProfileStore::select` has **one row per SAMPL
 - Modify: root `Cargo.toml` (members glob `crates/*` already covers it; `prost`/`prost-build`/`datafusion`/`arrow` already in `[workspace.dependencies]` per the blockstore/metrics plans)
 
 **Interfaces:**
+
 - Produces: a compiling `krabka-pprof` crate whose `build.rs` generates the perftools.profiles prost module, with `pub fn crate_smoke() -> bool` (placeholder, removed in A2).
 
 - [ ] **Step 1: Vendor `crates/pprof/proto/profile.proto`** — copy the perftools.profiles `Profile` proto verbatim from google/pprof `proto/profile.proto` (Apache-2.0). Pin the source: header comment `// vendored from github.com/google/pprof proto/profile.proto @ master, 2026-06-18`. **Do not edit field numbers.** The proto defines `Profile { sample_type[], sample[], mapping[], location[], function[], string_table[], ... }`, `Sample { location_id[], value[], label[] }`, `Location { id, mapping_id, address, line[] }`, `Line { function_id, line }`, `Function { id, name, system_name, filename, start_line }`, `Mapping { id, memory_start, memory_limit, file_offset, filename, build_id, has_functions, has_filenames, has_line_numbers, has_inline_frames }`, `ValueType { type, unit }`.
@@ -269,7 +272,7 @@ fn main() {
 }
 ```
 
-> **Verify against the grpc-gateway/rebalancer `build.rs` at this rev:** the exact `prost_build::Config` setup (whether the repo uses `protoc-bin-vendored` to supply `PROTOC`, or a `tonic_build`/`connectrpc-axum-build` wrapper). Match whatever those crates do for `protoc` discovery so CI without a system `protoc` still builds. Keep the *output*: a generated module containing the `Profile` message types, includable via `include!(concat!(env!("OUT_DIR"), "/perftools.profiles.rs"))` (the module name follows the proto's `package`).
+> **Verify against the grpc-gateway/rebalancer `build.rs` at this rev:** the exact `prost_build::Config` setup (whether the repo uses `protoc-bin-vendored` to supply `PROTOC`, or a `tonic_build`/`connectrpc-axum-build` wrapper). Match whatever those crates do for `protoc` discovery so CI without a system `protoc` still builds. Keep the _output_: a generated module containing the `Profile` message types, includable via `include!(concat!(env!("OUT_DIR"), "/perftools.profiles.rs"))` (the module name follows the proto's `package`).
 
 - [ ] **Step 4: Create `crates/pprof/src/lib.rs` with a placeholder + the generated include behind a module**
 
@@ -329,10 +332,12 @@ git commit -m "feat(pprof): scaffold krabka-pprof crate + vendored perftools.pro
 ### Task A2: `ProfileError`
 
 **Files:**
+
 - Create: `crates/pprof/src/error.rs`
 - Modify: `crates/pprof/src/lib.rs` (declare module, re-export, remove placeholder)
 
 **Interfaces:**
+
 - Produces:
   - `pub enum ProfileError { Decode(String), Plan(String), Exec(String), Store(String), Unsupported(String), Symbolize(String) }` (`Debug`, `Clone`, `thiserror::Error`)
   - `impl From<datafusion::error::DataFusionError> for ProfileError` → `Exec`
@@ -453,10 +458,12 @@ git commit -m "feat(pprof): ProfileError type + DataFusion/prost conversions"
 ### Task A3: `PprofProfile` decode/encode wrapper + `Frame`
 
 **Files:**
+
 - Create: `crates/pprof/src/pprof.rs`
 - Modify: `crates/pprof/src/lib.rs`
 
 **Interfaces:**
+
 - Consumes: `crate::proto::Profile`, `ProfileError`, `prost::Message`.
 - Produces:
   - `pub struct Frame { pub function: String, pub file: String, pub line: i32 }` (`Clone`, `Debug`, `PartialEq`, `Eq`)
@@ -520,7 +527,7 @@ mod tests {
 }
 ```
 
-> **Verify against the vendored `profile.proto`:** the prost-generated field names — `r#type` for the proto `type` field, the `ValueType`/`Profile` field set — depend on the proto and prost's identifier escaping. If `r#type` differs (e.g. prost renamed it), align the test + impl to the generated names; keep the asserted *behavior* (round-trip string-table + `sample_types` pairing). The proto's `value[]`/`location_id[]` are not exercised until A8/Slice 4; only the string-table + sample-type machinery is pinned here.
+> **Verify against the vendored `profile.proto`:** the prost-generated field names — `r#type` for the proto `type` field, the `ValueType`/`Profile` field set — depend on the proto and prost's identifier escaping. If `r#type` differs (e.g. prost renamed it), align the test + impl to the generated names; keep the asserted _behavior_ (round-trip string-table + `sample_types` pairing). The proto's `value[]`/`location_id[]` are not exercised until A8/Slice 4; only the string-table + sample-type machinery is pinned here.
 
 - [ ] **Step 2: Run to verify it fails**
 
@@ -608,10 +615,12 @@ git commit -m "feat(pprof): PprofProfile decode/encode wrapper + Frame + string-
 ### Task A4: `ProfileType` — 5-part parse + `Display`
 
 **Files:**
+
 - Create: `crates/pprof/src/profile_type.rs`
 - Modify: `crates/pprof/src/lib.rs`
 
 **Interfaces:**
+
 - Produces:
   - `pub struct ProfileType { pub name: String, pub sample_type: String, pub sample_unit: String, pub period_type: String, pub period_unit: String }` (`Clone`, `Debug`, `PartialEq`, `Eq`)
   - `impl ProfileType { pub fn parse(s: &str) -> Result<ProfileType, ProfileError> }` — split on `:` into exactly 5 parts (reject ≠5; trim an optional trailing `:delta` only if the spec marks delta — see note).
@@ -727,10 +736,12 @@ git commit -m "feat(pprof): ProfileType 5-part parse + Display"
 ### Task A5: `SymbolDb` (parent-pointer stacktrace tree + dedup tables) + `SymbolSource`
 
 **Files:**
+
 - Create: `crates/pprof/src/symbols.rs`
 - Modify: `crates/pprof/src/lib.rs`
 
 **Interfaces:**
+
 - Consumes: `Frame`, `ProfileError`.
 - Produces:
   - `pub trait SymbolSource: Send + Sync { fn resolve(&self, partition: u64, id: u32) -> Vec<Frame>; }`
@@ -848,11 +859,13 @@ git commit -m "feat(pprof): SymbolDb (parent-pointer stacktrace tree + dedup tab
 > (Two disjoint files, dispatched together in the A2–A6 batch; A8 depends on both.)
 
 **Files:**
+
 - Create: `crates/pprof/src/matcher.rs`
 - Create: `crates/pprof/src/samples.rs`
 - Modify: `crates/pprof/src/lib.rs`
 
 **Interfaces:**
+
 - `matcher.rs` Produces:
   - `pub(crate) fn parse_label_selector(s: &str) -> Result<Vec<LabelMatcher>, ProfileError>` — parse a Prometheus matcher string `{k1="v1", k2=~"re", k3!="v4"}` (braces optional; empty/`{}` ⇒ `[]`) into blockstore `LabelMatcher`s using `MatchOp` (`=`/`!=`/`=~`/`!~`). **This is the only thing resembling a parser in the crate — it is just Prometheus label matching, not a profiles query language.**
 - `samples.rs` Produces:
@@ -967,7 +980,7 @@ pub fn profile_samples_schema() -> SchemaRef {
 }
 ```
 
-> If `krabka_blockstore::{COL_FINGERPRINT, COL_TIMESTAMP, PCOL_*, profile_samples_schema}` already exist (profiles Slice 1 landed), import the `PCOL_*` + `profile_samples_schema` from there and delete the local consts/fn — one source of truth. The local fallback is named `profile_samples_schema` (identical to Slice 1's blockstore export) so the re-export swap is a no-op. The test asserts the *types*, so either source satisfies it.
+> If `krabka_blockstore::{COL_FINGERPRINT, COL_TIMESTAMP, PCOL_*, profile_samples_schema}` already exist (profiles Slice 1 landed), import the `PCOL_*` + `profile_samples_schema` from there and delete the local consts/fn — one source of truth. The local fallback is named `profile_samples_schema` (identical to Slice 1's blockstore export) so the re-export swap is a no-op. The test asserts the _types_, so either source satisfies it.
 
 - [ ] **Step 4: Wire + run + commit** — add `mod matcher; mod samples;` + `pub use samples::{COL_FINGERPRINT, COL_TIMESTAMP, PCOL_PROFILE_TYPE, PCOL_STACKTRACE_ID, PCOL_STACKTRACE_PARTITION, PCOL_SPAN_ID, PCOL_TOTAL_VALUE, PCOL_TRACE_ID, PCOL_VALUE, profile_samples_schema};` (`parse_label_selector` stays `pub(crate)`).
 
@@ -983,10 +996,12 @@ git commit -m "feat(pprof): Prometheus matcher-string helper + samples-table col
 ### Task A7: `ProfileStore` trait + `ProfileScan`
 
 **Files:**
+
 - Create: `crates/pprof/src/store.rs`
 - Modify: `crates/pprof/src/lib.rs`
 
 **Interfaces:**
+
 - Consumes: `datafusion::prelude::SessionContext`, `LabelMatcher`, `SymbolSource`, `ProfileError`.
 - Produces:
   - `pub struct ProfileScan { pub ctx: SessionContext, pub samples_table: String, pub symbols: std::sync::Arc<dyn SymbolSource> }`
@@ -1134,10 +1149,12 @@ git commit -m "feat(pprof): ProfileStore trait + ProfileScan"
 ### Task A8: `InMemoryProfileStore`
 
 **Files:**
+
 - Create: `crates/pprof/src/in_memory.rs`
 - Modify: `crates/pprof/src/lib.rs`
 
 **Interfaces:**
+
 - Consumes: `ProfileStore`/`ProfileScan`, `samples::{PCOL_*, profile_samples_schema}`, `SymbolDb`, `LabelMatcher`, DataFusion `MemTable`.
 - Produces:
   - `pub struct InMemoryProfileStore { /* per-tenant samples rows + a shared SymbolDb */ }` (`Default`) with `new()` and a fluent builder:
@@ -1230,10 +1247,12 @@ git commit -m "feat(pprof): InMemoryProfileStore building samples DataFusion tab
 ### Task B1: `Tree` — `new`/`add_stack`/`merge`
 
 **Files:**
+
 - Create: `crates/pprof/src/tree.rs`
 - Modify: `crates/pprof/src/lib.rs`
 
 **Interfaces:**
+
 - Consumes: `Frame`.
 - Produces:
   - `pub struct Tree { /* arena: Vec<Node>, root: usize */ }` where `Node { name: String, total: i64, self_: i64, children: BTreeMap<String, usize> }` (root is the synthetic `"total"` node).
@@ -1241,7 +1260,7 @@ git commit -m "feat(pprof): InMemoryProfileStore building samples DataFusion tab
   - `pub fn add_stack(&mut self, frames: &[Frame], value: i64)` — frames are **leaf-first** (as `resolve` yields); the path from root→leaf is `frames` **reversed** (root-most last in a leaf-first list → walk in reverse). `total += value` on every node along the root→leaf path (incl. root); `self_ += value` only on the leaf node.
   - `pub fn merge(&mut self, other: Tree)` — structural merge of two partial trees by frame name (sum `total`/`self_` per matching path).
 
-> **Frame-name keying:** a tree node is keyed by a frame's display name (`function` — or `function file:line` if the spec's flamegraph node identity needs file/line; pin the choice with the test). Leaf-first `frames` means `frames[0]` is the innermost (leaf) function; the root→leaf descent walks `frames.iter().rev()` so the *last* frame appended is the leaf where `self_` accrues.
+> **Frame-name keying:** a tree node is keyed by a frame's display name (`function` — or `function file:line` if the spec's flamegraph node identity needs file/line; pin the choice with the test). Leaf-first `frames` means `frames[0]` is the innermost (leaf) function; the root→leaf descent walks `frames.iter().rev()` so the _last_ frame appended is the leaf where `self_` accrues.
 
 - [ ] **Step 1: Write the failing tests** (the headline `Tree` fold: total-along-path, self-at-leaf, plus merge)
 
@@ -1319,17 +1338,19 @@ git commit -m "feat(pprof): Tree fold (total-along-path, self-at-leaf) + merge"
 ### Task B2: `FlameGraph`/`Level`/`FlameGraphDiff` + `Tree::to_flamegraph` (the 4-ints-per-bar encoding — THE CONTRACT)
 
 **Files:**
+
 - Modify: `crates/pprof/src/tree.rs` (add the flamegraph types + `to_flamegraph`)
 - Modify: `crates/pprof/src/lib.rs`
 
 **Interfaces:**
+
 - Produces (all `Clone`, `Debug`, `PartialEq`):
   - `pub struct Level { pub values: Vec<i64> }` — groups of 4: `[xOffsetDelta, total, self, nameIndex]`.
   - `pub struct FlameGraph { pub names: Vec<String>, pub levels: Vec<Level>, pub total: i64, pub max_self: i64 }`.
   - `pub struct FlameGraphDiff { pub names: Vec<String>, pub levels: Vec<Level>, pub left_ticks: i64, pub right_ticks: i64 }` (groups of 7; **bodies/encoding Slice 3** — type only, frozen here).
   - `impl Tree { pub fn to_flamegraph(self, max_nodes: i64) -> FlameGraph }` — BFS the tree level-by-level; `names[0] == "total"`; each bar emits `[xOffsetDelta, total, self, nameIndex]` where `xOffsetDelta` is the delta from the **previous bar's end on the same level** (the first bar on a level deltas from its parent's start). Truncate to `max_nodes` via a min-value heap threshold: nodes below the threshold collapse into a synthetic `"other"` sibling carrying the pruned total.
 
-> **The encoding is the spec's byte-exact contract (spec §6.1 + §10).** `xOffsetDelta` is a DELTA, not absolute. Level 0 is the single root bar `[0, total, 0, 0]` (offset 0, total = whole, self 0, name index 0 = "total"). Each subsequent level lists its bars left-to-right; the first bar's `xOffsetDelta` is the gap from the parent's left edge, and each following bar's `xOffsetDelta` is the gap from the previous sibling's *right edge* (previous bar's `xOffset + total`). Children are ordered by the `Tree`'s deterministic `BTreeMap` order. This is NOT a churn point — implement it exactly; the hand-built tests pin every integer.
+> **The encoding is the spec's byte-exact contract (spec §6.1 + §10).** `xOffsetDelta` is a DELTA, not absolute. Level 0 is the single root bar `[0, total, 0, 0]` (offset 0, total = whole, self 0, name index 0 = "total"). Each subsequent level lists its bars left-to-right; the first bar's `xOffsetDelta` is the gap from the parent's left edge, and each following bar's `xOffsetDelta` is the gap from the previous sibling's _right edge_ (previous bar's `xOffset + total`). Children are ordered by the `Tree`'s deterministic `BTreeMap` order. This is NOT a churn point — implement it exactly; the hand-built tests pin every integer.
 
 - [ ] **Step 1: Write the failing encoding tests** (known tree → known levels, asserting the 4-int groups + delta semantics)
 
@@ -1406,10 +1427,12 @@ git commit -m "feat(pprof): FlameGraph 4-ints-per-bar encoding (xOffsetDelta) + 
 ### Task B3: `Series` / `SeriesAgg` types (frozen; bodies Slice 3)
 
 **Files:**
+
 - Create: `crates/pprof/src/series.rs`
 - Modify: `crates/pprof/src/lib.rs`
 
 **Interfaces:**
+
 - Produces (all `Clone`, `Debug`, `PartialEq`):
   - `pub struct Series { pub labels: Vec<(String, String)>, pub points: Vec<(i64, f64)> }` — `(timestamp_ms, value)`.
   - `pub enum SeriesAgg { Sum, Average }` (`Copy`).
@@ -1457,10 +1480,12 @@ git commit -m "feat(pprof): Series/SeriesAgg types (frozen for slice 3)"
 ### Task C1: `FlameEngine` scaffold + `EngineOpts` + frozen slice-3 signatures
 
 **Files:**
+
 - Create: `crates/pprof/src/engine.rs`
 - Modify: `crates/pprof/src/lib.rs`
 
 **Interfaces:**
+
 - Consumes: `ProfileStore`, `matcher::parse_label_selector`, the result types, `ProfileError`.
 - Produces:
   - `pub struct EngineOpts { pub default_max_nodes: i64 }`; `impl Default for EngineOpts` (`default_max_nodes: 2048`).
@@ -1530,9 +1555,11 @@ git commit -m "feat(pprof): FlameEngine scaffold + EngineOpts + frozen slice-3 s
 ### Task C2: `select_merge_stacktraces` — the MERGE→flamegraph fold (THE CENTERPIECE)
 
 **Files:**
+
 - Modify: `crates/pprof/src/engine.rs`
 
 **Interfaces:**
+
 - Consumes: `ProfileStore::select`, `parse_label_selector`, `samples::{PCOL_STACKTRACE_PARTITION, PCOL_STACKTRACE_ID, PCOL_VALUE}`, `SymbolSource::resolve`, `Tree`, `Frame`.
 - Produces:
   - `pub async fn select_merge_stacktraces(&self, tenant: &str, profile_type: &str, label_selector: &str, start_ms: i64, end_ms: i64, max_nodes: i64) -> Result<FlameGraph, ProfileError>` — the full pipeline:
@@ -1624,7 +1651,7 @@ Append to `engine.rs`'s `tests`:
 
 - [ ] **Step 3: Implement the fold** — replace the C1 stub with the real pipeline. Use `ctx.sql(&format!("SELECT {p}, {id}, SUM({v}) AS v FROM {table} GROUP BY {p}, {id}", p=PCOL_STACKTRACE_PARTITION, id=PCOL_STACKTRACE_ID, v=PCOL_VALUE, table=scan.samples_table))` (or build the same via `LogicalPlanBuilder::aggregate` — **verify the SQL/aggregate path against datafusion rev `0838a4d`**), `.collect()` the batches, read the three columns (`UInt64`/`UInt64`/`Int64`) per row, `scan.symbols.resolve(partition, id)`, `tree.add_stack(&frames, v)`, then `to_flamegraph`. Provide the full real fold + batch-reading code; keep the `sql`/`collect`/`as_primitive` calls behind the verify note.
 
-> **Verify against datafusion rev `0838a4d` / arrow 59:** the `SessionContext::sql(&str).await?.collect().await?` entry point, the `RecordBatch::column(i).as_primitive::<UInt64Type/Int64Type>()` downcasts (and `as_primitive` import path `datafusion::arrow::array::AsArray`), and whether `SUM` returns `Int64` or `UInt64` for an `Int64` input (cast if needed) are the churn points. Implement to satisfy the known-value tests; if `SUM(Int64)` widens to `Decimal`/`Int64` differently, cast in the SQL (`SUM(value)::BIGINT`) — keep the asserted totals (18, folded 15). The fold-before-symbolize *algorithm* (GROUP BY then resolve) is the spec contract and must be exactly as written — never resolve before the fold.
+> **Verify against datafusion rev `0838a4d` / arrow 59:** the `SessionContext::sql(&str).await?.collect().await?` entry point, the `RecordBatch::column(i).as_primitive::<UInt64Type/Int64Type>()` downcasts (and `as_primitive` import path `datafusion::arrow::array::AsArray`), and whether `SUM` returns `Int64` or `UInt64` for an `Int64` input (cast if needed) are the churn points. Implement to satisfy the known-value tests; if `SUM(Int64)` widens to `Decimal`/`Int64` differently, cast in the SQL (`SUM(value)::BIGINT`) — keep the asserted totals (18, folded 15). The fold-before-symbolize _algorithm_ (GROUP BY then resolve) is the spec contract and must be exactly as written — never resolve before the fold.
 
 - [ ] **Step 4: Phase C gate + commit**
 
@@ -1643,9 +1670,11 @@ git commit -m "feat(pprof): select_merge_stacktraces — fold-before-symbolize M
 ### Task D1: Curated golden-merge suite over a fixed multi-profile fixture
 
 **Files:**
+
 - Create: `crates/pprof/tests/golden_merge.rs`
 
 **Interfaces:**
+
 - Consumes: `krabka_pprof::{FlameEngine, EngineOpts, InMemoryProfileStore, SymbolDb, ProfileType, FlameGraph}` + the public result model.
 - Produces: an integration test asserting a curated set of MERGE queries against a fixed fixture with hand-computed expected flamegraph levels.
 
@@ -1672,13 +1701,14 @@ git commit -m "test(pprof): curated golden-merge suite (fold-before-symbolize/in
 ## Self-review
 
 **Spec coverage (against §6 the flamegraph-merge engine + §4 data model + §11 Slice 2):**
+
 - The pprof model + codec (perftools.profiles `Profile` decode/encode + the string-table/sample-type helpers + `Frame`) → Tasks A1 (vendored proto + build.rs), A3.
 - The deduplicated `SymbolDb` — parent-pointer stacktrace tree (`intern_stacktrace` dedup, `resolve` leaf→root climb, inlined frames expanded innermost-first) + dedup string/function/location/mapping tables + the `encode`/`decode` `symbols.symdb`-equivalent artifact, behind the `SymbolSource` trait → Task A5.
 - The 5-part `ProfileType` parse + `Display` (Go/pprof vs Java/JFR examples; not hardcoded) → Task A4.
 - The `ProfileStore` trait + `ProfileScan` (the pinned query seam) → Task A7; `InMemoryProfileStore` building a samples DataFusion table + a `SymbolDb` → Tasks A6 (the column contract), A8.
 - The Prometheus matcher-string helper (`label_selector` → `Vec<LabelMatcher>` — the only "parser") → Task A6.
 - The `Tree` fold (total-along-path, self-at-leaf) + `merge` (partial-tree combine) → Task B1; the byte-exact **4-ints-per-bar `FlameGraph`** encoding (`xOffsetDelta` delta-from-previous-bar-end, `names[0]=="total"`, `max_nodes` truncation + synthetic `"other"`) + the `FlameGraphDiff` type (7-ints, frozen for Slice 3) → Task B2.
-- **The centerpiece — the MERGE→flamegraph engine:** resolve `label_selector` + profile_type + `[start,end]` → `ProfileStore.select` → DataFusion `GROUP BY (stacktrace_partition, stacktrace_id) → SUM(value)` (the merge-*before*-symbolize step) → Rust resolve distinct ids via `SymbolSource` → fold into one `Tree` → `to_flamegraph(max_nodes)` → `FlameGraph` → Tasks C1 (scaffold), C2 (`select_merge_stacktraces`).
+- **The centerpiece — the MERGE→flamegraph engine:** resolve `label_selector` + profile_type + `[start,end]` → `ProfileStore.select` → DataFusion `GROUP BY (stacktrace_partition, stacktrace_id) → SUM(value)` (the merge-_before_-symbolize step) → Rust resolve distinct ids via `SymbolSource` → fold into one `Tree` → `to_flamegraph(max_nodes)` → `FlameGraph` → Tasks C1 (scaffold), C2 (`select_merge_stacktraces`).
 - The golden-merge suite (no upstream corpus; hand-computed expected levels) → Task D1.
 - **Frozen public contract** (`PprofProfile`/`Frame`/`SymbolDb`/`SymbolSource`/`ProfileType`/`ProfileStore`/`ProfileScan`/`FlameGraph`/`Level`/`FlameGraphDiff`/`Tree`/`Series`/`SeriesAgg`/`EngineOpts`/`FlameEngine`/`ProfileError` + the `select_merge_stacktraces`/`select_series`/`diff`/`select_merge_profile` signatures + the `PCOL_*` samples-column contract) defined at the exact signatures the prompt pins → §"Shared cross-slice contract" + §"Samples table column contract" + the task interfaces.
 
@@ -1689,9 +1719,10 @@ git commit -m "test(pprof): curated golden-merge suite (fold-before-symbolize/in
 **Type consistency:** `ProfileStore`'s five method signatures are identical across A7 (definition), A8 (impl), and C2 (consumer). `ProfileScan` fields (`ctx`/`samples_table`/`symbols`) stable A7↔A8↔C2. `SymbolDb`/`SymbolSource`'s `resolve(partition, id) -> Vec<Frame>` signature is identical across A5 (definition), A8 (the in-memory `SymbolSource`), and C2 (the engine resolve). `ProfileError` variants (`Decode`/`Plan`/`Exec`/`Store`/`Unsupported`/`Symbolize`) are the single error type across all tasks. The `PCOL_*` samples-column constants + `samples_schema` defined once (A6) and referenced unchanged in A8/C2. `Frame` defined once (A3) and produced by `SymbolDb::resolve` (A5) + consumed by `Tree::add_stack` (B1). `FlameGraph`/`Level`/`FlameGraphDiff`/`Tree` defined once (B1/B2) and produced by `to_flamegraph` (B2) + `select_merge_stacktraces` (C2). `Series`/`SeriesAgg` defined once (B3) and used in the frozen `select_series` signature (C1). The frozen public names match the prompt's pinned contract exactly.
 
 **Known risks (flagged, not hidden):**
-1. **The vendored pprof proto + prost field names** — `prost`'s identifier escaping (`r#type` for the proto `type` field) and the generated module name (from the proto `package`) are the churn points. Contained to A1 (vendor + build.rs) + A3 (the wrapper), behind the verify-against-vendored-proto note + the round-trip behavioral test. The decode/encode *round-trip equality* is pinned; drift surfaces as a failing test, not silent corruption. Match the grpc-gateway/rebalancer `build.rs` `protoc` discovery so CI without a system `protoc` still builds.
-2. **The DataFusion-aggregate fold surface for `select_merge_stacktraces`** (the slice's centerpiece) — the `SessionContext::sql`/`collect` entry point, the `as_primitive` downcasts, and the `SUM(Int64)` output type are the churn points. Contained to `engine.rs` C2, behind the verify-against-rev note + the known-value fold-before-symbolize tests. The fold-before-symbolize *algorithm* (GROUP BY then resolve, never the reverse) is pinned as spec contract, so drift surfaces as a compile error against green correctness tests, never as a silent resolve-before-fold (which would symbolize millions of un-collapsed ids — the exact anti-pattern the spec forbids).
+
+1. **The vendored pprof proto + prost field names** — `prost`'s identifier escaping (`r#type` for the proto `type` field) and the generated module name (from the proto `package`) are the churn points. Contained to A1 (vendor + build.rs) + A3 (the wrapper), behind the verify-against-vendored-proto note + the round-trip behavioral test. The decode/encode _round-trip equality_ is pinned; drift surfaces as a failing test, not silent corruption. Match the grpc-gateway/rebalancer `build.rs` `protoc` discovery so CI without a system `protoc` still builds.
+2. **The DataFusion-aggregate fold surface for `select_merge_stacktraces`** (the slice's centerpiece) — the `SessionContext::sql`/`collect` entry point, the `as_primitive` downcasts, and the `SUM(Int64)` output type are the churn points. Contained to `engine.rs` C2, behind the verify-against-rev note + the known-value fold-before-symbolize tests. The fold-before-symbolize _algorithm_ (GROUP BY then resolve, never the reverse) is pinned as spec contract, so drift surfaces as a compile error against green correctness tests, never as a silent resolve-before-fold (which would symbolize millions of un-collapsed ids — the exact anti-pattern the spec forbids).
 3. **The 4-ints-per-bar `xOffsetDelta` encoding** — the delta-from-previous-bar-end semantics are the #1 byte-exactness trap (spec §6.1/§10). Triple-pinned: the root-level test (`[0,total,0,0]`), the sibling-delta test (b's `xOffsetDelta` is 0 because it abuts a's right edge), and the golden suite. NOT behind a verify note — it is implemented exactly as the spec contract.
-4. **Symbol-DB fidelity** — `InMemoryProfileStore` must populate the *identical* `SymbolDb` partition shape the block-builder (Slice 1) emits, or the merge tests are vacuous. `SymbolDb` is shared (A5), `intern_stacktrace`/`resolve` are pinned by known-tree dedup + climb + inline-expansion tests (A5), and the block-builder (Slice 4) is contracted to intern via the same `SymbolDb`.
+4. **Symbol-DB fidelity** — `InMemoryProfileStore` must populate the _identical_ `SymbolDb` partition shape the block-builder (Slice 1) emits, or the merge tests are vacuous. `SymbolDb` is shared (A5), `intern_stacktrace`/`resolve` are pinned by known-tree dedup + climb + inline-expansion tests (A5), and the block-builder (Slice 4) is contracted to intern via the same `SymbolDb`.
 5. **In-memory store time/filter approximation** — `InMemoryProfileStore` filters on ms timestamps + ignores matchers (over-approximate prefilter). This is sufficient for the engine's fold/resolve/encode (what Slice 2 pins); exact label filtering + ns-time harmonization are the querier's concern (Slice 5), flagged here and enforced (the store returns a superset; the engine's `GROUP BY` + `to_flamegraph` are exact on whatever rows it gets).
 6. **Slice executability** — this is the largest profiles slice; the phase batching (A→B→C→D, with the noted intra-phase parallel batches on disjoint file sets per `CLAUDE.md`) keeps each sub-batch's file sets disjoint and ends every phase at a green whole-crate gate so a sub-batch is reviewed/merged before the next starts.

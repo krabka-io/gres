@@ -67,23 +67,23 @@ Sub-projects in dependency order. Each becomes its own future spec when
 its turn comes. Items 1 and 3 can be developed in parallel; items 14 and
 15 are separate products that should get their own repos.
 
-| #  | Sub-project                          | Crate(s)                                | Depends on | Done means                                                                                                                                                | Risk      |
-|----|--------------------------------------|-----------------------------------------|------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------|-----------|
-|  1 | Wire protocol codec                  | `krabka-protocol`                       | —          | Encodes/decodes every Kafka request/response version of the pinned upstream release; byte-equal with the JVM client across a differential corpus.         | Low       |
-|  2 | Client foundation                    | `krabka-client-core`                    | 1          | Connection management, broker discovery, API-version negotiation, request dispatch. No producer/consumer semantics yet.                                   | Medium    |
-|  3 | Storage / log layer                  | `krabka-log`                            | —          | Read/write existing Kafka on-disk format byte-compatibly: segments, offset/time indexes, record batch v2, retention, compaction. Verified via JVM log dirs. | High      |
-|  4 | Single-node broker MVP               | `krabka-broker`                         | 1, 3       | Produce/fetch/metadata/api-versions over TCP. Single node, no replication, no groups, no auth. JVM clients can produce and consume.                       | High      |
-|  5 | Consumer groups + coordinator        | `krabka-broker`, `krabka-client-consumer` | 4        | Classic rebalance first, then KIP-848. Offset commits to `__consumer_offsets`.                                                                            | High      |
-|  6 | Producer client                      | `krabka-client-producer`                | 2          | Idempotent producer; batching, compression, partitioner. No transactions yet.                                                                             | Medium    |
-|  7 | KRaft / metadata quorum              | `krabka-raft`, `krabka-metadata`        | 1, 3       | Raft log, snapshots, metadata records, controller election. Replaces ZooKeeper entirely (Kafka 4.x is KRaft-only).                                        | Very high |
-|  8 | Replication + ISR                    | `krabka-broker`                         | 4, 7       | Multi-broker clusters; per-partition leader election; ISR; follower fetch.                                                                                | Very high |
-|  9 | Transactions                         | `krabka-broker`, `krabka-client-producer` | 5, 8     | Transactional producer, transaction coordinator, exactly-once. Includes in-flight KIP-1319 work.                                                          | High      |
-| 10 | Admin API + tooling                  | `krabka-client-admin`, `krabka-cli`     | 4–9        | All CreateTopics/DescribeConfigs/AlterConfigs/ACLs/quotas. CLI parity with `kafka-*.sh`.                                                                   | Medium    |
-| 11 | Auth / security                      | `krabka-security`                       | 2, 4       | SASL (PLAIN, SCRAM, GSSAPI, OAUTHBEARER), TLS, delegation tokens, authorizer interface.                                                                   | Med-high  |
-| 12 | Tiered storage                       | `krabka-tiered-storage`                 | 3, 8       | KIP-405. Pluggable remote storage manager; S3 reference impl.                                                                                             | High      |
-| 13 | Share groups                         | `krabka-broker`                         | 5, 8       | KIP-932 queue-style consumption.                                                                                                                          | Medium    |
-| 14 | Streams equivalent (separate product)| `krabka-streams-*` (own repo)           | 5, 6       | Processor API + DSL, state stores (RocksDB or sled), exactly-once. Own meta-spec when started.                                                            | Very high |
-| 15 | Connect equivalent (separate product)| `krabka-connect-*` (own repo)           | 10         | Distributed runtime, REST API, plugin isolation. Own meta-spec when started.                                                                              | Very high |
+| #   | Sub-project                           | Crate(s)                                  | Depends on | Done means                                                                                                                                                  | Risk      |
+| --- | ------------------------------------- | ----------------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| 1   | Wire protocol codec                   | `krabka-protocol`                         | —          | Encodes/decodes every Kafka request/response version of the pinned upstream release; byte-equal with the JVM client across a differential corpus.           | Low       |
+| 2   | Client foundation                     | `krabka-client-core`                      | 1          | Connection management, broker discovery, API-version negotiation, request dispatch. No producer/consumer semantics yet.                                     | Medium    |
+| 3   | Storage / log layer                   | `krabka-log`                              | —          | Read/write existing Kafka on-disk format byte-compatibly: segments, offset/time indexes, record batch v2, retention, compaction. Verified via JVM log dirs. | High      |
+| 4   | Single-node broker MVP                | `krabka-broker`                           | 1, 3       | Produce/fetch/metadata/api-versions over TCP. Single node, no replication, no groups, no auth. JVM clients can produce and consume.                         | High      |
+| 5   | Consumer groups + coordinator         | `krabka-broker`, `krabka-client-consumer` | 4          | Classic rebalance first, then KIP-848. Offset commits to `__consumer_offsets`.                                                                              | High      |
+| 6   | Producer client                       | `krabka-client-producer`                  | 2          | Idempotent producer; batching, compression, partitioner. No transactions yet.                                                                               | Medium    |
+| 7   | KRaft / metadata quorum               | `krabka-raft`, `krabka-metadata`          | 1, 3       | Raft log, snapshots, metadata records, controller election. Replaces ZooKeeper entirely (Kafka 4.x is KRaft-only).                                          | Very high |
+| 8   | Replication + ISR                     | `krabka-broker`                           | 4, 7       | Multi-broker clusters; per-partition leader election; ISR; follower fetch.                                                                                  | Very high |
+| 9   | Transactions                          | `krabka-broker`, `krabka-client-producer` | 5, 8       | Transactional producer, transaction coordinator, exactly-once. Includes in-flight KIP-1319 work.                                                            | High      |
+| 10  | Admin API + tooling                   | `krabka-client-admin`, `krabka-cli`       | 4–9        | All CreateTopics/DescribeConfigs/AlterConfigs/ACLs/quotas. CLI parity with `kafka-*.sh`.                                                                    | Medium    |
+| 11  | Auth / security                       | `krabka-security`                         | 2, 4       | SASL (PLAIN, SCRAM, GSSAPI, OAUTHBEARER), TLS, delegation tokens, authorizer interface.                                                                     | Med-high  |
+| 12  | Tiered storage                        | `krabka-tiered-storage`                   | 3, 8       | KIP-405. Pluggable remote storage manager; S3 reference impl.                                                                                               | High      |
+| 13  | Share groups                          | `krabka-broker`                           | 5, 8       | KIP-932 queue-style consumption.                                                                                                                            | Medium    |
+| 14  | Streams equivalent (separate product) | `krabka-streams-*` (own repo)             | 5, 6       | Processor API + DSL, state stores (RocksDB or sled), exactly-once. Own meta-spec when started.                                                              | Very high |
+| 15  | Connect equivalent (separate product) | `krabka-connect-*` (own repo)             | 10         | Distributed runtime, REST API, plugin isolation. Own meta-spec when started.                                                                                | Very high |
 
 ### Notes on ordering
 
@@ -187,10 +187,10 @@ the same approach widely used by `prost-build` consumers.
    - `borrowed::FooRequest<'a>` — fields are `&'a [u8]`, `&'a str`,
      `Cow<'a, [T]>` or borrowed slices, with `'a` propagated through
      nested structs.
-   Both flavors implement the same `Encode`/`Decode` traits. A
-   `to_owned()` method on the borrowed flavor produces the owned one. No
-   `as_borrowed()` is provided on the owned flavor (it cannot be done
-   without re-encoding); this trade-off is documented in rustdoc.
+     Both flavors implement the same `Encode`/`Decode` traits. A
+     `to_owned()` method on the borrowed flavor produces the owned one. No
+     `as_borrowed()` is provided on the owned flavor (it cannot be done
+     without re-encoding); this trade-off is documented in rustdoc.
 5. **Emit version dispatch.** For each API key, generate a `RequestKind`
    / `ResponseKind` enum keyed on version that returns the right concrete
    struct. Version negotiation lives in `api_versions.rs`.
@@ -250,7 +250,7 @@ pub fn write_frame<B: BufMut>(buf: &mut B, frame: &impl Encode, version: i16)
   in `rust-toolchain.toml`.
 - **Compression deps:** none (see above).
 - **Error model:** one `ProtocolError` enum, `#[non_exhaustive]`,
-  `thiserror`-derived. Decoded `errorCode` fields on responses are *not*
+  `thiserror`-derived. Decoded `errorCode` fields on responses are _not_
   surfaced as `Result`s — they are plain `i16`, because responses are
   valid wire messages even when they indicate a Kafka-level error.
 - **Stability:** pre-1.0 until slice 2 has shipped and shaken out the
@@ -360,14 +360,14 @@ release:
 
 ## Risks and mitigations
 
-| Risk                                                                           | Mitigation                                                                                                                          |
-|--------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------|
-| Upstream schema features the generator does not understand produce wrong code. | Generator validates the IR; unknown constructs are hard errors, not skipped.                                                        |
-| The two flavors drift in correctness.                                          | Proptest layer 2 includes cross-flavor encode equality; differential layer 3 runs against both flavors independently.               |
-| Subtle KIP-482 tagged-field edge cases (unknown tags, ordering).               | Explicit proptest invariants plus differential cases that inject unknown tags.                                                      |
-| Generated code bloat hurting compile times.                                    | Committed snapshot + `build.rs` short-circuit; per-message modules so `cargo` can parallelize.                                      |
-| Schemas evolve faster than re-vendoring.                                       | `tools/sync-schemas.sh` plus a CI job that diffs upstream weekly and opens an issue when drift exceeds a threshold.                 |
-| JVM oracle becomes a maintenance burden.                                       | Keep it ~200 LOC. Single class. Build via the Gradle wrapper; no transitive dep management.                                         |
+| Risk                                                                           | Mitigation                                                                                                            |
+| ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| Upstream schema features the generator does not understand produce wrong code. | Generator validates the IR; unknown constructs are hard errors, not skipped.                                          |
+| The two flavors drift in correctness.                                          | Proptest layer 2 includes cross-flavor encode equality; differential layer 3 runs against both flavors independently. |
+| Subtle KIP-482 tagged-field edge cases (unknown tags, ordering).               | Explicit proptest invariants plus differential cases that inject unknown tags.                                        |
+| Generated code bloat hurting compile times.                                    | Committed snapshot + `build.rs` short-circuit; per-message modules so `cargo` can parallelize.                        |
+| Schemas evolve faster than re-vendoring.                                       | `tools/sync-schemas.sh` plus a CI job that diffs upstream weekly and opens an issue when drift exceeds a threshold.   |
+| JVM oracle becomes a maintenance burden.                                       | Keep it ~200 LOC. Single class. Build via the Gradle wrapper; no transitive dep management.                           |
 
 ## Open questions deferred to the implementation plan
 

@@ -1,6 +1,8 @@
 use std::{sync::Arc, time::Duration};
 
 use assert2::assert;
+use http::Method;
+use k8s_openapi::apimachinery::pkg::apis::meta::v1::Time;
 use krabka_gres_control::{
     RangeBoundary, RangeLayoutEntry, SqlUser, TenantId, TenantName, TenantRecord, TenantState,
 };
@@ -13,8 +15,6 @@ use krabka_operator::{
     },
 };
 use krabka_security::scram::PgScramVerifier;
-use http::Method;
-use k8s_openapi::apimachinery::pkg::apis::meta::v1::Time;
 use kube::runtime::controller::Action;
 use tokio::sync::Mutex;
 

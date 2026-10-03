@@ -49,6 +49,7 @@
 Mirror `V1PartitionDirAssignment` (the existing carrier-delta record) at every site.
 
 **Files:**
+
 - Modify: `crates/metadata/src/records.rs`, `crates/metadata/src/lib.rs`, `crates/metadata/src/image.rs`
 
 - [ ] **Step 1: Write the failing apply test**
@@ -112,6 +113,7 @@ In `crates/metadata/src/lib.rs`, add `PartitionOffsetAdvanceRecord` to the `pub 
 - [ ] **Step 5: Add the image field, init, accessor, and apply arm**
 
 In `crates/metadata/src/image.rs`:
+
 - Add the field to the `MetadataImage` struct (`:85-111`): `partition_next_offsets: HashMap<(String, i32), i64>,`
 - Initialize it in `MetadataImage::new` (`:120-142`): `partition_next_offsets: HashMap::new(),`
 - Add an accessor mirroring `partition()` (`:175-177`):
@@ -126,6 +128,7 @@ In `crates/metadata/src/image.rs`:
             .copied()
     }
 ```
+
 - Add the `apply` arm (`:470-658`, next to the `V1PartitionDirAssignment` arm at `:648-657`):
 
 ```rust
@@ -138,6 +141,7 @@ In `crates/metadata/src/image.rs`:
                     .or_insert(0) += r.count;
             }
 ```
+
 - Add the `record_variant` arm (`:60-83`): `MetadataRecord::V1PartitionOffsetAdvance(_) => "V1PartitionOffsetAdvance",`
 - Add `V1PartitionOffsetAdvance` to the `validate` no-topic-store catch-all `|`-list (`:892-931`) so it validates as `Ok(())` (no pre-check needed — the delta is always applicable).
 
@@ -160,6 +164,7 @@ git commit -m "feat(metadata): add V1PartitionOffsetAdvance delta record + apply
 Carry the record verbatim through the KIP-631 `Unknown` envelope (apiKey `1003`) so it decodes back to the same delta, and emit it from `to_records` so it survives snapshots.
 
 **Files:**
+
 - Modify: `crates/metadata/src/kraft_translate.rs`, `crates/metadata/src/image.rs`
 
 - [ ] **Step 1: Write the failing round-trip tests**
@@ -203,6 +208,7 @@ Expected: FAIL — no carrier arm / no snapshot emit.
 - [ ] **Step 3: Add the carrier encode + apiKey + decode guard**
 
 In `crates/metadata/src/kraft_translate.rs`:
+
 - Add the apiKey constant next to the others (`:661-665`):
 
 ```rust
@@ -210,6 +216,7 @@ In `crates/metadata/src/kraft_translate.rs`:
 /// per-partition increment on apply (never a full-record replace).
 const PRIVATE_PARTITION_OFFSET_ADVANCE_KEY: u32 = 1003;
 ```
+
 - Add the encode arm in `to_kraft_iter` next to the dir-assignment arm (`:643-645`):
 
 ```rust
@@ -217,6 +224,7 @@ const PRIVATE_PARTITION_OFFSET_ADVANCE_KEY: u32 = 1003;
             vec![wincode_carrier(rec, PRIVATE_PARTITION_OFFSET_ADVANCE_KEY)?]
         }
 ```
+
 - Extend the decode guard's `||` list (`:895-898`):
 
 ```rust
@@ -266,6 +274,7 @@ git commit -m "feat(metadata): carrier + snapshot round-trip for V1PartitionOffs
 ## Task 3: `Log::append_verbatim_at` — CRC-safe stamp at a supplied base
 
 **Files:**
+
 - Modify: `crates/log/src/log.rs`
 
 - [ ] **Step 1: Write the failing tests**
@@ -354,6 +363,7 @@ git commit -m "feat(log): add Log::append_verbatim_at (sequencer base, CRC-safe,
 ## Task 4: `OffsetSequencer` seam + `ControllerSequencer`
 
 **Files:**
+
 - Create: `crates/broker/src/wal/offset_sequencer.rs`
 - Modify: `crates/broker/src/wal/mod.rs`
 
@@ -465,6 +475,7 @@ impl OffsetSequencer for ControllerSequencer {
 ```
 
 Implementer notes:
+
 - Replace the two placeholder types with the concrete broker handles: `ControllerHandle` is whatever `submit_change` is called through (`crates/raft/src/controller.rs:230` `Controller::submit_change`, or the broker's wrapper); `ImageHandle::current()` returns the latest `Arc<MetadataImage>` — use the exact accessor `process_partition` uses for the leadership gate (`grep -n "image" crates/broker/src/handlers/produce.rs` around `:459-476`). Both are already available at partition construction.
 - `BrokerError::from(RaftError)` — add the `From` impl if absent (small).
 
@@ -487,6 +498,7 @@ git commit -m "feat(broker): OffsetSequencer seam + ControllerSequencer (commit 
 Evolve the Slice-1 diskless branch: assign a range from the sequencer per group, then append each batch at the assigned base via `append_verbatim_at` (instead of the Slice-1 local-LEO append). Then Slice-1's fsync + `recompute_hw_for_wal_durable` run unchanged.
 
 **Files:**
+
 - Modify: `crates/broker/src/partition_writer.rs`
 - Modify: `crates/broker/src/partition.rs`
 
@@ -592,11 +604,13 @@ git commit -m "feat(broker): diskless writer sources offsets from the KRaft sequ
 ## Task 6: Stateright — gap-free / monotonic / unique proof
 
 **Files:**
+
 - Modify: `crates/broker/src/data_path_model.rs`
 
 - [ ] **Step 1: Add the sequencer ghost + Assign action + property**
 
 Extend the model (or add a focused sibling model in the same file) with, for a diskless config:
+
 - state: `seq_next: i64` (committed next-offset) and `assigned: Vec<(i64, i64)>` (ghost: each assigned `(base, count)`).
 - action `Assign(count)` (offered in diskless mode, bounded by `MAX_LEN`): record `assigned.push((seq_next, count)); seq_next += count;` then the local append writes those offsets.
 - property `Property::always("offsets_contiguous_and_unique", …)` asserting the flattened assigned offset ranges form exactly `0..seq_next` with no gap, no overlap, strictly increasing (and each equals the local log position it landed at — the `append_verbatim_at` guard).
@@ -640,6 +654,7 @@ git commit -m "test(broker): stateright gap-free/monotonic/unique offset proof (
 ## Self-Review
 
 **1. Spec coverage:**
+
 - `OffsetSequencer` seam + `ControllerSequencer` (local submit + read-after-commit) → Task 4. ✅
 - `V1PartitionOffsetAdvance` delta record + carrier + snapshot → Tasks 1-2. ✅
 - `Log::append_verbatim_at` (CRC-safe, LEO guard = gap-free witness) → Task 3. ✅

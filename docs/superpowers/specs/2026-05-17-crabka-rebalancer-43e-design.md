@@ -83,6 +83,7 @@ pub partition_disk_bytes: Family<PartitionLabel, Gauge>,
 ```
 
 Metric names emitted by `prometheus-client`:
+
 - `krabka_broker_partition_bytes_in_total{topic="...", partition="0"}`
 - `krabka_broker_partition_bytes_out_total{topic="...", partition="0"}`
 - `krabka_broker_partition_disk_bytes{topic="...", partition="0"}`
@@ -127,6 +128,7 @@ disk_scanner/
 `scan::sum_partition_dir(path: &Path) -> Result<u64, io::Error>`: reads the directory entry, sums the size of every regular file. Pure-logic, easily unit-tested with a tempdir.
 
 `DiskScanner::run(self)`:
+
 1. `tokio::time::interval(self.interval)` tick loop.
 2. Per tick: read the log manager's `partition_dirs() -> impl Iterator<Item=(PartitionLabel, PathBuf)>` (a new accessor on the existing log manager). For each entry, `sum_partition_dir(path)`, set `metrics.partition_disk_bytes.get_or_create(&label).set(bytes as i64)`.
 3. Errors: `warn!` with topic/partition + the io error, skip that partition, continue the tick.
@@ -182,6 +184,7 @@ pub enum MetricKind {
 ```
 
 Implementation: line-oriented. Skip `#` comments + blank lines. For each metric line, match the metric name prefix against the three known families:
+
 - `krabka_broker_partition_bytes_in_total` → `BytesIn`
 - `krabka_broker_partition_bytes_out_total` → `BytesOut`
 - `krabka_broker_partition_disk_bytes` → `DiskBytes`
@@ -232,6 +235,7 @@ pub enum Window { FiveMin, OneHour, TwelveHour }
 ```
 
 **API:**
+
 - `UsageStore::new(config: WindowConfig) -> Self`
 - `UsageStore::default() -> Self` — empty, default config (30s scrape / 12h retention)
 - `UsageStore::insert(&self, broker_id: i32, samples: Vec<ParsedSample>, at_ms: i64)` — bulk-insert one scrape's worth. Drops samples older than `retention`. Single write lock.
@@ -240,6 +244,7 @@ pub enum Window { FiveMin, OneHour, TwelveHour }
 - `UsageStore::disk_bytes_avg(broker_id, topic, partition, window) -> Option<f64>` — arithmetic average of gauge samples within window.
 
 Window length lookup:
+
 - `FiveMin` → `Duration::from_secs(300)`
 - `OneHour` → `Duration::from_secs(3600)`
 - `TwelveHour` → `Duration::from_secs(43200)`
@@ -308,6 +313,7 @@ Default = empty `UsageStore::default()`. Threaded into the goals via the existin
 15 goals total:
 
 Hard (unchanged order; some now have real bodies):
+
 1. `PreferredLeaderIdempotency`
 2. `RackAware`
 3. `ReplicaCapacity`
@@ -316,15 +322,7 @@ Hard (unchanged order; some now have real bodies):
 6. `NetworkOutCapacity` (functional now)
 7. `CpuCapacity` (still stub)
 
-Soft (extended with four new):
-8. `ReplicaDistribution`
-9. `LeaderDistribution`
-10. `TopicReplicaDistribution`
-11. `MinTopicLeadersPerBroker`
-12. `DiskUsage` *(new)*
-13. `LeaderBytesIn` *(new)*
-14. `NetworkInUsage` *(new)*
-15. `NetworkOutUsage` *(new)*
+Soft (extended with four new): 8. `ReplicaDistribution` 9. `LeaderDistribution` 10. `TopicReplicaDistribution` 11. `MinTopicLeadersPerBroker` 12. `DiskUsage` _(new)_ 13. `LeaderBytesIn` _(new)_ 14. `NetworkInUsage` _(new)_ 15. `NetworkOutUsage` _(new)_
 
 ### Binary entry
 
@@ -429,7 +427,7 @@ metricsRetentionSecs: 43200
 - **Counter reset detection.** A broker restart resets counters to 0. The naive `(latest - earliest) / dt` rate computation will produce a huge negative value when the latest reading is post-reset. Defensive: if `latest < earliest`, treat as a counter reset and return `None` (no rate signal until two post-reset samples accumulate). Document in `window.rs`.
 - **OpenMetrics text format quirks.** Our parser handles only what `prometheus-client` actually emits. Don't claim general OpenMetrics support; document it as scoped to the three known metric names.
 - **`partition_dirs()` accessor on log manager.** The existing log manager may not expose this; T3 needs to add a small public accessor. Verify during T3 — if the accessor isn't easy to add, fall back to the broker config's `log_dir` + reading `<log_dir>/<topic>-<partition>/` directly.
-- **`is_satisfied_with_ctx` correctness vs. tentative state.** The optimizer applies the tentative movement to a clone of the state before calling `is_satisfied_with_ctx`. Capacity goals consult `ctx.broker_usages` for current rates — but the *tentative* state has moved a replica, while the usages store is unchanged. So the check uses fresh placement + stale usage. That's fine for the first usage-driven proposal (operator-supplied placement causes usage to flow); subsequent proposals would benefit from usage re-estimation, deferred.
+- **`is_satisfied_with_ctx` correctness vs. tentative state.** The optimizer applies the tentative movement to a clone of the state before calling `is_satisfied_with_ctx`. Capacity goals consult `ctx.broker_usages` for current rates — but the _tentative_ state has moved a replica, while the usages store is unchanged. So the check uses fresh placement + stale usage. That's fine for the first usage-driven proposal (operator-supplied placement causes usage to flow); subsequent proposals would benefit from usage re-estimation, deferred.
 
 ## Acceptance criteria
 

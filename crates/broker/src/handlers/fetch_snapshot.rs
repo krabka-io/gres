@@ -16,6 +16,7 @@
 //! match this cluster gets a top-level `INCONSISTENT_CLUSTER_ID` (104).
 
 use bytes::Bytes;
+use futures_util::future::BoxFuture;
 use krabka_protocol::{
     Decode,
     owned::{
@@ -27,7 +28,6 @@ use krabka_protocol::{
     records::RecordsPayload,
 };
 use krabka_raft::SnapshotRange;
-use futures_util::future::BoxFuture;
 
 use crate::{broker::Broker, codes, error::BrokerError};
 

@@ -1,9 +1,9 @@
 //! Broker API dispatch registry.
 
 use bytes::Bytes;
+use futures_util::future::BoxFuture;
 use krabka_protocol::api_key::ApiKey;
 use krabka_units::convert::TimeExt as _;
-use futures_util::future::BoxFuture;
 
 use crate::{
     broker::Broker,

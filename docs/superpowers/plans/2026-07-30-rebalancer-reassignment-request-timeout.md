@@ -24,11 +24,13 @@
 ### Task 1: Validate and frame reassignment request timeout
 
 **Files:**
+
 - Modify: `crates/rebalancer/Cargo.toml`
 - Modify: `crates/rebalancer/src/executor/client_impl.rs`
 - Modify: `Cargo.lock`
 
 **Interfaces:**
+
 - Produces: `DEFAULT_REASSIGNMENT_REQUEST_TIMEOUT: Time`
 - Produces: `ReassignmentRequestTimeout::new(Time) -> Result<Self, String>`
 - Produces: `ReassignmentRequestTimeout::time(self) -> Time`
@@ -172,10 +174,12 @@ Expected: all focused tests pass.
 ### Task 2: Expose the timeout through CLI and environment
 
 **Files:**
+
 - Modify: `crates/rebalancer/Cargo.toml`
 - Modify: `crates/rebalancer/src/bin/rebalancer.rs`
 
 **Interfaces:**
+
 - Consumes: `ReassignmentRequestTimeout`
 - Produces: `--reassignment-request-timeout`
 - Produces: `KRABKA_REBALANCER_REASSIGNMENT_REQUEST_TIMEOUT`
@@ -316,12 +320,14 @@ Expected: parser, validation, and existing binary tests pass.
 ### Task 3: Wire the Helm override and close the audit slice
 
 **Files:**
+
 - Modify: `charts/krabka-rebalancer/values.yaml`
 - Modify: `charts/krabka-rebalancer/templates/deployment.yaml`
 - Modify: `charts/krabka-rebalancer/tests/deployment_test.yaml`
 - Modify: `docs/configuration-audit.md`
 
 **Interfaces:**
+
 - Produces: Helm value `reassignmentRequestTimeout`
 - Produces: pod environment variable `KRABKA_REBALANCER_REASSIGNMENT_REQUEST_TIMEOUT`
 
@@ -330,15 +336,15 @@ Expected: parser, validation, and existing binary tests pass.
 Add:
 
 ```yaml
-  - it: passes reassignment request timeout as a human duration
-    set:
-      reassignmentRequestTimeout: 37ms
-    asserts:
-      - contains:
-          path: spec.template.spec.containers[0].env
-          content:
-            name: KRABKA_REBALANCER_REASSIGNMENT_REQUEST_TIMEOUT
-            value: 37ms
+- it: passes reassignment request timeout as a human duration
+  set:
+    reassignmentRequestTimeout: 37ms
+  asserts:
+    - contains:
+        path: spec.template.spec.containers[0].env
+        content:
+          name: KRABKA_REBALANCER_REASSIGNMENT_REQUEST_TIMEOUT
+          value: 37ms
 ```
 
 - [x] **Step 2: Run the RED gate**
@@ -356,7 +362,7 @@ and render:
 
 ```yaml
 - name: KRABKA_REBALANCER_REASSIGNMENT_REQUEST_TIMEOUT
-  value: {{ .Values.reassignmentRequestTimeout | quote }}
+  value: { { .Values.reassignmentRequestTimeout | quote } }
 ```
 
 - [x] **Step 4: Update audit evidence**

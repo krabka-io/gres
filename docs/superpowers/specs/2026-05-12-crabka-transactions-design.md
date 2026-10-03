@@ -40,13 +40,13 @@ slice-8 follow-ups ship.
 
 ## Crate layout
 
-| Crate | Status | Responsibility |
-|---|---|---|
-| `krabka-broker` | modified + new modules | Transaction coordinator, `__transaction_state` bootstrap, 6 new wire handlers + extensions, control markers, LSO tracking, per-segment aborted-txn index, Fetch `isolation_level=read_committed` filtering. |
-| `krabka-client-producer` | modified | bon-builder gains `transactional_id` + `transaction_timeout`. `Producer` gains `init_transactions` / `begin_transaction` / `commit_transaction` / `abort_transaction` / `send_offsets_to_transaction`. Tags transactional records and drives the v2 protocol. |
-| `krabka-client-consumer` | modified, minor | bon-builder gains `isolation_level: IsolationLevel`. Threads it into Fetch requests. Default is `ReadUncommitted` (preserves slice-5 behavior). |
-| `krabka-log` | modified, minor | Per-segment `.txnindex` reader + writer. `Log::append` reads `is_transactional`/`is_control` attribute bits on incoming batches and updates the index + LSO. |
-| `krabka-metadata` | unchanged | Coordinator state lives in `__transaction_state` (a regular replicated topic), NOT in the openraft metadata image — same pattern as slice-5's `__consumer_offsets`. |
+| Crate                    | Status                 | Responsibility                                                                                                                                                                                                                                                |
+| ------------------------ | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `krabka-broker`          | modified + new modules | Transaction coordinator, `__transaction_state` bootstrap, 6 new wire handlers + extensions, control markers, LSO tracking, per-segment aborted-txn index, Fetch `isolation_level=read_committed` filtering.                                                   |
+| `krabka-client-producer` | modified               | bon-builder gains `transactional_id` + `transaction_timeout`. `Producer` gains `init_transactions` / `begin_transaction` / `commit_transaction` / `abort_transaction` / `send_offsets_to_transaction`. Tags transactional records and drives the v2 protocol. |
+| `krabka-client-consumer` | modified, minor        | bon-builder gains `isolation_level: IsolationLevel`. Threads it into Fetch requests. Default is `ReadUncommitted` (preserves slice-5 behavior).                                                                                                               |
+| `krabka-log`             | modified, minor        | Per-segment `.txnindex` reader + writer. `Log::append` reads `is_transactional`/`is_control` attribute bits on incoming batches and updates the index + LSO.                                                                                                  |
+| `krabka-metadata`        | unchanged              | Coordinator state lives in `__transaction_state` (a regular replicated topic), NOT in the openraft metadata image — same pattern as slice-5's `__consumer_offsets`.                                                                                           |
 
 ## Architecture
 
@@ -120,15 +120,15 @@ slice-8 follow-ups ship.
 
 ### Wire api keys (KIP-1319 v2 versions)
 
-| api_key | Handler | Status | Notes |
-|---|---|---|---|
-| 10 | `FindCoordinator` v6+ | modified | Existing slice-5 handler; extend with `key_type=TRANSACTION (1)`. Slice 5 only handled `key_type=GROUP (0)`. |
-| 22 | `InitProducerId` v5+ | modified | Slice-6 stub currently rejects transactional ids with `TRANSACTIONAL_ID_AUTHORIZATION_FAILED (67)`. Replace with real routing to `TxnCoordinator`. |
-| 24 | `AddPartitionsToTxn` v5+ | **new** | Producer registers partitions about to be written to. Under v2 the broker can auto-call this on first transactional Produce. |
-| 25 | `AddOffsetCommitsToTxn` v4+ | **new** | Producer registers a consumer group whose offsets it intends to commit transactionally. |
-| 26 | `EndTxn` v5+ | **new** | Commit or abort the in-flight transaction. |
-| 27 | `WriteTxnMarkers` v1+ | **new** | Inter-broker RPC: the coordinator pushes control markers to every involved partition leader. |
-| 28 | `TxnOffsetCommit` v4+ | **new** | Like `OffsetCommit` but within a transaction; goes through the group coordinator + ties into the txn coordinator via `AddOffsetCommitsToTxn`. |
+| api_key | Handler                     | Status   | Notes                                                                                                                                              |
+| ------- | --------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 10      | `FindCoordinator` v6+       | modified | Existing slice-5 handler; extend with `key_type=TRANSACTION (1)`. Slice 5 only handled `key_type=GROUP (0)`.                                       |
+| 22      | `InitProducerId` v5+        | modified | Slice-6 stub currently rejects transactional ids with `TRANSACTIONAL_ID_AUTHORIZATION_FAILED (67)`. Replace with real routing to `TxnCoordinator`. |
+| 24      | `AddPartitionsToTxn` v5+    | **new**  | Producer registers partitions about to be written to. Under v2 the broker can auto-call this on first transactional Produce.                       |
+| 25      | `AddOffsetCommitsToTxn` v4+ | **new**  | Producer registers a consumer group whose offsets it intends to commit transactionally.                                                            |
+| 26      | `EndTxn` v5+                | **new**  | Commit or abort the in-flight transaction.                                                                                                         |
+| 27      | `WriteTxnMarkers` v1+       | **new**  | Inter-broker RPC: the coordinator pushes control markers to every involved partition leader.                                                       |
+| 28      | `TxnOffsetCommit` v4+       | **new**  | Like `OffsetCommit` but within a transaction; goes through the group coordinator + ties into the txn coordinator via `AddOffsetCommitsToTxn`.      |
 
 ### `txn::coordinator::TxnCoordinator`
 
@@ -230,7 +230,7 @@ whose transaction this marker terminates.
 - `0` (`read_uncommitted`, default): existing slice-8 path; serve
   batches up to `log_end_offset`.
 - `1` (`read_committed`): clamp the response window to `[fetch_offset,
-  lso())`. Consult the per-segment `.txnindex` to mark aborted batches
+lso())`. Consult the per-segment `.txnindex` to mark aborted batches
   for filtering (the response can include batches the client must
   skip; the wire field `aborted_transactions` carries the
   `.txnindex` entries within the response window).
@@ -443,7 +443,7 @@ standard wire codes above.
   transition + every rejected invalid transition.
 - `txn::coordinator::tests::murmur2_partition_assignment` — verify
   tid → partition matches a known JVM-computed table (`hash("my-tid")
-  % 50 == 12`, etc.).
+% 50 == 12`, etc.).
 - `txn::marker::tests::commit_marker_byte_compat` — encoded marker
   bytes match an Apache Kafka–generated fixture (captured via
   `kafka-dump-log` on a JVM-produced control batch).
@@ -478,10 +478,10 @@ Single-broker (single-voter quorum), gated
 slice-8 to dodge TIME_WAIT).
 
 1. `kafka-topics --create --topic <T> --partitions 1
-   --replication-factor 1`. Let `__transaction_state` auto-create on
+--replication-factor 1`. Let `__transaction_state` auto-create on
    first FindCoordinator.
 2. Run a `kafka-verifiable-producer --transactional-id eos-tid
-   --transaction-duration-ms 100 --num-records 6` (sends 6 records
+--transaction-duration-ms 100 --num-records 6` (sends 6 records
    inside committed txns); follow with a second invocation that
    aborts (`--abort-transactions`).
 3. If `kafka-verifiable-producer` doesn't expose the right knobs,
@@ -489,10 +489,10 @@ slice-8 to dodge TIME_WAIT).
    uses the `KafkaProducer.beginTransaction` /
    `commitTransaction` / `abortTransaction` API directly.
 4. `kafka-console-consumer --isolation-level read_committed
-   --max-messages 6` → asserts exactly the 6 committed records,
+--max-messages 6` → asserts exactly the 6 committed records,
    none of the aborted ones.
 5. `kafka-console-consumer --isolation-level read_uncommitted
-   --max-messages 8` → asserts all 8 records (6 committed + 2
+--max-messages 8` → asserts all 8 records (6 committed + 2
    aborted) appear in stream.
 
 ## Acceptance gate
@@ -515,26 +515,26 @@ Slice 9 is shippable when:
 - **`__transaction_state` consistency under leader change.** The
   coordinator stores per-tid state in this topic; a failover before a
   marker write completes leaves a follower with stale state.
-  *Mitigation:* slice-9 always reads-then-writes within the same
+  _Mitigation:_ slice-9 always reads-then-writes within the same
   coordinator's lifetime; a leader failover restarts the txn (producer
   sees `CONCURRENT_TRANSACTIONS` and retries via `init_transactions`).
   True hardening requires slice-8's leader-election follow-up.
 - **`WriteTxnMarkers` partial failure across partitions.** EndTxn
   dispatches markers to N partitions; if one fails, the txn is
-  half-marked. *Mitigation:* coordinator retries marker writes
+  half-marked. _Mitigation:_ coordinator retries marker writes
   indefinitely with backoff; if a partition is permanently
   unreachable, the txn stays in `PrepareCommit`/`PrepareAbort`. A
   future slice adds an operator escape hatch.
 - **KIP-1319 v2 producer-epoch-per-transaction protocol fidelity.**
   The KIP's epoch-bump-on-every-init behavior is subtle.
-  *Mitigation:* Layer-1 unit tests against a hand-curated
+  _Mitigation:_ Layer-1 unit tests against a hand-curated
   state-transition table; Layer-3 acceptance against the JVM client
   verifies wire-compat with real Apache Kafka logic.
 - **`.txnindex` byte-compat.** The format isn't formally specified;
-  we reverse-engineer from the JVM's on-disk shape. *Mitigation:* the
+  we reverse-engineer from the JVM's on-disk shape. _Mitigation:_ the
   JVM acceptance test indirectly verifies — if our `.txnindex` is
   wrong, aborted records leak through to `kafka-console-consumer
-  --isolation-level read_committed`.
+--isolation-level read_committed`.
 
 ## Next step after this spec
 

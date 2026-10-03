@@ -40,6 +40,7 @@ Tempo /api/push ─┘                                                          
 ## Dependency & slice roadmap
 
 **Depends on (consume exactly — do not re-implement):**
+
 - **`krabka-blockstore` (slice-1 generalized)** — `BlockStore`, `BlockWriter::new(store: Arc<dyn object_store::ObjectStore>)` + `BlockWriter::write_block(tenant:&str, object_key:&str, schema:SchemaRef, batches:&[RecordBatch]) -> Result<BlockMeta>`, `BlockMeta`, the **`TraceIndex`** impl (`BlockIndex`) with `add_trace_block`/`add_tags`/`save`, and the **span block schema builder** `span_block_schema() -> SchemaRef` + column-name constants (`SCOL_TRACE_ID`, `SCOL_SPAN_ID`, `SCOL_PARENT_SPAN_ID`, `SCOL_NESTED_SET_LEFT`, `SCOL_NESTED_SET_RIGHT`, `SCOL_PARENT_ID`, `SCOL_NAME`, `SCOL_KIND`, `SCOL_START_NANO`, `SCOL_DURATION_NANOS`, `SCOL_STATUS_CODE`, `SCOL_ROOT_SERVICE_NAME`, `SCOL_ROOT_SPAN_NAME`, …). **Verify the exact `TraceIndex` + span-schema API against the slice-1 traces plan (`docs/superpowers/plans/2026-06-18-krabka-traces-slice1-blockstore.md`) before consuming; if a name differs, align to it.** `Labels`/`LabelMatcher`/`MatchOp` remain available.
 - **`krabka-client-producer`** — `Producer::builder().bootstrap(..).build().await? -> Result<Producer, ProducerError>`; `Producer::send(ProducerRecord) -> impl Future<Output = oneshot::Receiver<Result<RecordMetadata, ProducerError>>>` (the call is `async`; await it, then await the returned `oneshot::Receiver` for the ack: `producer.send(rec).await.await??`); `ProducerRecord { topic:String, partition:Option<i32>, key:Option<Bytes>, value:Option<Bytes>, headers:Vec<Header>, timestamp_ms:Option<i64> }` (`Default`); `Producer::flush()`. **The producer hashes `key` with MurmurHash2 to choose a partition** — set `key` = the trace-id partition key and leave `partition: None`. (Verified against `crates/client-producer/src/{record,producer}.rs`.)
 - **`krabka-client-consumer`** — `Consumer::builder().bootstrap(..).group_id(..).subscribe([..]).auto_offset_reset(AutoOffsetReset::Earliest).build().await?`; `Consumer::poll(Duration) -> Result<Vec<ConsumerRecord>, ConsumerError>`; `Consumer::commit_sync() -> Result<(), ConsumerError>`; `ConsumerRecord { topic, partition:i32, offset:i64, key:Option<Bytes>, value:Option<Bytes>, .. }`. (Verified against `crates/client-consumer/src/{consumer,poll,commit}.rs`.)
@@ -49,30 +50,31 @@ Tempo /api/push ─┘                                                          
 **THIS slice defines (Slices 5/6/7 consume):** `SpanRecord` + `Span` (Tasks 3, 5) — the WAL topic record and the internal span model. `TRACES_WAL_TOPIC = "__krabka_traces_wal"`. `partition_key(trace_id: &[u8;16]) -> Bytes`. The block-builder's `span_batch(spans) -> RecordBatch` and `assign_nested_set(spans) -> Vec<NestedSet>`. The live-store's `LiveStore` (`MemTable` provider + offset rebuild).
 
 **The 8 traces slices** (this plan = Slice 4):
-1. Blockstore generalization + span schema + `TraceIndex`. 2. `krabka-traceql` core. 3. TraceQL completeness. **4. Ingest service *(this plan)*.** 5. Querier + Tempo HTTP API. 6. Query-frontend. 7. Metrics-generator. 8. Hardening.
+
+1. Blockstore generalization + span schema + `TraceIndex`. 2. `krabka-traceql` core. 3. TraceQL completeness. **4. Ingest service _(this plan)_.** 5. Querier + Tempo HTTP API. 6. Query-frontend. 7. Metrics-generator. 8. Hardening.
 
 ---
 
 ## File structure (`crates/traces/`)
 
-| File | Responsibility |
-|---|---|
-| `Cargo.toml` | crate manifest; ingest + blockstore + client deps; `opentelemetry-proto` with `trace` feature |
-| `src/lib.rs` | module decls + public re-exports + crate docs |
-| `src/error.rs` | `TracesError` + per-edge status-code mapping |
-| `src/span/mod.rs` | internal `Span`, `SpanKind`, `StatusCode`, `KeyValue`, `EventRecord`, `LinkRecord` |
-| `src/span/nested_set.rs` | `assign_nested_set` — DFS pre-order → `nested_set_left/right/parent_id` |
-| `src/span/batch.rs` | `span_batch(&[Span]) -> RecordBatch` over the slice-1 span schema |
-| `src/wire/mod.rs` | `WireFormat`, content negotiation, `WireError` + status codes |
-| `src/wire/otlp.rs` | OTLP `TracesData` → `Vec<Span>` |
-| `src/wire/zipkin.rs` | Zipkin v2 JSON `/api/v2/spans` → `Vec<Span>` |
-| `src/wire/jaeger.rs` | Jaeger Thrift `Batch` + gRPC `PostSpansRequest` → `Vec<Span>` |
-| `src/wal.rs` | `SpanRecord`, `TRACES_WAL_TOPIC`, `partition_key`, encode/decode |
-| `src/distributor/mod.rs` | axum router (`/v1/traces`, `/api/v2/spans`, `/api/push`, Jaeger), serve, limits, produce |
-| `src/blockbuilder.rs` | consumer-group loop → group by trace_id over window → blocks → index → commit |
-| `src/livestore.rs` | consumer-group loop → in-memory recent traces → `MemTable`, rebuildable |
-| `src/bin/krabka-traces.rs` | `clap` role-selectable entrypoint (`--target`) |
-| `tests/ingest_roundtrip.rs` | end-to-end distributor → WAL → block-builder → block (in-process broker) |
+| File                        | Responsibility                                                                                |
+| --------------------------- | --------------------------------------------------------------------------------------------- |
+| `Cargo.toml`                | crate manifest; ingest + blockstore + client deps; `opentelemetry-proto` with `trace` feature |
+| `src/lib.rs`                | module decls + public re-exports + crate docs                                                 |
+| `src/error.rs`              | `TracesError` + per-edge status-code mapping                                                  |
+| `src/span/mod.rs`           | internal `Span`, `SpanKind`, `StatusCode`, `KeyValue`, `EventRecord`, `LinkRecord`            |
+| `src/span/nested_set.rs`    | `assign_nested_set` — DFS pre-order → `nested_set_left/right/parent_id`                       |
+| `src/span/batch.rs`         | `span_batch(&[Span]) -> RecordBatch` over the slice-1 span schema                             |
+| `src/wire/mod.rs`           | `WireFormat`, content negotiation, `WireError` + status codes                                 |
+| `src/wire/otlp.rs`          | OTLP `TracesData` → `Vec<Span>`                                                               |
+| `src/wire/zipkin.rs`        | Zipkin v2 JSON `/api/v2/spans` → `Vec<Span>`                                                  |
+| `src/wire/jaeger.rs`        | Jaeger Thrift `Batch` + gRPC `PostSpansRequest` → `Vec<Span>`                                 |
+| `src/wal.rs`                | `SpanRecord`, `TRACES_WAL_TOPIC`, `partition_key`, encode/decode                              |
+| `src/distributor/mod.rs`    | axum router (`/v1/traces`, `/api/v2/spans`, `/api/push`, Jaeger), serve, limits, produce      |
+| `src/blockbuilder.rs`       | consumer-group loop → group by trace_id over window → blocks → index → commit                 |
+| `src/livestore.rs`          | consumer-group loop → in-memory recent traces → `MemTable`, rebuildable                       |
+| `src/bin/krabka-traces.rs`  | `clap` role-selectable entrypoint (`--target`)                                                |
+| `tests/ingest_roundtrip.rs` | end-to-end distributor → WAL → block-builder → block (in-process broker)                      |
 
 Each file has one responsibility; `livestore.rs` and `blockbuilder.rs` are the only files that touch DataFusion / the blockstore writer, isolating the churn-prone surfaces.
 
@@ -81,12 +83,14 @@ Each file has one responsibility; `livestore.rs` and `blockbuilder.rs` are the o
 ### Task 1: Crate scaffold + dependency wiring + `trace` feature
 
 **Files:**
+
 - Create: `crates/traces/Cargo.toml`
 - Create: `crates/traces/src/lib.rs`
 - Create: `crates/traces/src/error.rs`
 - Modify: root `Cargo.toml` (workspace members + add `trace` to the `opentelemetry-proto` feature set; add `thrift` if absent)
 
 **Interfaces:**
+
 - Produces: a compiling `krabka-traces` crate; `pub enum TracesError` (`thiserror`) with `fn status_code(&self) -> u16`; `pub fn crate_smoke() -> bool` (placeholder, removed in Task 2) so there is a test to run.
 
 - [x] **Step 1: Add the crate to the workspace + enable trace types**
@@ -250,10 +254,12 @@ git commit -m "feat(traces): scaffold krabka-traces crate + trace-proto feature 
 ### Task 2: Internal `Span` model
 
 **Files:**
+
 - Create: `crates/traces/src/span/mod.rs`
 - Modify: `crates/traces/src/lib.rs` (declare `pub mod span;`, drop the placeholder)
 
 **Interfaces:**
+
 - Produces (consumed by every `wire/*` decoder, the WAL record, and the block-builder):
   - `struct Span { pub trace_id:[u8;16], pub span_id:[u8;8], pub parent_span_id:Option<[u8;8]>, pub name:String, pub kind:SpanKind, pub start_ns:i64, pub duration_ns:i64, pub status:StatusCode, pub status_message:String, pub resource_attrs:Vec<KeyValue>, pub span_attrs:Vec<KeyValue>, pub events:Vec<EventRecord>, pub links:Vec<LinkRecord>, pub instrumentation_scope:String }` (`Clone, Debug, PartialEq`)
   - `enum SpanKind { Unspecified, Internal, Server, Client, Producer, Consumer }` (`as_i32`/`from_i32`)
@@ -482,10 +488,12 @@ git commit -m "feat(traces): internal Span model (OTLP-shaped, serde-derived)"
 ### Task 3: `SpanRecord` — the WAL topic record (Slices 5/6/7 consume this)
 
 **Files:**
+
 - Create: `crates/traces/src/wal.rs`
 - Modify: `crates/traces/src/lib.rs`
 
 **Interfaces:**
+
 - Produces (the SHARED CONTRACT this slice owns):
   - `const TRACES_WAL_TOPIC: &str = "__krabka_traces_wal"`
   - `struct SpanRecord { pub tenant: String, pub span: Span }` (`serde`, `Clone`, `Debug`, `PartialEq`)
@@ -625,9 +633,11 @@ git commit -m "feat(traces): SpanRecord WAL record + serde-wincode codec + trace
 ### Task 4: Nested-set DFS pre-order (`assign_nested_set`)
 
 **Files:**
+
 - Create: `crates/traces/src/span/nested_set.rs` (overwrite the placeholder)
 
 **Interfaces:**
+
 - Produces (consumed by the block-builder batch builder, Task 11):
   - `struct NestedSet { pub left: i32, pub right: i32, pub parent_id: i32 }`
   - `fn assign_nested_set(spans: &[Span]) -> Vec<NestedSet>` — modified pre-order traversal over each trace's span tree (spec §4.1, §6.3): an ancestor's `[left,right]` strictly contains every descendant's; `parent_id(child) == parent.left`; **roots share `parent_id = 0`** (the sentinel). Output is index-aligned with `spans`.
@@ -804,11 +814,13 @@ git commit -m "feat(traces): nested-set DFS pre-order (left/right/parent_id, roo
 ### Task 5: OTLP traces decode (`wire/otlp.rs`)
 
 **Files:**
+
 - Create: `crates/traces/src/wire/mod.rs` (`WireFormat`, `WireError`, content negotiation)
 - Create: `crates/traces/src/wire/otlp.rs`
 - Modify: `crates/traces/src/lib.rs`
 
 **Interfaces:**
+
 - Consumes: `opentelemetry_proto::tonic::trace::v1::{TracesData, ResourceSpans, ScopeSpans, Span as OtlpSpan, Status, span::{Event, Link, SpanKind as OtlpKind}}`, `opentelemetry_proto::tonic::common::v1::{KeyValue as OtlpKv, AnyValue, any_value::Value}`.
 - Produces:
   - `enum WireFormat { Otlp, Zipkin, Jaeger }`
@@ -1100,11 +1112,13 @@ git commit -m "feat(traces): OTLP traces decode + push-door negotiation"
 ### Task 6: Zipkin v2 JSON decode (`wire/zipkin.rs`)
 
 **Files:**
+
 - Create: `crates/traces/src/wire/zipkin.rs` (overwrite the placeholder)
 
 **Interfaces:**
+
 - Produces:
-  - `fn decode_zipkin(body: &[u8]) -> Result<Vec<Span>, WireError>` — parse the Zipkin v2 `[ {span}, ... ]` JSON array (`/api/v2/spans`), mapping each Zipkin span to an internal `Span`: hex `traceId`/`id`/`parentId` → fixed byte arrays (Zipkin `traceId` may be 16 *or* 32 hex chars → 8 or 16 bytes, left-padded to 16); `timestamp` (epoch micros) → `start_ns`; `duration` (micros) → `duration_ns`; `kind` (`SERVER`/`CLIENT`/…) → `SpanKind`; `localEndpoint.serviceName` → a `service.name` resource attr; `tags` map → span attrs.
+  - `fn decode_zipkin(body: &[u8]) -> Result<Vec<Span>, WireError>` — parse the Zipkin v2 `[ {span}, ... ]` JSON array (`/api/v2/spans`), mapping each Zipkin span to an internal `Span`: hex `traceId`/`id`/`parentId` → fixed byte arrays (Zipkin `traceId` may be 16 _or_ 32 hex chars → 8 or 16 bytes, left-padded to 16); `timestamp` (epoch micros) → `start_ns`; `duration` (micros) → `duration_ns`; `kind` (`SERVER`/`CLIENT`/…) → `SpanKind`; `localEndpoint.serviceName` → a `service.name` resource attr; `tags` map → span attrs.
 
 - [x] **Step 1: Write the failing tests**
 
@@ -1290,9 +1304,11 @@ git commit -m "feat(traces): Zipkin v2 JSON decode"
 ### Task 7: Span Arrow batch builder (`span/batch.rs`)
 
 **Files:**
+
 - Create: `crates/traces/src/span/batch.rs` (overwrite the placeholder)
 
 **Interfaces:**
+
 - Consumes: the slice-1 `krabka_blockstore::{span_block_schema, SCOL_*}` constants + `assign_nested_set` (Task 4).
 - Produces:
   - `fn span_batch(spans: &[Span]) -> Result<RecordBatch, TracesError>` — builds one `RecordBatch` over the slice-1 span schema for a set of spans **already grouped by trace and ordered**, filling identity columns, the nested-set columns (via `assign_nested_set` per trace), span intrinsics, and the trace-denormalized root columns (root service/name, trace start/duration). Generic attrs + events/links are encoded into their list/struct columns.
@@ -1517,10 +1533,12 @@ git commit -m "feat(traces): span Arrow batch builder (identity + nested-set + d
 ### Task 8: Distributor axum server — routes, limits, produce
 
 **Files:**
+
 - Create: `crates/traces/src/distributor/mod.rs`
 - Modify: `crates/traces/src/lib.rs`
 
 **Interfaces:**
+
 - Produces:
   - `struct TenantLimits { pub max_spans_per_request: usize, pub max_attr_value_len: usize }` (`Default`)
   - `trait WalSink: Send + Sync { async fn append(&self, rec: SpanRecord) -> Result<(), TracesError>; }` (async-trait or `impl Future` return; use the codebase's async-trait convention)
@@ -1648,6 +1666,7 @@ Expected: FAIL — `cannot find function router`.
 - [x] **Step 3: Implement `distributor/mod.rs`**
 
 Implement:
+
 - `WalSink` trait + `KafkaSink` (`async fn append`: build `ProducerRecord { topic: TRACES_WAL_TOPIC.into(), key: Some(partition_key(&rec.span.trace_id)), value: Some(Bytes::from(rec.encode()?)), partition: None, ..Default::default() }`, then `producer.send(record).await.await.map_err(...)?.map_err(...)?`).
 - `DistributorState { sink, limits, max_decompressed }`, generic-free via `Arc<dyn WalSink>`.
 - `router()`: `Router::new().route("/v1/traces", post(otlp_push)).route("/api/push", post(otlp_push)).route("/api/v2/spans", post(zipkin_push)).with_state(state)`.
@@ -1680,10 +1699,12 @@ git commit -m "feat(traces): distributor axum server — OTLP/Zipkin routes, lim
 ### Task 9: Jaeger receivers (Thrift compact + gRPC) — decode + wire
 
 **Files:**
+
 - Create/overwrite: `crates/traces/src/wire/jaeger.rs`
 - Modify: `crates/traces/src/distributor/mod.rs` (add the Jaeger HTTP route)
 
 **Interfaces:**
+
 - Produces:
   - `fn decode_jaeger_thrift(body: &[u8]) -> Result<Vec<Span>, WireError>` — decode a Jaeger `Batch` (compact-Thrift, the `thrift_http` `14268` `/api/traces` body) → `Vec<Span>`: Jaeger `traceIdLow`/`traceIdHigh` (i64 pair) → `[u8;16]`; `spanId`/`parentSpanId` (i64) → `[u8;8]`; `process.serviceName` → `service.name` resource attr; `tags` (Jaeger `KeyValue`) → span attrs; `startTime`+`duration` (micros) → ns; `references` (CHILD_OF) → `parent_span_id`.
   - the Jaeger gRPC path (`collector.PostSpans`) is structurally identical once the protobuf model is decoded; this slice implements the **Thrift HTTP** receiver fully and the gRPC receiver is `// TODO(slice4-jaeger-grpc)` (the gRPC server wiring belongs with the Slice-5 gRPC surface; the decode core is shared).
@@ -1736,6 +1757,7 @@ Expected: FAIL — `cannot find function decode_jaeger_thrift`.
 - [x] **Step 4: Implement `decode_jaeger_thrift`**
 
 Map the decoded `Batch` to `Vec<Span>`:
+
 - `trace_id`: `traceIdHigh` (i64) into bytes `[0..8]`, `traceIdLow` into `[8..16]` (big-endian).
 - `span_id`/`parent_span_id`: i64 → big-endian `[u8;8]`; `parent_span_id` from the first `CHILD_OF` reference (or the legacy `parentSpanId` field), `None` if zero/absent.
 - `start_ns`: `startTime` (micros) × 1000; `duration_ns`: `duration` (micros) × 1000.
@@ -1767,10 +1789,12 @@ git commit -m "feat(traces): Jaeger Thrift receiver decode + /api/traces route"
 ### Task 10: Live-store — recent-traces `MemTable`, rebuildable from offsets
 
 **Files:**
+
 - Create: `crates/traces/src/livestore.rs`
 - Modify: `crates/traces/src/lib.rs`
 
 **Interfaces:**
+
 - Produces:
   - `struct LiveStore { /* tenant -> Vec<Span> ring/window, retention_ns */ }`
   - `LiveStore::new(retention_ns: i64) -> Self`
@@ -2006,10 +2030,12 @@ git commit -m "feat(traces): live-store hot tier — recent-traces MemTable, ret
 ### Task 11: Block-builder — WAL consumer-group → group by trace_id → blocks → index
 
 **Files:**
+
 - Create: `crates/traces/src/blockbuilder.rs`
 - Modify: `crates/traces/src/lib.rs`
 
 **Interfaces:**
+
 - Produces:
   - `fn object_key(tenant: &str, partition: i32, min_offset: i64, max_offset: i64, window_start_ns: i64) -> String` — deterministic idempotent key.
   - `fn group_by_trace(records: &[SpanRecord]) -> BTreeMap<(String, [u8; 16]), Vec<Span>>` — group by `(tenant, trace_id)`, each group sorted by `(start_ns, span_id)` (stable nested-set input).
@@ -2100,6 +2126,7 @@ Expected: FAIL — `cannot find function object_key` (or a missing `TraceIndex::
 - [x] **Step 3: Implement `blockbuilder.rs`**
 
 Implement:
+
 - `object_key`: `format!("traces/{tenant}/{partition:05}/{min_offset:020}-{max_offset:020}-{window_start_ns}.parquet")` — deterministic from the WAL offset range + window, so a re-process after a crash overwrites identical bytes (idempotent; spec §9).
 - `group_by_trace`: `BTreeMap<(String, [u8;16]), Vec<Span>>`; push by `(tenant, trace_id)`, then `sort_by_key(|s| (s.start_ns, s.span_id))` each group (stable nested-set input, Task 4 determinism note).
 - `build_blocks`: group → for each `(tenant, trace_id)` group call `span_batch(&spans)` (Task 7) → concat all of one tenant's batches into one block (`arrow::compute::concat_batches`) → `writer.write_block(tenant, &object_key(...), schema, &[concatenated])` → for each trace, `index.add_trace_block(tenant, &trace_id, &meta.object_key)` (bloom) + `index.add_tags(tenant, &meta.object_key, &tag_names, &tag_values)` (tag sets/blooms). Return the `BlockMeta`s.
@@ -2135,10 +2162,12 @@ git commit -m "feat(traces): block-builder — WAL group-by-trace → span block
 ### Task 12: Role-selectable binary
 
 **Files:**
+
 - Create: `crates/traces/src/bin/krabka-traces.rs`
 - Modify: `crates/traces/Cargo.toml` (`[[bin]]` if needed; clap already a dep)
 
 **Interfaces:**
+
 - Produces: a binary with `--target distributor|block-builder|live-store` (later targets `querier|query-frontend|compactor|metrics-generator` stubbed with a "not implemented until slice N" message + exit 2). Distributor wires a real `Producer` + `serve`; block-builder/live-store wire a `Consumer` + `run`.
 
 - [x] **Step 1: Write the failing test (arg parsing)**
@@ -2179,6 +2208,7 @@ Expected: FAIL — `cannot find type Cli`.
 `#[derive(Parser)] struct Cli { #[arg(long)] target: Target, #[arg(long, default_value = "127.0.0.1:3200")] listen: String, #[arg(long, default_value = "127.0.0.1:9092")] bootstrap: String, ... }` and `#[derive(Clone, ValueEnum)] enum Target { Distributor, BlockBuilder, LiveStore, Querier, QueryFrontend, Compactor, MetricsGenerator }` (clap kebab-cases the variants → `block-builder`, `live-store`, `metrics-generator`).
 
 `main`: parse `Cli`; `tracing_subscriber` init; wire a `CancellationToken` to `tokio::signal::ctrl_c`; match `target`:
+
 - `Distributor` → `Producer::builder().bootstrap(&cli.bootstrap).build().await?`, wrap in `KafkaSink`, build `DistributorState`, `distributor::serve(cli.listen.parse()?, state, shutdown).await?`.
 - `BlockBuilder` → `Consumer::builder().bootstrap(&cli.bootstrap).group_id("krabka-traces-block-builder").subscribe([TRACES_WAL_TOPIC.to_string()]).auto_offset_reset(AutoOffsetReset::Earliest).build().await?`, build a `BlockWriter` + `TraceIndex` over the configured object store (memory for now; real object-store config is `// TODO(slice4-objstore-config)`), `blockbuilder::run(...).await?`.
 - `LiveStore` → `Consumer::builder()...group_id("krabka-traces-live-store")...`, `livestore::run(consumer, Arc::new(RwLock::new(LiveStore::new(retention_ns))), shutdown).await?`.
@@ -2205,10 +2235,12 @@ git commit -m "feat(traces): role-selectable krabka-traces binary (distributor|b
 ### Task 13: End-to-end broker round-trip (in-process)
 
 **Files:**
+
 - Create: `crates/traces/tests/ingest_roundtrip.rs`
 - Create: `crates/traces/tests/support/mod.rs` (minimal in-process broker start helper)
 
 **Interfaces:**
+
 - Consumes the public API: `distributor::{router, KafkaSink, DistributorState}`, `Producer`, `Consumer`, `blockbuilder::{build_blocks, group_by_trace}`, `SpanRecord`, `TRACES_WAL_TOPIC`, blockstore `BlockWriter`/`TraceIndex`.
 
 This is the one test that needs a real broker. Use the in-process broker test-support — `krabka_broker::{Broker, BrokerConfig}` + `BrokerHandle::listen_addr()` are public (verified in `crates/broker/tests/support/mod.rs`), so no Docker is needed and it runs in CI.
@@ -2287,6 +2319,7 @@ git commit -m "test(traces): end-to-end OTLP → WAL → block-builder → span 
 ## Self-review
 
 **Spec coverage (against §5 ingest + §3 architecture + §11 Slice 4):**
+
 - Four push doors → internal `Span`: OTLP (Task 5), Zipkin v2 JSON (Task 6), Jaeger Thrift (Task 9); Tempo-native `/api/push` routes to the OTLP decoder (Task 5/8). gRPC OTLP + Jaeger gRPC servers are flagged as Slice-5 gRPC-surface follow-ons (`// TODO(slice4-otlp-grpc)`/`// TODO(slice4-jaeger-grpc)`) — the decode cores are done.
 - `SpanRecord` (the slice-4 contract) + `TRACES_WAL_TOPIC` + `partition_key = trace_id` → Task 3, with the dedup-avoidance invariant pinned by `same_trace_id_same_partition_key` (Task 3) and the round-trip partition assertion (Task 13).
 - distributor (axum, four routes, validate/limits, `X-Scope-OrgID` tenant, trace_id-keyed produce, format-correct success codes 200/202) → Tasks 8, 9.
@@ -2297,6 +2330,7 @@ git commit -m "test(traces): end-to-end OTLP → WAL → block-builder → span 
 - in-process broker round-trip test (no Docker) → Task 13.
 
 **Deviations flagged (deferred with explicit TODO markers, not silently dropped):**
+
 - OTLP gRPC + Jaeger gRPC server wiring → Slice-5 gRPC surface; decode cores done (`// TODO(slice4-otlp-grpc)`/`// TODO(slice4-jaeger-grpc)`).
 - Zipkin `annotations` → events (`// TODO(slice4-zipkin-annotations)`); the richer OTLP events/links path is implemented.
 - Attribute-promotion dedicated columns (default-empty promotion set) → `// TODO(slice4-attr-promotion)`; the mandatory span schema is written fully.
@@ -2304,6 +2338,7 @@ git commit -m "test(traces): end-to-end OTLP → WAL → block-builder → span 
 - Wall-clock retention eviction in the live-store (`// TODO(slice4-wallclock-evict)`); frontier-relative eviction works and is tested.
 
 **Placeholder scan:** no "TBD"/"similar to Task N" without code. The churn-prone surfaces are each bounded with a "verify against X" note + a behavior-pinning test, never fabricated:
+
 - the generated `opentelemetry-proto` 0.32 trace field names (Task 5) — pinned by the OTLP decode test, verified against the registry source;
 - the `thrift` crate's compact-protocol + generated-Jaeger-type API (Task 9) — STRUCTURE + a round-trip-the-encoder test, verify against the pinned `thrift` version;
 - the slice-1 span schema + `SCOL_*` constants + `TraceIndex`/`BlockWriter` API (Tasks 7, 11) — pinned by the batch + block tests, verify against the slice-1 traces-blockstore plan;
@@ -2315,6 +2350,7 @@ git commit -m "test(traces): end-to-end OTLP → WAL → block-builder → span 
 **Type consistency:** `Span` (Task 2) is consumed unchanged by every `wire/*` decoder (Tasks 5, 6, 9), the WAL record (Task 3), the batch builder (Task 7), the live-store (Task 10), and the block-builder (Task 11). `SpanRecord`/`partition_key`/`TRACES_WAL_TOPIC` (Task 3) are consumed by the distributor produce path (Task 8), both consumer loops (Tasks 10, 11), and the round-trip test (Task 13). `assign_nested_set`/`NestedSet` (Task 4) feed `span_batch` (Task 7), which feeds both the block-builder (Task 11) and the live-store `MemTable` (Task 10). `TracesError::status_code()` is the single ingest status mapping (Task 1), used by every handler (Tasks 8, 9). The blockstore API (`BlockWriter::new`/`write_block`, `TraceIndex`, `span_block_schema`, `SCOL_*`) matches the slice-1 traces-blockstore plan exactly (Tasks 7, 11).
 
 **Known risks (flagged, not hidden):**
+
 - **slice-1 dependency** — Tasks 7/10/11 consume the slice-1 generalized blockstore (span schema + `TraceIndex`). This slice cannot land before slice 1; the batch/block tests are the loud failure if the slice-1 API drifts. **Verify the exact span-schema column constants + `TraceIndex` method names against the slice-1 plan before starting Tasks 7/11.**
 - **`thrift` crate API churn** — Jaeger Thrift decode (Task 9) is the least-stable surface; the encode-then-decode round-trip test pins behavior, and the gRPC path (the simpler protobuf model) is deferred to keep the slice scoped.
 - **`opentelemetry-proto` `trace` feature** — Task 1 adds `trace` to the workspace feature set; this is additive and does not touch the metrics signal's `metrics`-only usage. Pinned by the OTLP round-trip test (a codegen/feature break is a compile error).

@@ -81,7 +81,7 @@ bounded by the cap). `set_rate` stays as-is — the CAS in `try_consume` is the 
 ## Stateright model (`bucket_model.rs`, `#[cfg(test)]` descendant of `bucket`)
 
 A **shared-memory interleaving** model. The nanosecond arithmetic is abstracted (covered by the
-proptest); the model focuses on the *concurrency* over small abstract token counts.
+proptest); the model focuses on the _concurrency_ over small abstract token counts.
 
 - **State:** shared `{ rate: i64, available: i64, pending_refill: i64 }` (`available` is `i64` so the
   buggy underflow shows up as a **negative** value the asserts catch) + a fixed-size array of
@@ -96,7 +96,7 @@ proptest); the model focuses on the *concurrency* over small abstract token coun
   - `Load(t)` — `cur[t] = available`.
   - **Commit(t)** — branches on the model's `cas` flag:
     - `cas = false` (BUGGY): two separate interleavable steps — `Store(t)` sets `available =
-      min(cur[t]+refill[t], rate)`, then `Sub(t)` sets `available -= grant[t]` (the `fetch_sub`,
+min(cur[t]+refill[t], rate)`, then `Sub(t)` sets `available -= grant[t]` (the `fetch_sub`,
       which can drive `available` negative).
     - `cas = true` (FIXED): one step — if `available == cur[t]` then `available = new` (from the real
       `plan_consume`), else `t` retries from `Load`.
@@ -105,10 +105,10 @@ proptest); the model focuses on the *concurrency* over small abstract token coun
 - **Safety asserts (per transition / `Property::always`):**
   - **no-underflow / no-over-grant** (HEADLINE): `available >= 0` in every state. The buggy
     store+`fetch_sub` interleaving drives it negative; the CAS version keeps `new = min(cur+refill,
-    rate) - grant >= 0`.
+rate) - grant >= 0`.
   - **burst-cap**: `available <= max_rate_ever_set` in every state.
   - **grant-bounded**: each completed grant `<=` the `available` it observed (`grant[t] <=
-    min(cur[t]+refill[t], rate)`).
+min(cur[t]+refill[t], rate)`).
 - **Non-vacuity (`sometimes`):** a refill is claimed; a real grant occurs; a `set_rate` interleaves an
   in-flight consume; the buggy path actually reaches a negative `available` (in the RED config) /
   a CAS retry occurs (in the fixed config).
@@ -144,7 +144,7 @@ more than `initial + Σ refills` capped by the running cap.
   `Duration::from_mins(2)`) and run under the host memory watchdog (kill > 3 GB / > 150 s) while
   bounds are tuned — `[[feedback_bound_model_checkers]]`. `proptest` is bounded sampling.
 - `cargo +nightly fmt` per-crate (`[[reference_windows_fmt_path_length]]`); `cargo clippy
-  --all-targets -- -D warnings` clean.
+--all-targets -- -D warnings` clean.
 
 ## Success criteria
 

@@ -23,11 +23,11 @@ mod harness;
 use std::sync::Arc;
 
 use bytes::Bytes;
+use harness::KafkaStack;
 use krabka_client_producer::Header;
 use krabka_pgexec::SqlEngine;
 use krabka_pgwire::session::SessionConfig;
 use krabka_schema_registry::{ids::SchemaVersion, kafkastore::record::SchemaReference};
-use harness::KafkaStack;
 use prost_reflect::prost::Message as _;
 use tokio::net::TcpListener;
 use tokio_postgres::NoTls;

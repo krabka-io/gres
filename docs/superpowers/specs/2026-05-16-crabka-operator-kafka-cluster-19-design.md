@@ -33,18 +33,18 @@
 
 ### Out (deferred)
 
-| Concern | Slice |
-|---|---|
-| Multi-broker clusters via `KafkaNodePool` | 20 |
-| Pod templates (affinity, tolerations, labels, annotations) | 20 |
-| Rolling restart on config drift | 21 |
-| `ControlledShutdown` for graceful drain | 22 (core) |
-| `NetworkPolicy` generation | 23 |
-| Persistent storage (PVCs, `storageClass`, retain-vs-delete) | 24 |
-| External listeners (NodePort / LB / Ingress / Route) | 25–27 |
-| Version upgrades / `inter.broker.protocol.version` | 28 |
-| Cluster CA + clients CA, TLS, SASL listener config | 30–31 |
-| `KafkaTopic` / `KafkaUser` CRDs | 35–36 |
+| Concern                                                     | Slice     |
+| ----------------------------------------------------------- | --------- |
+| Multi-broker clusters via `KafkaNodePool`                   | 20        |
+| Pod templates (affinity, tolerations, labels, annotations)  | 20        |
+| Rolling restart on config drift                             | 21        |
+| `ControlledShutdown` for graceful drain                     | 22 (core) |
+| `NetworkPolicy` generation                                  | 23        |
+| Persistent storage (PVCs, `storageClass`, retain-vs-delete) | 24        |
+| External listeners (NodePort / LB / Ingress / Route)        | 25–27     |
+| Version upgrades / `inter.broker.protocol.version`          | 28        |
+| Cluster CA + clients CA, TLS, SASL listener config          | 30–31     |
+| `KafkaTopic` / `KafkaUser` CRDs                             | 35–36     |
 
 ### Constraints inherited
 
@@ -219,7 +219,13 @@ spec:
         app.kubernetes.io/instance: demo
         app.kubernetes.io/version: <kafkaVersion>
     spec:
-      securityContext: { runAsNonRoot: true, runAsUser: 65532, fsGroup: 65532, seccompProfile: { type: RuntimeDefault } }
+      securityContext:
+        {
+          runAsNonRoot: true,
+          runAsUser: 65532,
+          fsGroup: 65532,
+          seccompProfile: { type: RuntimeDefault },
+        }
       initContainers:
         - name: format
           image: <broker image>
@@ -232,10 +238,19 @@ spec:
                 touch /var/lib/crabka/data/.formatted
               fi
           env:
-            - { name: KRABKA_CLUSTER_ID, valueFrom: { secretKeyRef: { name: demo-cluster-id, key: clusterId } } }
+            - {
+                name: KRABKA_CLUSTER_ID,
+                valueFrom:
+                  { secretKeyRef: { name: demo-cluster-id, key: clusterId } },
+              }
           volumeMounts:
             - { name: data, mountPath: /var/lib/crabka/data }
-          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+          securityContext:
+            {
+              allowPrivilegeEscalation: false,
+              readOnlyRootFilesystem: true,
+              capabilities: { drop: [ALL] },
+            }
       containers:
         - name: broker
           image: <broker image>
@@ -245,10 +260,23 @@ spec:
             - --log-dir=/var/lib/crabka/data
             - --broker-id=0
           env:
-            - { name: POD_NAME, valueFrom: { fieldRef: { fieldPath: metadata.name } } }
-            - { name: POD_NAMESPACE, valueFrom: { fieldRef: { fieldPath: metadata.namespace } } }
-            - { name: KRABKA_CLUSTER_ID, valueFrom: { secretKeyRef: { name: demo-cluster-id, key: clusterId } } }
-            - { name: KRABKA_ADVERTISED_LISTENER, value: "$(POD_NAME).demo-broker-headless.$(POD_NAMESPACE).svc.cluster.local:9092" }
+            - {
+                name: POD_NAME,
+                valueFrom: { fieldRef: { fieldPath: metadata.name } },
+              }
+            - {
+                name: POD_NAMESPACE,
+                valueFrom: { fieldRef: { fieldPath: metadata.namespace } },
+              }
+            - {
+                name: KRABKA_CLUSTER_ID,
+                valueFrom:
+                  { secretKeyRef: { name: demo-cluster-id, key: clusterId } },
+              }
+            - {
+                name: KRABKA_ADVERTISED_LISTENER,
+                value: "$(POD_NAME).demo-broker-headless.$(POD_NAMESPACE).svc.cluster.local:9092",
+              }
           ports:
             - { containerPort: 9092, name: kafka-internal, protocol: TCP }
           readinessProbe:
@@ -262,7 +290,12 @@ spec:
           resources: <from spec or defaults>
           volumeMounts:
             - { name: data, mountPath: /var/lib/crabka/data }
-          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+          securityContext:
+            {
+              allowPrivilegeEscalation: false,
+              readOnlyRootFilesystem: true,
+              capabilities: { drop: [ALL] },
+            }
       volumes:
         - { name: data, emptyDir: {} }
 ```

@@ -44,7 +44,7 @@ production default. The key invariants we adopt unchanged:
   applied to the local cache, before returning.
 
 This design follows that shape. Where Kafka's TBRLMM allows brokers
-to consume a *subset* of metadata partitions (limited to those that
+to consume a _subset_ of metadata partitions (limited to those that
 host their leader/follower assignments), 48f's first cut **consumes
 all metadata-topic partitions on every broker**. Partition-set
 assignment is an optimization deferred to a follow-up.

@@ -498,9 +498,9 @@ exactly 12 `crates/gres-activator` matches across two files, classified above.
 The activator-owned sub-slice passed:
 
 - `cargo nextest run -p krabka-gres-activator -p krabka-gres-control
-  -p krabka-operator --no-fail-fast`: 975 passed, 0 skipped, and no failures.
+-p krabka-operator --no-fail-fast`: 975 passed, 0 skipped, and no failures.
 - `cargo clippy -p krabka-gres-activator -p krabka-gres-control
-  -p krabka-operator --all-targets -- -D warnings`: passed.
+-p krabka-operator --all-targets -- -D warnings`: passed.
 - `cargo run -p krabka-gres-activator -- --help`: displayed all six direct
   settings and their `KRABKA_GRES_ACTIVATOR_*` environment bindings.
 - `cargo +nightly fmt --all -- --check`: passed.
@@ -588,11 +588,11 @@ repository matches. Relevant crate totals were 33 for `gres-control`, 12 for
 fully classified matches above.
 
 - `cargo nextest run -p krabka-gres-control -p krabka-gres-activator
-  -p krabka-gres -p krabka-cli -p krabka-gres-loadtest -p krabka-operator
-  --no-fail-fast`: 1,309 passed, 1 skipped, and no failures.
+-p krabka-gres -p krabka-cli -p krabka-gres-loadtest -p krabka-operator
+--no-fail-fast`: 1,309 passed, 1 skipped, and no failures.
 - `cargo clippy -p krabka-gres-control -p krabka-gres-activator
-  -p krabka-gres -p krabka-cli -p krabka-gres-loadtest -p krabka-operator
-  --all-targets --all-features -- -D warnings`: passed.
+-p krabka-gres -p krabka-cli -p krabka-gres-loadtest -p krabka-operator
+--all-targets --all-features -- -D warnings`: passed.
 - The five standalone help surfaces each displayed all five
   `--registry-*` settings and exact `KRABKA_GRES_REGISTRY_*` bindings:
   `krabka-gres-activator --help`, `krabka-gres --help`,
@@ -632,15 +632,15 @@ both.
 
 `Gres.spec.pgdog` has seven optional runtime-policy fields:
 
-| Field | Bounds | Effective default |
-|---|---:|---:|
-| `poolerMode` | `transaction` or `session` | `transaction` |
-| `connectAttempts` | `1..=65535` | `3` |
-| `idleTimeoutMs` | positive `u64` | `60000` |
-| `suspensionIdleTimeoutMs` | positive `u64` | `1000` |
-| `serverLifetimeMs` | positive `u64` | `300000` |
-| `readinessProbePeriodSeconds` | positive `i32` | `5` |
-| `directBootstrapGraceMs` | positive `u64` | `4000` |
+| Field                         |                     Bounds | Effective default |
+| ----------------------------- | -------------------------: | ----------------: |
+| `poolerMode`                  | `transaction` or `session` |     `transaction` |
+| `connectAttempts`             |                `1..=65535` |               `3` |
+| `idleTimeoutMs`               |             positive `u64` |           `60000` |
+| `suspensionIdleTimeoutMs`     |             positive `u64` |            `1000` |
+| `serverLifetimeMs`            |             positive `u64` |          `300000` |
+| `readinessProbePeriodSeconds` |             positive `i32` |               `5` |
+| `directBootstrapGraceMs`      |             positive `u64` |            `4000` |
 
 The existing required `listenPort` is independently bounded to `1..=65535`
 in OpenAPI and validated before child API access. It has no fallback or clamp.
@@ -650,13 +650,13 @@ an explicit tenant mode still wins.
 
 The operator process exposes six positive CLI/environment timing values:
 
-| CLI | Environment | Default |
-|---|---|---:|
-| `--pgdog-reload-attempts` | `PGDOG_RELOAD_ATTEMPTS` | `3` |
-| `--pgdog-reload-backoff-ms` | `PGDOG_RELOAD_BACKOFF_MS` | `100` |
-| `--pgdog-reload-requeue-ms` | `PGDOG_RELOAD_REQUEUE_MS` | `15000` |
-| `--pgdog-admin-timeout-ms` | `PGDOG_ADMIN_TIMEOUT_MS` | `20000` |
-| `--pgdog-transition-poll-ms` | `PGDOG_TRANSITION_POLL_MS` | `60000` |
+| CLI                             | Environment                   | Default |
+| ------------------------------- | ----------------------------- | ------: |
+| `--pgdog-reload-attempts`       | `PGDOG_RELOAD_ATTEMPTS`       |     `3` |
+| `--pgdog-reload-backoff-ms`     | `PGDOG_RELOAD_BACKOFF_MS`     |   `100` |
+| `--pgdog-reload-requeue-ms`     | `PGDOG_RELOAD_REQUEUE_MS`     | `15000` |
+| `--pgdog-admin-timeout-ms`      | `PGDOG_ADMIN_TIMEOUT_MS`      | `20000` |
+| `--pgdog-transition-poll-ms`    | `PGDOG_TRANSITION_POLL_MS`    | `60000` |
 | `--controller-error-requeue-ms` | `CONTROLLER_ERROR_REQUEUE_MS` | `15000` |
 
 One validated connection-attempt value drives both sides of timeout
@@ -721,10 +721,10 @@ files. The focused implementation paths contributed 26 matches in
 and found no code remediation.
 
 - `cargo nextest run -p krabka-gres-control -p krabka-cli
-  -p krabka-operator --no-fail-fast`: 1,058 passed, 0 skipped, and no
+-p krabka-operator --no-fail-fast`: 1,058 passed, 0 skipped, and no
   failures.
 - `cargo clippy -p krabka-gres-control -p krabka-cli -p krabka-operator
-  --all-targets --all-features -- -D warnings`: passed.
+--all-targets --all-features -- -D warnings`: passed.
 - `crabka gres render-pgdog --help` displayed all 13 exact
   `KRABKA_GRES_PGDOG_*` bindings, including the client CA.
 - `krabka-operator run --help` displayed all six controller timing
@@ -4797,12 +4797,12 @@ The four approved runtime policies now flow through broker CLI/environment,
 `Kafka.spec.brokerTuning` owns the three new CRD fields and renders the same
 TOML keys:
 
-| Policy | Default | CLI/environment | CRD |
-|---|---:|---|---|
-| heartbeat cadence | election timeout / `3` when omitted | `--controller-heartbeat-interval` / `KRABKA_CONTROLLER_HEARTBEAT_INTERVAL` | existing `controllerHeartbeatInterval` |
-| fetch-miss limit | `3` | `--controller-fetch-miss-limit` / `KRABKA_CONTROLLER_FETCH_MISS_LIMIT` | `controllerFetchMissLimit` |
-| command queue capacity | `256` | `--metadata-raft-command-queue-capacity` / `KRABKA_METADATA_RAFT_COMMAND_QUEUE_CAPACITY` | `metadataRaftCommandQueueCapacity` |
-| bounded read and request chunk | `8MiB` | `--metadata-raft-fetch-max` / `KRABKA_METADATA_RAFT_FETCH_MAX` | `metadataRaftFetchMax` |
+| Policy                         |                             Default | CLI/environment                                                                          | CRD                                    |
+| ------------------------------ | ----------------------------------: | ---------------------------------------------------------------------------------------- | -------------------------------------- |
+| heartbeat cadence              | election timeout / `3` when omitted | `--controller-heartbeat-interval` / `KRABKA_CONTROLLER_HEARTBEAT_INTERVAL`               | existing `controllerHeartbeatInterval` |
+| fetch-miss limit               |                                 `3` | `--controller-fetch-miss-limit` / `KRABKA_CONTROLLER_FETCH_MISS_LIMIT`                   | `controllerFetchMissLimit`             |
+| command queue capacity         |                               `256` | `--metadata-raft-command-queue-capacity` / `KRABKA_METADATA_RAFT_COMMAND_QUEUE_CAPACITY` | `metadataRaftCommandQueueCapacity`     |
+| bounded read and request chunk |                              `8MiB` | `--metadata-raft-fetch-max` / `KRABKA_METADATA_RAFT_FETCH_MAX`                           | `metadataRaftFetchMax`                 |
 
 The two counts are positive `refined_type` newtypes. The byte budget is a UOM
 `ByteSize` constrained to positive whole bytes fitting signed `i32`. Broker
@@ -5006,8 +5006,6 @@ additional protocol CLI, environment variable, or CRD field is warranted.
 Caller-owned request policy remains classified with each service; the next
 scanner-visible unresolved owner is the rebalancer's reassignment request
 timeout.
-
-
 
 ## Telemetry UOM Closure and Profiling Policy
 
@@ -5258,7 +5256,6 @@ CRD currently owns the standalone Traces service.
 
 This design is pending explicit approval and has not been implemented. All 400
 all-target tests and strict all-target Clippy pass.
-
 
 ## Security GSSAPI Policy
 
@@ -5616,14 +5613,14 @@ for both packages.
 The topic-backed production metadata client now exposes all six operational
 settings end to end:
 
-| Policy | Rust field | TOML field | Kafka CRD field | Preserved default |
-|---|---|---|---|---|
-| topic creation timeout | `topic_create_timeout` | `topic_create_timeout` | `topicCreateTimeout` | `30s` |
-| fetch maximum wait | `fetch_max_wait` | `fetch_max_wait` | `fetchMaxWait` | `500ms` |
-| fetch byte budget | `fetch_max_bytes` | `fetch_max_bytes` | `fetchMaxBytes` | `1MiB` |
-| failed-fetch backoff | `fetch_retry_backoff` | `fetch_retry_backoff` | `fetchRetryBackoff` | `200ms` |
-| event queue capacity | `event_queue_capacity` | `event_queue_capacity` | `eventQueueCapacity` | `1024` |
-| RLMM snapshot cadence | `snapshot_interval` | `snapshot_interval` | `snapshotInterval` | `1m` |
+| Policy                 | Rust field             | TOML field             | Kafka CRD field      | Preserved default |
+| ---------------------- | ---------------------- | ---------------------- | -------------------- | ----------------- |
+| topic creation timeout | `topic_create_timeout` | `topic_create_timeout` | `topicCreateTimeout` | `30s`             |
+| fetch maximum wait     | `fetch_max_wait`       | `fetch_max_wait`       | `fetchMaxWait`       | `500ms`           |
+| fetch byte budget      | `fetch_max_bytes`      | `fetch_max_bytes`      | `fetchMaxBytes`      | `1MiB`            |
+| failed-fetch backoff   | `fetch_retry_backoff`  | `fetch_retry_backoff`  | `fetchRetryBackoff`  | `200ms`           |
+| event queue capacity   | `event_queue_capacity` | `event_queue_capacity` | `eventQueueCapacity` | `1024`            |
+| RLMM snapshot cadence  | `snapshot_interval`    | `snapshot_interval`    | `snapshotInterval`   | `1m`              |
 
 The five dimensioned settings remain UOM `Time` or `ByteSize` values through
 the public, broker TOML, and CRD boundaries. Queue capacity is represented by
@@ -5865,22 +5862,22 @@ client-core security ceiling. The ceiling itself is not configurable.
 
 The exact standalone surfaces are:
 
-| Process | CLI flags | Environment |
-|---|---|---|
-| bench-driver | `--client-dispatch-queue-capacity`, `--client-frame-max` | `BENCH_CLIENT_DISPATCH_QUEUE_CAPACITY`, `BENCH_CLIENT_FRAME_MAX` |
-| broker | `--client-dispatch-queue-capacity`, `--client-frame-max` | `KRABKA_BROKER_CLIENT_DISPATCH_QUEUE_CAPACITY`, `KRABKA_BROKER_CLIENT_FRAME_MAX` |
-| gres and gres-loadtest | `--client-dispatch-queue-capacity`, `--client-frame-max` | `KRABKA_GRES_CLIENT_DISPATCH_QUEUE_CAPACITY`, `KRABKA_GRES_CLIENT_FRAME_MAX` |
-| grpc-gateway | `--client-dispatch-queue-capacity`, `--client-frame-max` | `KRABKA_GRPC_GATEWAY_CLIENT_DISPATCH_QUEUE_CAPACITY`, `KRABKA_GRPC_GATEWAY_CLIENT_FRAME_MAX` |
-| metrics | `--client-dispatch-queue-capacity`, `--client-frame-max` | `KRABKA_METRICS_CLIENT_DISPATCH_QUEUE_CAPACITY`, `KRABKA_METRICS_CLIENT_FRAME_MAX` |
-| metrics-service | `--client-dispatch-queue-capacity`, `--client-frame-max` | `KRABKA_METRICS_SERVICE_CLIENT_DISPATCH_QUEUE_CAPACITY`, `KRABKA_METRICS_SERVICE_CLIENT_FRAME_MAX` |
-| observability | `--client-dispatch-queue-capacity`, `--client-frame-max` | `KRABKA_OBSERVABILITY_CLIENT_DISPATCH_QUEUE_CAPACITY`, `KRABKA_OBSERVABILITY_CLIENT_FRAME_MAX` |
-| observability-demo-app | `--client-dispatch-queue-capacity`, `--client-frame-max` | `KRABKA_DEMO_CLIENT_DISPATCH_QUEUE_CAPACITY`, `KRABKA_DEMO_CLIENT_FRAME_MAX` |
-| operator | `--client-dispatch-queue-capacity`, `--client-frame-max` | `OPERATOR_CLIENT_DISPATCH_QUEUE_CAPACITY`, `OPERATOR_CLIENT_FRAME_MAX` |
-| profiles | `--client-dispatch-queue-capacity`, `--client-frame-max` | `KRABKA_PROFILES_CLIENT_DISPATCH_QUEUE_CAPACITY`, `KRABKA_PROFILES_CLIENT_FRAME_MAX` |
-| rebalancer | `--client-dispatch-queue-capacity`, `--client-frame-max` | `KRABKA_REBALANCER_CLIENT_DISPATCH_QUEUE_CAPACITY`, `KRABKA_REBALANCER_CLIENT_FRAME_MAX` |
-| replicator | `--client-dispatch-queue-capacity`, `--client-frame-max` | `KRABKA_REPLICATOR_CLIENT_DISPATCH_QUEUE_CAPACITY`, `KRABKA_REPLICATOR_CLIENT_FRAME_MAX` |
-| schema-registry | `--client-dispatch-queue-capacity`, `--client-frame-max` | `SCHEMA_REGISTRY_CLIENT_DISPATCH_QUEUE_CAPACITY`, `SCHEMA_REGISTRY_CLIENT_FRAME_MAX` |
-| traces | `--client-dispatch-queue-capacity`, `--client-frame-max` | `KRABKA_TRACES_CLIENT_DISPATCH_QUEUE_CAPACITY`, `KRABKA_TRACES_CLIENT_FRAME_MAX` |
+| Process                | CLI flags                                                | Environment                                                                                        |
+| ---------------------- | -------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| bench-driver           | `--client-dispatch-queue-capacity`, `--client-frame-max` | `BENCH_CLIENT_DISPATCH_QUEUE_CAPACITY`, `BENCH_CLIENT_FRAME_MAX`                                   |
+| broker                 | `--client-dispatch-queue-capacity`, `--client-frame-max` | `KRABKA_BROKER_CLIENT_DISPATCH_QUEUE_CAPACITY`, `KRABKA_BROKER_CLIENT_FRAME_MAX`                   |
+| gres and gres-loadtest | `--client-dispatch-queue-capacity`, `--client-frame-max` | `KRABKA_GRES_CLIENT_DISPATCH_QUEUE_CAPACITY`, `KRABKA_GRES_CLIENT_FRAME_MAX`                       |
+| grpc-gateway           | `--client-dispatch-queue-capacity`, `--client-frame-max` | `KRABKA_GRPC_GATEWAY_CLIENT_DISPATCH_QUEUE_CAPACITY`, `KRABKA_GRPC_GATEWAY_CLIENT_FRAME_MAX`       |
+| metrics                | `--client-dispatch-queue-capacity`, `--client-frame-max` | `KRABKA_METRICS_CLIENT_DISPATCH_QUEUE_CAPACITY`, `KRABKA_METRICS_CLIENT_FRAME_MAX`                 |
+| metrics-service        | `--client-dispatch-queue-capacity`, `--client-frame-max` | `KRABKA_METRICS_SERVICE_CLIENT_DISPATCH_QUEUE_CAPACITY`, `KRABKA_METRICS_SERVICE_CLIENT_FRAME_MAX` |
+| observability          | `--client-dispatch-queue-capacity`, `--client-frame-max` | `KRABKA_OBSERVABILITY_CLIENT_DISPATCH_QUEUE_CAPACITY`, `KRABKA_OBSERVABILITY_CLIENT_FRAME_MAX`     |
+| observability-demo-app | `--client-dispatch-queue-capacity`, `--client-frame-max` | `KRABKA_DEMO_CLIENT_DISPATCH_QUEUE_CAPACITY`, `KRABKA_DEMO_CLIENT_FRAME_MAX`                       |
+| operator               | `--client-dispatch-queue-capacity`, `--client-frame-max` | `OPERATOR_CLIENT_DISPATCH_QUEUE_CAPACITY`, `OPERATOR_CLIENT_FRAME_MAX`                             |
+| profiles               | `--client-dispatch-queue-capacity`, `--client-frame-max` | `KRABKA_PROFILES_CLIENT_DISPATCH_QUEUE_CAPACITY`, `KRABKA_PROFILES_CLIENT_FRAME_MAX`               |
+| rebalancer             | `--client-dispatch-queue-capacity`, `--client-frame-max` | `KRABKA_REBALANCER_CLIENT_DISPATCH_QUEUE_CAPACITY`, `KRABKA_REBALANCER_CLIENT_FRAME_MAX`           |
+| replicator             | `--client-dispatch-queue-capacity`, `--client-frame-max` | `KRABKA_REPLICATOR_CLIENT_DISPATCH_QUEUE_CAPACITY`, `KRABKA_REPLICATOR_CLIENT_FRAME_MAX`           |
+| schema-registry        | `--client-dispatch-queue-capacity`, `--client-frame-max` | `SCHEMA_REGISTRY_CLIENT_DISPATCH_QUEUE_CAPACITY`, `SCHEMA_REGISTRY_CLIENT_FRAME_MAX`               |
+| traces                 | `--client-dispatch-queue-capacity`, `--client-frame-max` | `KRABKA_TRACES_CLIENT_DISPATCH_QUEUE_CAPACITY`, `KRABKA_TRACES_CLIENT_FRAME_MAX`                   |
 
 The approved isolated-fetch minima are also whole-byte UOM values. Gres owns
 `--fdw-fetch-min` / `KRABKA_GRES_FDW_FETCH_MIN`,
@@ -5903,13 +5900,13 @@ owner.
 Operator-rendered Kafka clients now have equivalent optional CRD fields. The
 exact ownership is:
 
-| Workload | CRD paths |
-|---|---|
-| broker | `KafkaNodePool.spec.clientDispatchQueueCapacity`, `KafkaNodePool.spec.clientFrameMax` |
-| Gres activator | `Gres.spec.activator.clientDispatchQueueCapacity`, `Gres.spec.activator.clientFrameMax`, `Kafka.spec.gresRegistry.readerFetchMin` |
-| Gres compute | `Gres.spec.compute.clientDispatchQueueCapacity`, `Gres.spec.compute.clientFrameMax`, `Gres.spec.compute.fdwFetchMin`, `Gres.spec.compute.walRecoveryFetchMin`, `Kafka.spec.gresRegistry.readerFetchMin` |
-| gRPC gateway | `KafkaGrpcGateway.spec.tuning.clientDispatchQueueCapacity`, `KafkaGrpcGateway.spec.tuning.clientFrameMax` |
-| Schema Registry | `SchemaRegistry.spec.runtime.clientDispatchQueueCapacity`, `SchemaRegistry.spec.runtime.clientFrameMax` |
+| Workload        | CRD paths                                                                                                                                                                                               |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| broker          | `KafkaNodePool.spec.clientDispatchQueueCapacity`, `KafkaNodePool.spec.clientFrameMax`                                                                                                                   |
+| Gres activator  | `Gres.spec.activator.clientDispatchQueueCapacity`, `Gres.spec.activator.clientFrameMax`, `Kafka.spec.gresRegistry.readerFetchMin`                                                                       |
+| Gres compute    | `Gres.spec.compute.clientDispatchQueueCapacity`, `Gres.spec.compute.clientFrameMax`, `Gres.spec.compute.fdwFetchMin`, `Gres.spec.compute.walRecoveryFetchMin`, `Kafka.spec.gresRegistry.readerFetchMin` |
+| gRPC gateway    | `KafkaGrpcGateway.spec.tuning.clientDispatchQueueCapacity`, `KafkaGrpcGateway.spec.tuning.clientFrameMax`                                                                                               |
+| Schema Registry | `SchemaRegistry.spec.runtime.clientDispatchQueueCapacity`, `SchemaRegistry.spec.runtime.clientFrameMax`                                                                                                 |
 
 The activator standalone surface is
 `--client-dispatch-queue-capacity` /
@@ -5947,15 +5944,15 @@ hardcoded operational-value audit remains active.
 Classic Consumer startup and coordinator retry timing now flows through one
 validated `ConsumerRetryPolicy`. Its unchanged defaults are:
 
-| Setting | Default |
-|---|---:|
-| startup attempt timeout | `90s` |
-| startup wall-clock deadline | `5m` |
-| startup initial backoff | `500ms` |
-| startup maximum backoff | `5s` |
-| coordinator retry timeout | `30s` |
+| Setting                     | Default |
+| --------------------------- | ------: |
+| startup attempt timeout     |   `90s` |
+| startup wall-clock deadline |    `5m` |
+| startup initial backoff     | `500ms` |
+| startup maximum backoff     |    `5s` |
+| coordinator retry timeout   |   `30s` |
 | coordinator initial backoff | `100ms` |
-| coordinator maximum backoff | `1s` |
+| coordinator maximum backoff |    `1s` |
 
 Each value is a positive, finite, whole-millisecond UOM `Time` backed by a
 private `refined_type` newtype. Startup attempt timeout cannot exceed the
@@ -5968,15 +5965,15 @@ matching duration literals are test inputs or unrelated request behavior.
 The standalone observability demo Consume role owns these exact CLI and
 environment pairs:
 
-| CLI | Environment |
-|---|---|
-| `--consumer-startup-attempt-timeout` | `KRABKA_DEMO_CONSUMER_STARTUP_ATTEMPT_TIMEOUT` |
-| `--consumer-startup-deadline` | `KRABKA_DEMO_CONSUMER_STARTUP_DEADLINE` |
-| `--consumer-startup-initial-backoff` | `KRABKA_DEMO_CONSUMER_STARTUP_INITIAL_BACKOFF` |
-| `--consumer-startup-max-backoff` | `KRABKA_DEMO_CONSUMER_STARTUP_MAX_BACKOFF` |
-| `--consumer-coordinator-retry-timeout` | `KRABKA_DEMO_CONSUMER_COORDINATOR_RETRY_TIMEOUT` |
+| CLI                                      | Environment                                        |
+| ---------------------------------------- | -------------------------------------------------- |
+| `--consumer-startup-attempt-timeout`     | `KRABKA_DEMO_CONSUMER_STARTUP_ATTEMPT_TIMEOUT`     |
+| `--consumer-startup-deadline`            | `KRABKA_DEMO_CONSUMER_STARTUP_DEADLINE`            |
+| `--consumer-startup-initial-backoff`     | `KRABKA_DEMO_CONSUMER_STARTUP_INITIAL_BACKOFF`     |
+| `--consumer-startup-max-backoff`         | `KRABKA_DEMO_CONSUMER_STARTUP_MAX_BACKOFF`         |
+| `--consumer-coordinator-retry-timeout`   | `KRABKA_DEMO_CONSUMER_COORDINATOR_RETRY_TIMEOUT`   |
 | `--consumer-coordinator-initial-backoff` | `KRABKA_DEMO_CONSUMER_COORDINATOR_INITIAL_BACKOFF` |
-| `--consumer-coordinator-max-backoff` | `KRABKA_DEMO_CONSUMER_COORDINATOR_MAX_BACKOFF` |
+| `--consumer-coordinator-max-backoff`     | `KRABKA_DEMO_CONSUMER_COORDINATOR_MAX_BACKOFF`     |
 
 Explicit values on Produce or Stream roles fail before telemetry or external
 I/O. Compose exposes the variables only on `demo-consume`, with unit-bearing
@@ -5991,11 +5988,11 @@ repository-wide hardcoded operational-value audit remains active.
 
 Classic Consumer Fetch requests now carry one complete validated byte policy:
 
-| Setting | Default |
-|---|---:|
-| minimum response bytes | `1B` |
-| total response maximum | `50MiB` |
-| per-partition response maximum | `1MiB` |
+| Setting                        | Default |
+| ------------------------------ | ------: |
+| minimum response bytes         |    `1B` |
+| total response maximum         | `50MiB` |
+| per-partition response maximum |  `1MiB` |
 
 `FetchMinBytes`, `ConsumerFetchMaxBytes`, and
 `ConsumerFetchPartitionMaxBytes` validate positive, finite, whole-byte UOM
@@ -6020,10 +6017,10 @@ isolation level, and oversized-first-batch behavior are unchanged.
 
 The observability demo Consume role exposes:
 
-| CLI | Environment |
-|---|---|
-| `--consumer-fetch-min` | `KRABKA_DEMO_CONSUMER_FETCH_MIN` |
-| `--consumer-fetch-max` | `KRABKA_DEMO_CONSUMER_FETCH_MAX` |
+| CLI                              | Environment                                |
+| -------------------------------- | ------------------------------------------ |
+| `--consumer-fetch-min`           | `KRABKA_DEMO_CONSUMER_FETCH_MIN`           |
+| `--consumer-fetch-max`           | `KRABKA_DEMO_CONSUMER_FETCH_MAX`           |
 | `--consumer-fetch-partition-max` | `KRABKA_DEMO_CONSUMER_FETCH_PARTITION_MAX` |
 
 Explicit values on Produce or Stream fail before telemetry or external I/O.
@@ -6041,12 +6038,12 @@ operational-value audit remains active.
 The standalone observability demo Consume role now exposes the classic
 Consumer's existing timing controls with their unchanged defaults:
 
-| Setting | Default | CLI | Environment |
-|---|---:|---|---|
-| session timeout | `45s` | `--consumer-session-timeout` | `KRABKA_DEMO_CONSUMER_SESSION_TIMEOUT` |
-| rebalance timeout | `1m` | `--consumer-rebalance-timeout` | `KRABKA_DEMO_CONSUMER_REBALANCE_TIMEOUT` |
-| heartbeat interval | `3s` | `--consumer-heartbeat-interval` | `KRABKA_DEMO_CONSUMER_HEARTBEAT_INTERVAL` |
-| request timeout | `30s` | `--consumer-request-timeout` | `KRABKA_DEMO_CONSUMER_REQUEST_TIMEOUT` |
+| Setting            | Default | CLI                             | Environment                               |
+| ------------------ | ------: | ------------------------------- | ----------------------------------------- |
+| session timeout    |   `45s` | `--consumer-session-timeout`    | `KRABKA_DEMO_CONSUMER_SESSION_TIMEOUT`    |
+| rebalance timeout  |    `1m` | `--consumer-rebalance-timeout`  | `KRABKA_DEMO_CONSUMER_REBALANCE_TIMEOUT`  |
+| heartbeat interval |    `3s` | `--consumer-heartbeat-interval` | `KRABKA_DEMO_CONSUMER_HEARTBEAT_INTERVAL` |
+| request timeout    |   `30s` | `--consumer-request-timeout`    | `KRABKA_DEMO_CONSUMER_REQUEST_TIMEOUT`    |
 
 Values parse as positive UOM `Time` quantities. Explicit values on Produce or
 Stream roles fail before telemetry or external I/O. The settings flow directly
@@ -6071,19 +6068,19 @@ hardcoded operational-value audit remains active.
 The standalone observability demo Consume role now exposes the classic
 Consumer's existing behavior choices with unchanged defaults:
 
-| Setting | Default | Accepted values |
-|---|---|---|
-| auto offset reset | `latest` | `latest`, `earliest`, `none` |
-| isolation level | `read-uncommitted` | `read-uncommitted`, `read-committed` |
-| partition assignor | `range` | `range`, `cooperative-sticky` |
+| Setting            | Default            | Accepted values                      |
+| ------------------ | ------------------ | ------------------------------------ |
+| auto offset reset  | `latest`           | `latest`, `earliest`, `none`         |
+| isolation level    | `read-uncommitted` | `read-uncommitted`, `read-committed` |
+| partition assignor | `range`            | `range`, `cooperative-sticky`        |
 
 The exact CLI and environment pairs are:
 
-| CLI | Environment |
-|---|---|
+| CLI                            | Environment                              |
+| ------------------------------ | ---------------------------------------- |
 | `--consumer-auto-offset-reset` | `KRABKA_DEMO_CONSUMER_AUTO_OFFSET_RESET` |
-| `--consumer-isolation-level` | `KRABKA_DEMO_CONSUMER_ISOLATION_LEVEL` |
-| `--consumer-assignor` | `KRABKA_DEMO_CONSUMER_ASSIGNOR` |
+| `--consumer-isolation-level`   | `KRABKA_DEMO_CONSUMER_ISOLATION_LEVEL`   |
+| `--consumer-assignor`          | `KRABKA_DEMO_CONSUMER_ASSIGNOR`          |
 
 The three existing client-consumer enums own exact `FromStr` parsing. Clap
 provides environment parsing and CLI precedence without coupling the Consumer
@@ -6108,13 +6105,13 @@ audit remains active.
 The shared telemetry profiling routes now use one validated process-local
 policy while preserving their previous defaults:
 
-| Setting | Default | CLI | Environment |
-|---|---:|---|---|
-| CPU duration | `30s` | `--profiling-cpu-default-duration` | `KRABKA_PROFILING_CPU_DEFAULT_DURATION` |
-| CPU duration cap | `60s` | `--profiling-cpu-max-duration` | `KRABKA_PROFILING_CPU_MAX_DURATION` |
-| CPU sample frequency | `99Hz` | `--profiling-cpu-sample-frequency` | `KRABKA_PROFILING_CPU_SAMPLE_FREQUENCY` |
-| heap duration | `5s` | `--profiling-heap-default-duration` | `KRABKA_PROFILING_HEAP_DEFAULT_DURATION` |
-| heap duration cap | `30s` | `--profiling-heap-max-duration` | `KRABKA_PROFILING_HEAP_MAX_DURATION` |
+| Setting                |                    Default | CLI                                  | Environment                               |
+| ---------------------- | -------------------------: | ------------------------------------ | ----------------------------------------- |
+| CPU duration           |                      `30s` | `--profiling-cpu-default-duration`   | `KRABKA_PROFILING_CPU_DEFAULT_DURATION`   |
+| CPU duration cap       |                      `60s` | `--profiling-cpu-max-duration`       | `KRABKA_PROFILING_CPU_MAX_DURATION`       |
+| CPU sample frequency   |                     `99Hz` | `--profiling-cpu-sample-frequency`   | `KRABKA_PROFILING_CPU_SAMPLE_FREQUENCY`   |
+| heap duration          |                       `5s` | `--profiling-heap-default-duration`  | `KRABKA_PROFILING_HEAP_DEFAULT_DURATION`  |
+| heap duration cap      |                      `30s` | `--profiling-heap-max-duration`      | `KRABKA_PROFILING_HEAP_MAX_DURATION`      |
 | native-frame blocklist | `libc,libgcc,pthread,vdso` | `--profiling-native-frame-blocklist` | `KRABKA_PROFILING_NATIVE_FRAME_BLOCKLIST` |
 
 Durations and frequency are dimensioned UOM values. CPU sampling accepts only

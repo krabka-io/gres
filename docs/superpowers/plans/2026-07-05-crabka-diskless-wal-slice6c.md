@@ -33,6 +33,7 @@
 ## Task 1: Widen the commit path to return the applied base
 
 **Files:**
+
 - Modify: `crates/raft/src/kraft/controller.rs`, `crates/raft/src/kraft/transport.rs`
 
 - [ ] **Step 1: Write the failing test**
@@ -41,7 +42,7 @@ Two concurrent `V1PartitionOffsetAdvance` submits for the same partition return 
 
 - [ ] **Step 2: Run to verify it fails; implement**
 
-Add an `AssignOffsets { topic, partition, count, reply: oneshot<Result<Offset>> }` command (or widen the `submit_change` reply) that, in the apply path (`controller.rs:1441-1448`, next to the Slice-2 `V1PartitionOffsetAdvance` apply), records the **pre-increment** `partition_next_offsets` slot value and resolves *that submitter's* reply with it. The single serialized apply loop (`:445`) gives concurrent advances a total order → unique contiguous ranges. (This is the return-from-commit Slice 2 deferred as "the S6-era robustification.")
+Add an `AssignOffsets { topic, partition, count, reply: oneshot<Result<Offset>> }` command (or widen the `submit_change` reply) that, in the apply path (`controller.rs:1441-1448`, next to the Slice-2 `V1PartitionOffsetAdvance` apply), records the **pre-increment** `partition_next_offsets` slot value and resolves _that submitter's_ reply with it. The single serialized apply loop (`:445`) gives concurrent advances a total order → unique contiguous ranges. (This is the return-from-commit Slice 2 deferred as "the S6-era robustification.")
 
 - [ ] **Step 3: Run to verify + commit**
 
@@ -57,6 +58,7 @@ git commit -m "feat(raft): return the applied base offset from the offset-advanc
 ## Task 2: `ConcurrentSequencer` (impl the `OffsetSequencer` seam)
 
 **Files:**
+
 - Create/Modify: `crates/broker/src/wal/…` (next to Slice-2's `ControllerSequencer`)
 
 - [ ] **Step 1: Write the failing test**
@@ -81,6 +83,7 @@ git commit -m "feat(broker): ConcurrentSequencer — concurrent-safe offset assi
 ## Task 3: Leaderless write path (produce-gate flip)
 
 **Files:**
+
 - Modify: `crates/broker/src/handlers/produce.rs`
 
 - [ ] **Step 1: Write the failing test**
@@ -105,6 +108,7 @@ git commit -m "feat(broker): leaderless diskless write path (accept-and-sequence
 ## Task 4: The verified concurrent offset-allocator kernel
 
 **Files:**
+
 - Create: `crates/verified/src/offset_allocator.rs`; Modify: `crates/verified/src/lib.rs`
 
 - [ ] **Step 1: Write the failing oracle test**

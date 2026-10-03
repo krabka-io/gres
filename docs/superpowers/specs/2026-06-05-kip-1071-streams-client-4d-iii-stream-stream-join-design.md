@@ -21,14 +21,17 @@ stores and adds the dual join processors + the KIP-633 left/outer emit-on-close.
 ## 2. Goal & non-goals
 
 ### Goal
+
 A windowed KStream-KStream join in the DSL:
+
 ```rust
 KStream<K,V>::join<V2,VO,F>(&self, other: &KStream<K,V2>, joiner: F, windows: JoinWindows) -> KStream<K,VO>      // inner; F: Fn(&V,&V2)->VO
 KStream<K,V>::left_join<V2,VO,F>(&self, other, joiner, windows) -> KStream<K,VO>                                  // left;  F: Fn(&V, Option<&V2>)->VO
 KStream<K,V>::outer_join<V2,VO,F>(&self, other, joiner, windows) -> KStream<K,VO>                                 // outer; F: Fn(Option<&V>, Option<&V2>)->VO
 ```
+
 - A record on side A at `tA` matches side-B records with timestamp in `[tA−before,
-  tA+after]` (and the mirror for B, **with before/after swapped**); each match emits
+tA+after]` (and the mirror for B, **with before/after swapped**); each match emits
   `joiner(a,b)` at `max(tA,tB)`.
 - **inner**: emit only on matches. **left/outer**: buffer unmatched records and emit
   the null-padded result when the window **closes** (stream-time-driven).
@@ -38,18 +41,19 @@ KStream<K,V>::outer_join<V2,VO,F>(&self, other, joiner, windows) -> KStream<K,VO
   the `retainDuplicates` `WindowKeySchema` changelog records.
 
 ### Non-goals (deferred)
+
 - The JVM **wall-clock emit throttle** (`EMIT_INTERVAL_MS`=1s) — Crabka runs the
   close-scan **stream-time-only** (same result set, deterministic, testable).
 - **GlobalKTable** / **foreign-key** / **self** joins; **sliding** windows; the
   windowed-**aggregation** closing (4d-ii's deferral stands — this slice adds only
-  *join*-specific close emission).
+  _join_-specific close emission).
 
 ## 3. `JoinWindows` + the retainDuplicates join store
 
 - **`JoinWindows`** (`dsl/windows.rs`): `{ before_ms, after_ms, grace_ms }` with
   `JoinWindows::of(diff)` (before=after=diff, grace 0), `.before(d)`, `.after(d)`,
   `.grace(g)`. `size() = before + after`; store/changelog retention = `before +
-  after + grace + 86_400_000`.
+after + grace + 86_400_000`.
 - **Seqnum codec** (`store/window_schema.rs`): `store_key` gains a `seqnum: u32` param
   — `key_bytes ‖ windowStart:8BE ‖ seqnum:4BE`. 4d-ii aggregation callers pass `0`
   (bytes unchanged); the join store passes an incrementing value.
@@ -57,8 +61,8 @@ KStream<K,V>::outer_join<V2,VO,F>(&self, other, joiner, windows) -> KStream<K,VO
   NEW) — a second window store beside 4d-ii's `WindowBytesStore`, over the same async
   `ByteKeyValueStore`, with three deliberate differences:
   - `async fn put(&mut self, key: K, timestamp: i64, value: V)` — writes `store_key(kb,
-    ts, self.seqnum)` with a **per-store monotonic seqnum** (`self.seqnum =
-    (self.seqnum + 1) & 0x7FFF_FFFF` per put; mirrors `RocksDBWindowStore`), so
+ts, self.seqnum)` with a **per-store monotonic seqnum** (`self.seqnum =
+(self.seqnum + 1) & 0x7FFF_FFFF` per put; mirrors `RocksDBWindowStore`), so
     duplicates at the same `(key, ts)` coexist.
   - **raw value** — `value_serde.serialize(v)` directly, NO `ValueAndTimestamp` wrap
     (join stores are plain `WindowStore`).
@@ -78,8 +82,9 @@ KStream<K,V>::outer_join<V2,VO,F>(&self, other, joiner, windows) -> KStream<K,VO
 `KStreamKStreamJoinProcessor<K, VThis, VOther, VO, F>` (`dsl/processors/stream_join.rs`,
 NEW; `Processor<K, VThis, K, VO>` — output is a plain `KStream` record, not `Change`).
 Per record `(k, v_this)` at `t`:
-1. **put own** — `own_store.put(k, t, v_this)` (raw value, auto-seqnum into *this
-   side's* store).
+
+1. **put own** — `own_store.put(k, t, v_this)` (raw value, auto-seqnum into _this
+   side's_ store).
 2. **fetch other** — `other_store.fetch(k, t − fetch_before, t + fetch_after)`.
 3. **emit per match** — for each `(t_other, v_other)`: forward `joiner(...)` keyed `k`
    at `max(t, t_other)`.
@@ -110,13 +115,13 @@ Three new pieces (all gated to left/outer):
    `(timestamp:8BE ‖ side:1 ‖ key_bytes)` (sorts by time→side→key), value = a tagged
    `LeftOrRight(VA | VB)` (the unmatched value). Both processors connect to it. Its
    changelog is a standard KV changelog (config pinned by the capture).
-   - **Ground truth (C4 capture).** The JVM `KStreamImplJoin` *renames the per-side
-     join processors* for left/outer: THIS → `KSTREAM-OUTERTHIS-` when the other side
+   - **Ground truth (C4 capture).** The JVM `KStreamImplJoin` _renames the per-side
+     join processors_ for left/outer: THIS → `KSTREAM-OUTERTHIS-` when the other side
      is outer (`rightOuter`), OTHER → `KSTREAM-OUTEROTHER-` when this side is outer
      (`leftOuter`) — so inner = `JOINTHIS/JOINOTHER`, left = `JOINTHIS/OUTEROTHER`,
      outer = `OUTERTHIS/OUTEROTHER`. The window-store names follow
      (`<proc>-store`). The shared store does **not** mint a fresh counter index — it
-     *reuses the THIS processor's index*: `KSTREAM-OUTERSHARED-<thisIndex>-store`. Its
+     _reuses the THIS processor's index_: `KSTREAM-OUTERSHARED-<thisIndex>-store`. Its
      changelog is `cleanup.policy=compact` (+ `message.timestamp.type=CreateTime`),
      i.e. the standard KV changelog. Sorted changelog order: `OUTEROTHER` <
      `OUTERSHARED` < `OUTERTHIS`.
@@ -128,21 +133,21 @@ Three new pieces (all gated to left/outer):
    - bump `stream_time = max(stream_time, t)`.
    - **unmatched** (outer/left, no fetch match): if the record's window already closed
      (`t + fetch_after < stream_time`), emit the null-padded result eagerly; else
-     buffer it at `(t, side, k)`. *(Implementation note: the JVM's additional
+     buffer it at `(t, side, k)`. _(Implementation note: the JVM's additional
      "outer store empty" eager-emit short-circuit is intentionally dropped — with a
      windowed buffer it is self-defeating, since the first unmatched record always
      sees an empty store and would emit eagerly, defeating the buffer/close-scan and
-     reintroducing the spurious nulls KIP-633 removes.)*
+     reintroducing the spurious nulls KIP-633 removes.)_
    - **close scan**: iterate the outer store in timestamp order; for each buffered
      `(ts, side, k)` whose window has closed — `min_time + lookback(side) + grace <
-     stream_time`, **lookback = after for a left-side (A) record, before for a
+stream_time`, **lookback = after for a left-side (A) record, before for a
      right-side (B) record** — emit its null-padded result at `ts` and delete it; stop
      at the first still-open entry.
 
 **Simplification (flagged):** the JVM throttles the close-scan with a 1s wall-clock
 gate + a system-time punctuator. Crabka drops the wall-clock throttle and runs the
 close-scan stream-time-only every `process()` — same emitted result set,
-deterministic, testable in `TopologyTestDriver`. Emission *cadence* may differ from a
+deterministic, testable in `TopologyTestDriver`. Emission _cadence_ may differ from a
 wall-clock JVM; the result bytes do not.
 
 ## 6. DSL ops + lowering + windowed-join changelog config
@@ -157,10 +162,10 @@ wall-clock JVM; the result bytes do not.
   stores it touches; `add_copartition_group([a_src, b_src])`. Return `KStream<K,VO>`.
   Both inputs must be copartitioned; a key-changed stream must `.repartition(..)`
   first (reuse 4c-ii's eager-panic convention).
-- **Windowed-join changelog config** (a *third* variant): `add_join_window_store`
+- **Windowed-join changelog config** (a _third_ variant): `add_join_window_store`
   registers a windowed store whose changelog is `cleanup.policy=delete` (NOT
   `compact,delete` — retainDuplicates can't compact) + `retention.ms = before + after +
-  grace + 86_400_000`. Threaded by widening `StoreEntry`'s windowed marker to an enum:
+grace + 86_400_000`. Threaded by widening `StoreEntry`'s windowed marker to an enum:
   `Kv` (compact) | `AggWindow` (compact,delete + retention) | `JoinWindow` (delete +
   retention). `wire.rs` picks the config per store kind. The shared outer store is a
   plain KV store (standard `compact` changelog); the exact config is pinned by the
@@ -169,6 +174,7 @@ wall-clock JVM; the result bytes do not.
 ## 7. JVM capture & golden frames
 
 Add to `Capture.java`:
+
 - `streamStreamJoin()` = `streamA.join(streamB, (a,b)->a+b, JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofSeconds(60)))` → `to("out")` (inner — two `delete` window-store changelogs + copartition `[0,1]`).
 - `streamStreamOuterJoin()` = the same with `outerJoin` (left≈outer topology — + the shared outer KV store + its changelog).
 
@@ -183,11 +189,12 @@ Capture via the Docker Kafka-Streams 4.1 harness → `testdata/golden/dsl/{strea
    fixtures; the **9 prior goldens stay byte-identical**.
 3. **Execution** (`TopologyTestDriver`): inner (A+B in window → joined; outside → none;
    the before/after **swap** with an asymmetric `.before`/`.after`); duplicates (two A's
-   + one B → two results); left (A with no B → `joiner(a,None)` emitted only after
-   stream-time closes the window); outer (both sides null-padded on close).
+   - one B → two results); left (A with no B → `joiner(a,None)` emitted only after
+     stream-time closes the window); outer (both sides null-padded on close).
 4. **Regression:** all prior 4d / #4 / #2 / #3 tests stay green.
 
 ## 9. Success criteria
+
 - `KStream::join`/`left_join`/`outer_join` with `JoinWindows` work (execution:
   inner/left/outer + the swap + duplicates + close emission) and the topology +
   window/outer-store changelog configs byte-match captured JVM 4.1 output; the
@@ -195,14 +202,15 @@ Capture via the Docker Kafka-Streams 4.1 harness → `testdata/golden/dsl/{strea
   seqnum) + raw values.
 - The 9 prior golden frames unchanged.
 - `cargo test -p krabka-client-streams` green; `cargo clippy --workspace
-  --all-targets -- -D warnings` + `cargo fmt --check` clean; `cargo build
-  --workspace`.
+--all-targets -- -D warnings` + `cargo fmt --check` clean; `cargo build
+--workspace`.
 - A documented stream-stream-join note in `lib.rs`.
 
 ## 10. Plan phasing (largest slice in the program)
 
 The implementation plan phases this so inner is a green, reviewable milestone before
 the emit-on-close subsystem:
+
 - **Phase A:** seqnum codec param + `JoinWindowBytesStore` + `add_join_window_store` +
   the `JoinWindow` changelog variant (units + a wire test).
 - **Phase B:** `JoinWindows` + the inner dual processors + DSL `join` + inner golden +
@@ -213,6 +221,7 @@ the emit-on-close subsystem:
   its own PR stacked on Phases A+B).
 
 ## 11. Open points for the plan
+
 - **Store-name indices / the JVM `KSTREAM-WINDOWED-` nodes** — the capture pins the
   two window-store names + the outer-store name + their counter positions; the
   lowering mints/burns to match (Step 7 captures first).

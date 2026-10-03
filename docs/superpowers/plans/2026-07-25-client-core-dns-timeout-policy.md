@@ -25,6 +25,7 @@
 ### Task 1: Validated and Bounded Client DNS Policy
 
 **Files:**
+
 - Modify: `crates/client-core/Cargo.toml`
 - Modify: `crates/client-core/src/error.rs`
 - Modify: `crates/client-core/src/connection.rs`
@@ -34,6 +35,7 @@
 - Modify: `crates/client-core/src/lib.rs`
 
 **Interfaces:**
+
 - Produces: `DEFAULT_CLIENT_DNS_TIMEOUT`, `DEFAULT_CLIENT_CONNECT_TIMEOUT`, and `DEFAULT_CLIENT_REQUEST_TIMEOUT`.
 - Produces: `ClientDnsTimeout::new(Duration) -> Result<ClientDnsTimeout, String>`, `duration() -> Duration`, and `milliseconds() -> u64`.
 - Extends: `ConnectionOptions { dns_timeout: ClientDnsTimeout, .. }`.
@@ -371,9 +373,11 @@ git commit -m "feat(client): bound DNS resolution"
 ### Task 2: Audit and Slice Verification
 
 **Files:**
+
 - Modify: `docs/configuration-audit.md`
 
 **Interfaces:**
+
 - Consumes: the committed `ClientDnsTimeout` policy and all lookup call sites from Task 1.
 - Produces: an evidence-backed audit entry and the next coherent unresolved configuration owner.
 
@@ -430,9 +434,11 @@ git commit -m "docs(client): record DNS timeout audit"
 ### Task 3: Independent Review and Publication
 
 **Files:**
+
 - Review only: the complete implementation range from the parent of Task 1 through Task 2 HEAD.
 
 **Interfaces:**
+
 - Consumes: the approved design, this plan, task reports, committed diff, and scanner evidence.
 - Produces: a clean independent review verdict and published draft PR head.
 

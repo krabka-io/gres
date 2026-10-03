@@ -23,12 +23,14 @@
 ### Task 1: Enforce Crate Publication Allowlist
 
 **Files:**
+
 - Modify: `crates/*/Cargo.toml`
 - Modify: `release-plz.toml`
 - Create: `tools/check-publish-allowlist.sh`
 - Modify: `.github/workflows/ci.yml`
 
 **Interfaces:**
+
 - Consumes: Cargo package metadata where `publish = false` appears as `publish: []` and omitted `publish` appears as `publish: null`.
 - Produces: `tools/check-publish-allowlist.sh`, an executable verifier that exits non-zero for any publishable package not in the public allowlist.
 

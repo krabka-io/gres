@@ -66,9 +66,11 @@ CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
 ### Task 1: Carry DNS policy to the registry producer
 
 **Files:**
+
 - Modify: `crates/gres-control/src/registry.rs`
 
 **Interfaces:**
+
 - Consumes:
   `krabka_client_core::ClientDnsTimeout`
 - Produces:
@@ -193,6 +195,7 @@ producer and that no reader/admin behavior changed.
 ### Task 2: Expose every standalone registry surface
 
 **Files:**
+
 - Modify: `crates/gres/src/lib.rs`
 - Modify: `crates/cli/src/gres.rs`
 - Modify: `crates/gres-activator/src/main.rs`
@@ -200,6 +203,7 @@ producer and that no reader/admin behavior changed.
 - Modify: `crates/gres-loadtest/src/cluster.rs`
 
 **Interfaces:**
+
 - Consumes:
   `RegistryPolicy::with_producer_dns_timeout_ms(u64) -> Result<RegistryPolicy, String>`
 - Produces on all four parsers:
@@ -390,6 +394,7 @@ load-test child propagation.
 ### Task 3: Expose the Kafka CRD and operator paths
 
 **Files:**
+
 - Modify: `crates/operator/src/crd/kafka.rs`
 - Modify: `crates/operator/src/context.rs`
 - Modify: `crates/operator/src/controller/gres.rs`
@@ -397,6 +402,7 @@ load-test child propagation.
 - Modify generated: `deploy/crds/crabka.io_kafkas.yaml`
 
 **Interfaces:**
+
 - Produces:
   `GresRegistrySpec::producer_dns_timeout_ms: Option<u64>`
 - Produces:
@@ -622,9 +628,11 @@ schema.
 ### Task 4: Audit, verify, publish, and continue
 
 **Files:**
+
 - Modify: `docs/configuration-audit.md`
 
 **Interfaces:**
+
 - Consumes: the reviewed shared policy, standalone surfaces, and operator paths
 - Produces: classified audit evidence, updated draft PR #904, and the next
   unresolved owner

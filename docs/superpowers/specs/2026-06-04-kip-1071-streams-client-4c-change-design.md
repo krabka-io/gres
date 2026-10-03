@@ -14,11 +14,11 @@ flags this: `Change<V>` propagation is deferred here.
 
 The joins+windowing program (roadmap rows 4c/4d) decomposes by dependency:
 
-| Slice | Delivers | Depends on |
-|---|---|---|
-| **4c-i** (this spec) | `Change<old,new>` propagation + `toTable` | #4 |
-| 4c-ii | Joins — KStream-KTable, KTable-KTable | 4c-i |
-| 4d | Windowing — window/session stores, windowed aggregations, windowed KStream-KStream join | 4c-i |
+| Slice                | Delivers                                                                                | Depends on |
+| -------------------- | --------------------------------------------------------------------------------------- | ---------- |
+| **4c-i** (this spec) | `Change<old,new>` propagation + `toTable`                                               | #4         |
+| 4c-ii                | Joins — KStream-KTable, KTable-KTable                                                   | 4c-i       |
+| 4d                   | Windowing — window/session stores, windowed aggregations, windowed KStream-KStream join | 4c-i       |
 
 `Change` is foundational: KTable-KTable joins and correct downstream KTable
 operators all require it. This slice does the refactor in isolation (lowest risk)
@@ -27,6 +27,7 @@ so the joins build on a correct base.
 ## 2. Goal & non-goals
 
 ### Goal
+
 1. A KTable is internally a **change stream**: every KTable node flows
    `Record<K, Change<V>>` where `Change<V> { old: Option<V>, new: Option<V> }`.
 2. **Tombstones propagate**: `filter` emits a tombstone (`new: None`) when a row
@@ -37,18 +38,20 @@ so the joins build on a correct base.
    change for existing operators** (the 5 golden frames stay byte-identical).
 
 ### Non-goals (deferred)
+
 - **Joins** (KStream-KTable, KTable-KTable) → 4c-ii.
 - **Windowing** + windowed joins → 4d.
-- **`toStream` tombstone→null output** — `to_stream()` forwards updates and *drops*
+- **`toStream` tombstone→null output** — `to_stream()` forwards updates and _drops_
   tombstones from the output stream (a typed `Record<K,V>` can't hold a null
   value; full null-output needs crate-wide `Option<V>` plumbing). Joins read
-  KTable *stores*, not `toStream` output, so this isn't on the 4c-ii path.
+  KTable _stores_, not `toStream` output, so this isn't on the 4c-ii path.
 - **`suppress` / record caching** (KIP-328), foreign-key joins.
 
 ## 3. `Change<V>` model
 
 `Change<V> { old: Option<V>, new: Option<V> }` lives in `dsl/processors/change.rs`
 (`Send + 'static`, carried erased like any record value):
+
 - Normal update: `Change { old: prev_or_None, new: Some(v) }`.
 - Tombstone: `Change { old: Some(prev), new: None }`.
 
@@ -80,8 +83,9 @@ null-value changelog entries).
 ## 5. `to_table` (`dsl/kstream.rs`, `dsl/processors/table.rs`)
 
 `KStream::to_table<KS,VS>(Materialized<KS,VS>) -> KTable<K,V>`:
+
 - Records a node + lower thunk: `add_processor(name, KStreamToTableProcessor{store})`
-  + `add_state_store(store_name, ks, vs, [name])`.
+  - `add_state_store(store_name, ks, vs, [name])`.
 - `KStreamToTableProcessor` — per record: `old = store.get(k)`, `store.put(k, v)`,
   forward `Change{old, new: Some(v)}`.
 - Store name: `Materialized.store_name` if set (the `to_table` fixture uses an explicit
@@ -117,16 +121,18 @@ changes execution, not topology. This is the primary regression gate.
 4. **Regression:** all #1/#2/#3/#4 execution + broker integration tests stay green.
 
 ## 8. Success criteria
+
 - KTable internally propagates `Change<old,new>`; `filter` emits tombstones;
   materialized stores delete on tombstone; `to_table` works.
 - `to_table` golden frame byte-matches captured JVM 4.1 output; the 5 prior golden
   frames unchanged.
 - `cargo test -p krabka-client-streams` green; `cargo clippy --workspace
-  --all-targets -- -D warnings` + `cargo fmt --check` clean; `cargo build
-  --workspace`.
+--all-targets -- -D warnings` + `cargo fmt --check` clean; `cargo build
+--workspace`.
 - A documented `to_table` / Change example or doctest in `lib.rs`.
 
 ## 9. Open points for the plan
+
 - **`Change` erasure in the driver/test-driver** — the test driver's `read_output`
   deserializes the value; for KTable-derived streams the value is the extracted
   `new` (post-`to_stream`), so existing `read_output` works. Confirm the

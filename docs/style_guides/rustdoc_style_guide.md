@@ -73,7 +73,7 @@ pub fn apply(&mut self, record: &MetadataRecord) -> Vec<TopicId> {
 
 For types or functions with non-trivial behaviour, use structured sections:
 
-```rust
+````rust
 /// A cancellable pool of async tasks with panic propagation.
 ///
 /// Tasks spawned on the pool are cancelled when the pool is dropped.
@@ -91,17 +91,17 @@ For types or functions with non-trivial behaviour, use structured sections:
 /// # Panics
 ///
 /// `join()` panics if any spawned task panicked.
-```
+````
 
 ## Sections
 
 Use only these standard sections, in this order:
 
-| Section | When to use |
-|---------|-------------|
-| `# Examples` | Complex APIs where usage is not obvious |
-| `# Panics` | When the function can panic in normal use |
-| `# Errors` | When the function returns `Result` and the error conditions are worth a note |
+| Section      | When to use                                                                  |
+| ------------ | ---------------------------------------------------------------------------- |
+| `# Examples` | Complex APIs where usage is not obvious                                      |
+| `# Panics`   | When the function can panic in normal use                                    |
+| `# Errors`   | When the function returns `Result` and the error conditions are worth a note |
 
 There is no `# Safety` section: Crabka forbids `unsafe` (`unsafe_code = "forbid"`), so there are no `unsafe fn` to document.
 
@@ -114,8 +114,8 @@ A prose audit of this workspace found eight such boilerplate strings and hundred
 ## Examples
 
 - Doc examples compile **and run** in CI (`cargo test --workspace --doc`). Keep them correct against the current API.
-- Use ```` ```no_run ```` for examples that need a runtime, a network, or a live broker. These examples compile, but CI does not run them.
-- Use ```` ```ignore ```` only for genuinely incomplete snippets, and sparingly.
+- Use ` ```no_run ` for examples that need a runtime, a network, or a live broker. These examples compile, but CI does not run them.
+- Use ` ```ignore ` only for genuinely incomplete snippets, and sparingly.
 - Keep examples minimal. Show the API call, not the setup. Use `#`-hidden lines for boilerplate the reader does not need to see.
 - `rustfmt.toml` sets `format_code_in_doc_comments = true`, so `cargo +nightly fmt` formats the code inside your examples. Keep them fmt-clean so the format check passes.
 

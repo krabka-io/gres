@@ -1,9 +1,9 @@
-use krabka_units::{Time, convert::TimeExt as _};
 use k8s_openapi::{
     api::coordination::v1::{Lease, LeaseSpec},
     apimachinery::pkg::apis::meta::v1::{MicroTime, ObjectMeta},
     jiff,
 };
+use krabka_units::{Time, convert::TimeExt as _};
 use kube::{
     Client,
     api::{Api, PostParams},

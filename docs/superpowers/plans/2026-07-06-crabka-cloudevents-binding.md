@@ -44,6 +44,7 @@
 ## Task 1 (Batch A): The `ce_translate` module
 
 **Files:**
+
 - Create: `crates/grpc-gateway/src/ce_translate.rs` (+ `mod ce_translate;` in `lib.rs`)
 
 - [ ] **Step 1: Write the failing tests**
@@ -275,6 +276,7 @@ git commit -m "feat(gateway): ce_translate — CloudEvents binding translation +
 ## Task 2 (Batch B1): Ingress — HTTP produce-in
 
 **Files:**
+
 - Modify: `crates/grpc-gateway/src/webhook.rs:86-259` (both handlers, the `:198`/`:249` seams)
 - Test: `crates/grpc-gateway/tests/webhook.rs` (extend)
 
@@ -323,6 +325,7 @@ git commit -m "feat(gateway): CloudEvents ingress on HTTP produce-in (binary + s
 ## Task 3 (Batch B2): Egress — webhook `content_mode`
 
 **Files:**
+
 - Modify: `crates/grpc-gateway/src/outbound_config.rs:30-190` (`ContentMode` enum, config field, `compile()` guard)
 - Modify: `crates/grpc-gateway/src/outbound.rs:185-296` (branch the POST construction + structured serializer)
 - Test: `crates/grpc-gateway/tests/outbound.rs` (extend)
@@ -380,6 +383,7 @@ git commit -m "feat(gateway): CloudEvents webhook egress (binary + structured co
 ## Task 4 (Batch B1, optional): gRPC Send validation flag
 
 **Files:**
+
 - Modify: `crates/grpc-gateway/src/handlers.rs:130-162`
 
 - [ ] **Step 1:** Add a gateway-level `validate_cloudevents_on_send: bool` (default false). When set, after `to_gateway_record`, if the record's headers assert `ce_specversion`, run `ce_translate::validate_binary_required` and, on error, return a non-retriable `RecordResult` error (mirror the per-record error at `streaming.rs`). Default off = raw passthrough unchanged.
@@ -395,6 +399,7 @@ git commit -m "feat(gateway): optional CloudEvents validation on gRPC Send"
 ## Task 5 (Batch C): End-to-end round-trip
 
 **Files:**
+
 - Create: `crates/grpc-gateway/tests/cloudevents_roundtrip.rs`
 
 - [ ] **Step 1 (5a): The HTTP produce-in → Kafka → webhook egress round-trip**

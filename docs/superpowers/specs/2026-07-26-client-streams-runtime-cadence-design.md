@@ -73,10 +73,10 @@ use the validated types directly.
 
 The observability demo adds Stream-role-only inputs:
 
-| Policy | CLI | Environment | Default |
-| --- | --- | --- | --- |
-| Poll interval | `--streams-poll-interval-ms` | `KRABKA_DEMO_STREAMS_POLL_INTERVAL_MS` | `200` |
-| Commit interval | `--streams-commit-interval-ms` | `KRABKA_DEMO_STREAMS_COMMIT_INTERVAL_MS` | `5000` |
+| Policy          | CLI                            | Environment                              | Default |
+| --------------- | ------------------------------ | ---------------------------------------- | ------- |
+| Poll interval   | `--streams-poll-interval-ms`   | `KRABKA_DEMO_STREAMS_POLL_INTERVAL_MS`   | `200`   |
+| Commit interval | `--streams-commit-interval-ms` | `KRABKA_DEMO_STREAMS_COMMIT_INTERVAL_MS` | `5000`  |
 
 Each optional CLI field uses `std::num::NonZeroU64`. Clap provides
 CLI-over-environment precedence; absence selects the corresponding typed

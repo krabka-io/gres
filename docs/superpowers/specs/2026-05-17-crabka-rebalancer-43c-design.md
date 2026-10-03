@@ -103,6 +103,7 @@ min_topic_leaders_per_broker: u32,
 ```
 
 Helm chart additions:
+
 - `values.yaml`: `minTopicLeadersPerBroker: 0`
 - `templates/deployment.yaml`: `- name: KRABKA_MIN_TOPIC_LEADERS_PER_BROKER` env entry, value `{{ .Values.minTopicLeadersPerBroker | quote }}`
 - `tests/deployment_test.yaml`: one new `contains` assertion in the existing "passes env vars" test for the new env var name.
@@ -112,6 +113,7 @@ Helm chart additions:
 ### Unit tests (per goal, `#[cfg(test)]` in source files)
 
 **`rack_aware::tests`** (5 tests):
+
 - `balanced_three_racks_no_op` — RF=3 across 3 racks, no collisions, returns empty Vec.
 - `single_collision_resolved` — two replicas in rack A, one in B; goal emits one movement to rack C.
 - `multi_collision_iterates_within_propose` — multiple partitions with collisions; goal emits one movement per collision in a single call.
@@ -119,12 +121,14 @@ Helm chart additions:
 - `rf_greater_than_rack_count_logs_warn_and_skips` — RF=3 across 2 racks; the affected partition gets zero movements (verified by counting emitted movements for that partition's key).
 
 **`topic_replica_distribution::tests`** (4 tests):
+
 - `balanced_topic_no_op` — three brokers each hold 4 replicas of topic `t`; threshold 10%; returns empty.
 - `hot_broker_triggers_swaps` — broker 1 holds 9 replicas, brokers 2+3 hold 0; emits movements until within threshold.
 - `multi_topic_independence` — topic A balanced, topic B imbalanced; only topic B sees movements.
 - `respects_max_movements_cap` — extreme imbalance + `max_movements_per_proposal = 2`; emits exactly 2 movements.
 
 **`min_topic_leaders_per_broker::tests`** (4 tests):
+
 - `min_zero_is_no_op` — `ctx.min_topic_leaders_per_broker = 0`; returns empty Vec regardless of distribution.
 - `min_one_ensures_coverage` — three brokers, one topic, all leaders on broker 1, `min = 1`; emits one leader-swap per under-served (broker, topic).
 - `broker_not_in_replica_set_skipped` — broker C isn't in topic T's replica set anywhere; goal doesn't try to flip a leader onto C.

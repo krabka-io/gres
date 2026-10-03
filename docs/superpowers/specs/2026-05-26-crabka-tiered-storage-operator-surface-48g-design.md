@@ -102,6 +102,7 @@ required here because there are no per-variant fields yet.
 ## Reconciler changes
 
 ### `render_broker_toml`
+
 (`crates/operator/src/controller/listeners.rs`)
 
 Accept a new `tiered_storage: Option<&TieredStorage>` argument. When
@@ -118,6 +119,7 @@ existing block order). The path is operator-owned — operators do not
 configure it.
 
 ### `render_configmap`
+
 (`crates/operator/src/controller/common.rs`)
 
 Plumb `owner.spec.tiered_storage.as_ref()` into the per-broker
@@ -130,7 +132,7 @@ After resolving `parent: Kafka` (existing code path), read
 
 - Add an `emptyDir` pod volume named `tier-storage`.
 - Add a writable `volumeMount` `{ name: "tier-storage", mountPath:
-  "/var/lib/crabka/remote" }` to the `broker` container.
+"/var/lib/crabka/remote" }` to the `broker` container.
 
 When `None`: neither volume nor mount is rendered (byte-identical pod
 template — no spurious roll on non-tiered clusters).
@@ -144,7 +146,7 @@ flips when `[remote_storage]` is added, triggering a rolling restart.
 ### CRD round-trip (`crates/operator/src/crd/kafka.rs`)
 
 - `tiered_storage_round_trips_through_json` — `Some(TieredStorage {
-  kind: Local })` ↔ `{"tieredStorage":{"type":"Local"}}`.
+kind: Local })` ↔ `{"tieredStorage":{"type":"Local"}}`.
 - `tiered_storage_omitted_when_none` — JSON doesn't contain
   `tieredStorage` when the field is `None`.
 - `minimum_required_spec_parses_without_tiered_storage` — the existing

@@ -2,8 +2,8 @@
 
 use std::sync::Arc;
 
-use krabka_remote_storage_topic::{MetadataEventLog, PartitionStart};
 use futures_util::StreamExt;
+use krabka_remote_storage_topic::{MetadataEventLog, PartitionStart};
 use tokio::sync::Mutex;
 
 use super::wal_index::{WalFlushRecord, WalIndexCache};

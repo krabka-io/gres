@@ -53,7 +53,7 @@ constructor for production wiring.
     size and rejected when the cap is one byte smaller.
 
 - [ ] Add failing CLI tests proving the default, invalid inputs, environment
-  parsing, and command-line precedence:
+      parsing, and command-line precedence:
 
 ```text
 KRABKA_TRACES_SCAN_CONCAT_MAX_BYTES=1024
@@ -70,20 +70,20 @@ CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
 ```
 
 - [ ] Add the workspace-pinned `refined_type` dependency to
-  `crates/traces/Cargo.toml`.
+      `crates/traces/Cargo.toml`.
 
 - [ ] Add `DEFAULT_SCAN_CONCAT_MAX_BYTES` and
-  `ScanConcatMaxBytes(u64)` beside `CrabkaSpanStore`. Validate with
-  `MinMaxU64<1, 1_500_000_000>` and implement only `new`, `into_value`,
-  `size`, `Default`, `Display`, and `FromStr`.
+      `ScanConcatMaxBytes(u64)` beside `CrabkaSpanStore`. Validate with
+      `MinMaxU64<1, 1_500_000_000>` and implement only `new`, `into_value`,
+      `size`, `Default`, `Display`, and `FromStr`.
 
 - [ ] Store the value in `CrabkaSpanStore`. Keep `new` as a default wrapper and
-  add `new_with_scan_concat_max_bytes` for the two production construction
-  paths.
+      add `new_with_scan_concat_max_bytes` for the two production construction
+      paths.
 
 - [ ] Pass the stored `ByteSize` to `recompute_scan_nested_sets`; remove the
-  local fixed cap while retaining the fixed ceiling documentation and existing
-  error.
+      local fixed cap while retaining the fixed ceiling documentation and existing
+      error.
 
 - [ ] Add:
 
@@ -137,7 +137,7 @@ CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
 ```
 
 - [ ] Add that single environment mapping to `traces-querier`; add no unused
-  mapping to other services.
+      mapping to other services.
 
 - [ ] Verify GREEN and deployment rendering:
 
@@ -170,7 +170,7 @@ git commit -m "feat(demo): wire traces scan concat cap"
 ### Task 3: Audit, verify, commit, and push
 
 - [ ] Run `tools/audit-runtime-values.sh` and record exact line, file, and
-  affected-package counts.
+      affected-package counts.
 
 - [ ] Classify every result from:
 
@@ -181,8 +181,8 @@ rg -n \
 ```
 
 - [ ] Append the owner, default, validation, precedence, runtime flow,
-  deployment scope, exact counts, and verification evidence to
-  `docs/configuration-audit.md`.
+      deployment scope, exact counts, and verification evidence to
+      `docs/configuration-audit.md`.
 
 - [ ] Run the final gate:
 
@@ -212,5 +212,5 @@ git commit -m "docs(audit): record traces scan concat cap"
 ```
 
 - [ ] Fetch, rebase only if the remote advanced, push
-  `configuration_expose`, and verify local and remote HEADs match. Preserve the
-  unrelated untracked plans.
+      `configuration_expose`, and verify local and remote HEADs match. Preserve the
+      unrelated untracked plans.

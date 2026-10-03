@@ -243,13 +243,13 @@ The raw `assignors` field stays `pub` (parity with other `NextGenConfig` fields)
 
 ## Error handling
 
-| Failure | Handling |
-|---------|----------|
-| `register_assignor` with duplicate name | Returns `AssignorRegistrationError::DuplicateName(name)`. |
-| `pick_assignor` on empty `assignors` vec | Panics with `"NextGenConfig must have at least one registered assignor"`. Only reachable if operator deliberately cleared the vec — non-recoverable. |
-| Client requests unregistered `server_assignor` | Heartbeat returns `UNSUPPORTED_ASSIGNOR` (111). No change from current. |
+| Failure                                                                                                     | Handling                                                                                                                                                   |
+| ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `register_assignor` with duplicate name                                                                     | Returns `AssignorRegistrationError::DuplicateName(name)`.                                                                                                  |
+| `pick_assignor` on empty `assignors` vec                                                                    | Panics with `"NextGenConfig must have at least one registered assignor"`. Only reachable if operator deliberately cleared the vec — non-recoverable.       |
+| Client requests unregistered `server_assignor`                                                              | Heartbeat returns `UNSUPPORTED_ASSIGNOR` (111). No change from current.                                                                                    |
 | Member previously chose an assignor name that's no longer registered (operator removed it across a restart) | `pick_assignor` skips the missing entry, tries the next member preference, falls back to `assignors.first()`. Documented in `pick_assignor`'s doc comment. |
-| Custom `assign()` panics | Actor task crashes; existing `get_or_create` dead-actor detection respawns from `seeds_cache`. Same failure model as the persistence path. |
+| Custom `assign()` panics                                                                                    | Actor task crashes; existing `get_or_create` dead-actor detection respawns from `seeds_cache`. Same failure model as the persistence path.                 |
 
 No new wire error codes.
 

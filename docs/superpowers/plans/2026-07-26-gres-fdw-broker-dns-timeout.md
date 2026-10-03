@@ -33,9 +33,11 @@
 ### Task 1: Secured Admin DNS Constructor
 
 **Files:**
+
 - Modify: `crates/client-admin/src/lib.rs`
 
 **Interfaces:**
+
 - Consumes: existing `AdminClient::opts`, `AdminClient::connect_with_options`, `ClientSecurity`, and `ClientDnsTimeout`.
 - Produces:
   ```rust
@@ -145,10 +147,12 @@
 ### Task 2: Carry and Enforce FDW Broker DNS Policy
 
 **Files:**
+
 - Modify: `crates/gres-fdw/src/lib.rs`
 - Modify: `crates/gres-fdw/src/source.rs`
 
 **Interfaces:**
+
 - Consumes: Task 1
   `AdminClient::connect_secured_with_dns_timeout` and existing
   `ClientDnsTimeout`.
@@ -356,10 +360,12 @@
 ### Task 3: Expose Standalone Gres Configuration
 
 **Files:**
+
 - Modify: `crates/gres/src/lib.rs`
 - Modify: `crates/gres/tests/runtime.rs`
 
 **Interfaces:**
+
 - Consumes: Task 2 `KafkaFdw::with_broker_dns_timeout`.
 - Produces:
   ```rust
@@ -552,13 +558,16 @@
 ### Task 4: Expose Operator CRD and Compute Rendering
 
 **Files:**
+
 - Modify: `crates/operator/src/crd/gres.rs`
 - Modify: `crates/operator/src/controller/gres_tenant.rs`
 - Modify: `deploy/crds/crabka.io_greses.yaml`
 
 **Interfaces:**
+
 - Consumes: Task 3 exact CLI flag and `ClientDnsTimeout`.
 - Produces:
+
   ```rust
   pub GresComputeSpec::fdw_broker_dns_timeout_ms: Option<u64>
   pub(crate) EffectiveGresComputePolicy::fdw_broker_dns_timeout:
@@ -784,9 +793,11 @@
 ### Task 5: Audit Evidence, Whole-Slice Review, and Publication
 
 **Files:**
+
 - Modify: `docs/configuration-audit.md`
 
 **Interfaces:**
+
 - Consumes: Tasks 1-4 complete runtime/configuration path.
 - Produces: an auditable closure record for only this FDW broker DNS slice and
   identifies the next unresolved owner without claiming the repository-wide
@@ -820,7 +831,7 @@
   - exact CLI/environment/CRD names and 10,000-ms default;
   - CLI > environment > default precedence;
   - `Gres.spec.compute -> EffectiveGresComputePolicy -> rendered CLI ->
-    ServeArgs -> KafkaFdw -> admin/raw lookup` flow;
+ServeArgs -> KafkaFdw -> admin/raw lookup` flow;
   - scan and import coverage, TLS/SASL preservation, and timeout errors;
   - scanner and focused-search totals;
   - verification evidence from Tasks 1-4;
@@ -886,7 +897,7 @@
   Confirm `git status -sb`, exact commits, exact file scope, `gh auth status`,
   and current branch. Push `configuration_expose` normally; do not force-push.
   Verify local `HEAD`, `git ls-remote origin
-  refs/heads/configuration_expose`, and draft PR #904 `head_sha` are identical.
+refs/heads/configuration_expose`, and draft PR #904 `head_sha` are identical.
   Require PR #904 to remain open, draft, and mergeable.
 
 - [ ] **Step 8: Continue the repository-wide audit**

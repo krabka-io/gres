@@ -239,5 +239,5 @@ mod wal;
 pub use broker::{Broker, BrokerHandle};
 pub use config::{BootstrapMode, BrokerConfig, KafkaRlmmConfig, RemoteStorageBackend, RlmmKind};
 pub use config_keys::{TopicConfigDoc, topic_config_docs};
-pub use krabka_raft::NodeId;
 pub use error::BrokerError;
+pub use krabka_raft::NodeId;

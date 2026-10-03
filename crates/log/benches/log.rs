@@ -17,11 +17,11 @@ use std::{
 };
 
 use bytes::Bytes;
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use krabka_ids::{LeaderEpoch, Offset, ProducerId};
 use krabka_log::{Log, LogConfig, VerbatimBatch};
 use krabka_protocol::records::{Record, RecordBatch};
 use krabka_units::prelude::{ByteSize, gibibytes, kibibytes, mebibytes};
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use tempfile::tempdir;
 
 /// A read budget larger than the whole benchmark log, so the "unbounded"

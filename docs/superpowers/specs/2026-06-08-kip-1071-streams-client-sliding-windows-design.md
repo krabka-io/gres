@@ -64,6 +64,7 @@ pub struct SlidingWindows {
 ```
 
 Constructors mirroring the JVM:
+
 - `of_time_difference_with_no_grace(time_difference_ms)` — grace 0.
 - `of_time_difference_and_grace(time_difference_ms, grace_ms)`.
 
@@ -79,7 +80,7 @@ comment states.
 A near-clone of `windowed_kgrouped.rs`:
 
 - `KGroupedStream::windowed_by_sliding(SlidingWindows) ->
-  SlidingWindowedKGroupedStream<K, V>` (distinct method name because Rust cannot
+SlidingWindowedKGroupedStream<K, V>` (distinct method name because Rust cannot
   overload `windowed_by` by argument type — same reason `windowed_by_session`
   exists).
 - Terminal ops `count`/`reduce`/`aggregate` (+ `count_explicit`/
@@ -115,7 +116,7 @@ For a record with key `k`, value `v`, timestamp `t`, window size `W`:
 1. **Late-record drop.** Maintain observed stream time per task; drop (and, per
    JVM, count as a late record) if `t < streamTime - (W + grace_ms)`.
 2. **Scan** the key's existing windows via `WindowStore::fetch(k, max(0, t-2W),
-   t)`, classifying each found window `[ws, ws+W]` by where its end sits relative
+t)`, classifying each found window `[ws, ws+W]` by where its end sits relative
    to `t` to determine: whether the record's **left window** `[t-W, t]` already
    exists, whether records exist that require creating the record's **right
    window** `[t+1, t+1+W]`, and which already-materialized windows the record
@@ -128,7 +129,7 @@ For a record with key `k`, value `v`, timestamp `t`, window size `W`:
 
 The exact branch structure (the JVM's `processInOrder` left/right-window logic
 plus the out-of-order path) is ported and pinned by the behavioral golden
-(§3.5); the design commits to *behavioral equivalence with the JVM*, not to a
+(§3.5); the design commits to _behavioral equivalence with the JVM_, not to a
 paraphrase of the branches here.
 
 ### 3.4 Wiring
@@ -177,18 +178,20 @@ what sliding needs).
 ## 5. Files touched
 
 New:
+
 - `crates/client-streams/src/dsl/sliding_windowed_kgrouped.rs`
 - `crates/client-streams/src/dsl/processors/sliding_window_aggregate.rs`
 - `crates/client-streams/tests/testdata/golden/dsl/sliding_window_*.topology.json`
 - `crates/client-streams/tests/testdata/golden/dsl/behavioral/sliding_window_*.json`
 
 Modified:
+
 - `src/dsl/windows.rs` (`SlidingWindows`)
 - `src/dsl/kgrouped.rs` (`windowed_by_sliding`)
 - `src/dsl/mod.rs`, `src/lib.rs` (re-exports + module doc)
 - `src/dsl/processors/mod.rs` (module decl)
 - `tests/jvm-capture/{src/main/java/crabka/capture/Capture.java, run.sh,
-  build.gradle}` (structural fixtures + behavioral runner)
+build.gradle}` (structural fixtures + behavioral runner)
 - `tests/dsl_golden_frame.rs`, `tests/dsl_execution.rs` (assertions)
 
 ## 6. Risks

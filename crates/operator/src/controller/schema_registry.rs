@@ -6,16 +6,16 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
+use futures::StreamExt as _;
+use k8s_openapi::api::{
+    apps::v1::Deployment,
+    core::v1::{Secret, Service},
+};
 use krabka_units::{
     ByteSize, Time,
     convert::{ByteSizeExt as _, TimeExt as _},
     fmt::Human as _,
     secs,
-};
-use futures::StreamExt as _;
-use k8s_openapi::api::{
-    apps::v1::Deployment,
-    core::v1::{Secret, Service},
 };
 use kube::{
     Resource, ResourceExt as _,

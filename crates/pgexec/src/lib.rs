@@ -161,9 +161,6 @@ use std::{
 /// the oid a `regclass` value carries is this, not the bare catalog id.
 pub use catalog_rel::table_relation_oid;
 pub use commit::{Committer, LocalCommitter};
-use krabka_pgkv::{FjallKv, Kv, MemKv};
-use krabka_pgwire::engine::Engine;
-use krabka_units::convert::{ByteSizeExt as _, TimeExt as _};
 pub use error::{
     DependentForeignKey, DroppedObject, ExecError, ForeignKeyDependents, ForeignKeyTypeMismatch,
     ForeignKeyViolation, ForeignKeyViolationSide, GucRangeViolation, VirtualGeneratedSubcommand,
@@ -173,6 +170,9 @@ pub use hlc::{Hlc, HybridLogicalClock};
 pub use hlc_source::{
     HlcTimestampSource, ManualWallClock, SkewedWallClock, SystemWallClock, WallClock,
 };
+use krabka_pgkv::{FjallKv, Kv, MemKv};
+use krabka_pgwire::engine::Engine;
+use krabka_units::convert::{ByteSizeExt as _, TimeExt as _};
 pub use local_sequence::LocalSequence;
 pub use read_gate::{Linearizer, LocalLinearizer};
 pub use scanner::{

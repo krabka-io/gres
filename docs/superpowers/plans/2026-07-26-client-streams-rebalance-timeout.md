@@ -34,6 +34,7 @@
 ### Task 1: Validate and Route the Membership Rebalance Timeout
 
 **Files:**
+
 - Modify: `crates/client-streams/src/membership/client.rs:10-175`
 - Modify: `crates/client-streams/src/membership/client.rs:311-370`
 - Modify: `crates/client-streams/src/membership/coordinator.rs:403-440`
@@ -44,6 +45,7 @@
 - Modify: `crates/client-streams/src/lib.rs:914-929`
 
 **Interfaces:**
+
 - Consumes: existing public `Duration` builder inputs and Kafka `StreamsGroupHeartbeatRequest::rebalance_timeout_ms: i32`.
 - Produces: `pub const DEFAULT_STREAMS_REBALANCE_TIMEOUT: Duration`, `pub struct StreamsRebalanceTimeout(Duration)`, `StreamsRebalanceTimeout::new(Duration) -> Result<Self, String>`, `duration(self) -> Duration`, and `milliseconds(self) -> i32`.
 - Produces: `KafkaStreams::builder().rebalance_timeout(Duration)` while retaining the existing `StreamsMembership::builder().rebalance_timeout(Duration)`.
@@ -313,6 +315,7 @@ git commit -m "feat(streams): validate rebalance timeout"
 ### Task 2: Expose the Typed App and Demo Configuration
 
 **Files:**
+
 - Modify: `crates/client-streams/src/streams_app.rs:54-124`
 - Modify: `crates/client-streams/src/streams_app.rs:171-190`
 - Modify: `crates/client-streams/src/streams_app.rs:194-263`
@@ -324,6 +327,7 @@ git commit -m "feat(streams): validate rebalance timeout"
 - Modify: `demo/observability/docker-compose.yml:452-460`
 
 **Interfaces:**
+
 - Consumes: Task 1 `StreamsRebalanceTimeout`, its 30-second default, and `KafkaStreams::builder().rebalance_timeout(Duration)`.
 - Produces: `StreamsApp::builder().rebalance_timeout(StreamsRebalanceTimeout)`.
 - Produces: `--streams-rebalance-timeout-ms` and `KRABKA_DEMO_STREAMS_REBALANCE_TIMEOUT_MS`.
@@ -601,9 +605,11 @@ git commit -m "feat(demo): expose Streams rebalance timeout"
 ### Task 3: Close the Audit Slice and Run Final Gates
 
 **Files:**
+
 - Modify: `docs/configuration-audit.md:2066-2074`
 
 **Interfaces:**
+
 - Consumes: completed Task 1 and Task 2 production, test, and deployment paths.
 - Produces: reproducible scanner evidence, exclusive focused-reference classification, and the next unresolved operational owner without reclassifying the heartbeat fallback.
 

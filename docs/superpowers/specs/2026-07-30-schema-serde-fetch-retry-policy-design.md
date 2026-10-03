@@ -7,10 +7,10 @@ schema cache's current behavior and fixed wire/algorithm contracts.
 
 The configurable policy is limited to:
 
-| Value | Default |
-| --- | --- |
-| initial retry backoff | `10ms` |
-| maximum retry backoff | `1s` |
+| Value                 | Default |
+| --------------------- | ------- |
+| initial retry backoff | `10ms`  |
+| maximum retry backoff | `1s`    |
 
 The Confluent media type and magic byte, reference traversal ceiling,
 exponential growth, exponent cap, and deterministic zero-to-25-percent jitter

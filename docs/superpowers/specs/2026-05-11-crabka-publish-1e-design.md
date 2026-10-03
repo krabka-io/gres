@@ -89,6 +89,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 ### `crates/protocol/Cargo.toml`
 
 Same shape with:
+
 - `name = "krabka-protocol"`
 - `description = "Apache Kafka wire-protocol codec (4.2.0), with typed RecordBatch and zero-copy borrowed decode"`
 - `keywords = ["kafka", "wire-protocol", "codec", "serialization", "decoder"]` (max 5)
@@ -166,13 +167,13 @@ allow-git = []
 Append to `.github/workflows/ci.yml`:
 
 ```yaml
-  cargo-deny:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: EmbarkStudios/cargo-deny-action@v2
-        with:
-          command: check advisories bans sources licenses
+cargo-deny:
+  runs-on: ubuntu-latest
+  steps:
+    - uses: actions/checkout@v6
+    - uses: EmbarkStudios/cargo-deny-action@v2
+      with:
+        command: check advisories bans sources licenses
 ```
 
 ### Expected first-run state
@@ -181,6 +182,7 @@ Current dep graph licenses are all standard ecosystem permissive
 licenses (Apache-2.0, MIT, BSD-*, ISC, Unicode-3.0, MPL-2.0). All are
 in the allowlist. If anything surfaces unexpectedly, the resolution
 order is:
+
 1. Replace the dep with a permissive-licensed alternative.
 2. If not possible, add to `licenses.exceptions` with a rationale
    comment.
@@ -201,15 +203,15 @@ allowed. `cargo-semver-checks` runs and reports; does not gate.
 Append to `.github/workflows/ci.yml`:
 
 ```yaml
-  cargo-semver-checks:
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: obi1kenobi/cargo-semver-checks-action@v2
-        with:
-          rust-toolchain: stable
+cargo-semver-checks:
+  runs-on: ubuntu-latest
+  continue-on-error: true
+  steps:
+    - uses: actions/checkout@v6
+    - uses: dtolnay/rust-toolchain@stable
+    - uses: obi1kenobi/cargo-semver-checks-action@v2
+      with:
+        rust-toolchain: stable
 ```
 
 ### What it covers
@@ -397,6 +399,7 @@ it here.
 ### Initial 0.1.0 release: manual, then release-plz takes over
 
 Sequence after 1e merges:
+
 1. The 1e PR lands on `main` with `version = "0.1.0"`, both crate
    CHANGELOGs seeded, release-plz config in place.
 2. **Manual final task:** tag `v0.1.0` + `gh release create v0.1.0`

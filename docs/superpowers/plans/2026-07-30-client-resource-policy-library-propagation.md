@@ -37,12 +37,14 @@ owner policy. Compatibility constructors select the current typed defaults.
 ### Task 1: Propagate Connection Policy Through `krabka-client-producer`
 
 **Files:**
+
 - Modify: `crates/client-producer/src/builder.rs`
 - Modify: `crates/client-producer/src/producer.rs`
 - Modify: `crates/client-producer/src/transport.rs`
 - Modify: `crates/client-producer/src/transactional.rs`
 
 **Interfaces:**
+
 - Producer builder accepts raw `dispatch_queue_capacity: usize` and
   `frame_max: ByteSize`, preserving client-core defaults.
 - `Producer` stores the two validated client-core policy values.
@@ -99,9 +101,11 @@ git commit -m "feat(producer): carry client resource policy"
 ### Task 2: Give `krabka-client-admin` an Explicit Connection Policy
 
 **Files:**
+
 - Modify: `crates/client-admin/src/lib.rs`
 
 **Interfaces:**
+
 - Existing convenience constructors retain default `ConnectionOptions`.
 - Explicit constructors accept a complete `ConnectionOptions` value and use it
   unchanged for every broker connection.
@@ -140,6 +144,7 @@ git commit -m "feat(admin): preserve client resource policy"
 ### Task 3: Propagate One Policy Through Every Streams Client
 
 **Files:**
+
 - Modify: `crates/client-streams/src/membership/client.rs`
 - Modify: `crates/client-streams/src/runtime/io_broker.rs`
 - Modify: the existing streams runtime/config builder that calls these entry
@@ -148,6 +153,7 @@ git commit -m "feat(admin): preserve client resource policy"
 - Modify: focused tests beside those owners
 
 **Interfaces:**
+
 - Streams configuration carries one typed queue/frame pair.
 - Streams configuration separately carries one typed `FetchMinBytes`.
 - Membership, coordinator, metadata, fetch, producer, offset, EOS, restore, and
@@ -209,12 +215,14 @@ git commit -m "feat(streams): carry client resource policy"
 ### Task 4: Add FDW Scan-Owned Connection and Fetch Policy
 
 **Files:**
+
 - Modify: `crates/gres-fdw/src/source.rs`
 - Modify: the existing FDW connection/config owner located from
   `rg -n 'ConnProfile|fetch_budgets|connection_options' crates/gres-fdw/src`
 - Modify: focused tests in `crates/gres-fdw/src/source.rs`
 
 **Interfaces:**
+
 - FDW configuration carries typed queue/frame values into
   `connection_options`.
 - FDW scan policy carries typed `FetchMinBytes` into every isolated fetch.
@@ -252,10 +260,12 @@ git commit -m "feat(fdw): carry client resource policy"
 ### Task 5: Propagate WAL Recovery Client Policy
 
 **Files:**
+
 - Modify: `crates/gres-substrate/src/recovery.rs`
 - Modify: focused recovery tests
 
 **Interfaces:**
+
 - `LiveRecoveryConfig` stores a typed queue/frame pair and fetch minimum.
 - WAL admin, producer, replay connection, and every reconstructed recovery
   client reuse the same connection pair.
@@ -299,9 +309,11 @@ git commit -m "feat(substrate): carry recovery client policy"
 ### Task 6: Propagate Registry Reader and Writer Policy
 
 **Files:**
+
 - Modify: `crates/gres-control/src/registry.rs`
 
 **Interfaces:**
+
 - `RegistryPolicy` owns one typed queue/frame pair shared by registry admin,
   writer, and reader connections.
 - `RegistryPolicy` owns a typed reader `FetchMinBytes`.
@@ -341,6 +353,7 @@ git commit -m "feat(gres-control): carry registry client policy"
 ### Task 7: Audit Remaining Library Construction Sites
 
 **Files:**
+
 - Modify: any library-only owner reported by the inventory that was not covered
   above
 - Modify: `docs/configuration-audit.md`

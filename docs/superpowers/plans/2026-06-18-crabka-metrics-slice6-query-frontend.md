@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build the `query-frontend` role — an axum server that sits in front of N queriers and (1) splits a long `query_range` into step-aligned per-day sub-ranges, (2) vertically shards a shardable query by injecting Mimir's `__query_shard__="<i>_of_<n>"` selector and merging the partials *correctly*, (3) fans sub-queries across queriers in parallel through a trait-abstracted backend, and (4) caches `query_range` results split on cache boundaries so a moving time window reuses cached older sub-ranges — all while preserving the Prometheus HTTP API byte-shapes the querier (Slice 5) exposes.
+**Goal:** Build the `query-frontend` role — an axum server that sits in front of N queriers and (1) splits a long `query_range` into step-aligned per-day sub-ranges, (2) vertically shards a shardable query by injecting Mimir's `__query_shard__="<i>_of_<n>"` selector and merging the partials _correctly_, (3) fans sub-queries across queriers in parallel through a trait-abstracted backend, and (4) caches `query_range` results split on cache boundaries so a moving time window reuses cached older sub-ranges — all while preserving the Prometheus HTTP API byte-shapes the querier (Slice 5) exposes.
 
 **Architecture:** A new `frontend` module tree inside `krabka-metrics`. The querier backend is a `QuerierBackend` **trait** (`async fn instant_query` / `async fn range_query`) so tests drive a `MockQuerier` returning canned partials and real deployments use an `HttpQuerier` pool (reqwest, the grpc-gateway `forward.rs` pattern). A `QueryResult` type mirrors the Prometheus JSON envelope (`status`/`data.resultType`∈{vector,matrix,scalar,string}) so splitting/sharding logic manipulates parsed results, not raw bytes. PromQL AST inspection (`promql_parser::parser::parse`) decides shardability and rewrites leaf selectors. The pipeline composes as `split → (per sub-range) cache-lookup → shard → fan-out → shard-merge → stitch → cache-store`. The role binary is `krabka-metrics --target query-frontend`.
 
@@ -15,7 +15,7 @@
 - **Lints:** `clippy::pedantic` is `warn`. New code clippy-pedantic clean. Run `cargo clippy -p krabka-metrics --all-targets` before each commit.
 - **Formatting:** `cargo fmt -p krabka-metrics` before every commit (never `cargo +nightly fmt --all` — OS error 206 in deep worktrees on Windows; always `-p`).
 - **Assertions:** `assert2::assert!`/`assert2::check!` in tests.
-- **Kafka/Prometheus wire fidelity:** the frontend must round-trip the querier's Prometheus JSON unchanged for the no-op path (single sub-range, non-shardable, cache-miss) — that is the byte-equality analog. Splitting/sharding only ever *rearranges* the same sample set; a sharded result MUST equal the unsharded result over identical data.
+- **Kafka/Prometheus wire fidelity:** the frontend must round-trip the querier's Prometheus JSON unchanged for the no-op path (single sub-range, non-shardable, cache-miss) — that is the byte-equality analog. Splitting/sharding only ever _rearranges_ the same sample set; a sharded result MUST equal the unsharded result over identical data.
 - **Tenant propagation:** the inbound `X-Scope-OrgID` header is threaded onto every backend sub-request and into every cache key. Never collapse tenants in the cache.
 - **promql-parser as the source of truth for shardability/rewrite.** Decide shardability and inject selectors from the parsed AST, never by string-munging the query text.
 
@@ -29,18 +29,18 @@
 - `GET`/`POST /api/v1/query_range?query=&start=&end=&step=` → range query → Prometheus JSON (`resultType` `matrix`).
 - Tenant via `X-Scope-OrgID`. Errors as Prometheus envelopes (`status:"error"`, `errorType`, `error`).
 
-**The querier's `__query_shard__` support is assumed (Slice 5 contract):** the querier honors a `__query_shard__="<i>_of_<n>"` matcher on a vector selector by restricting its series scan to the shard whose `fingerprint % n == i`. The frontend's job is to *inject* that matcher and *merge* the partials; the querier's job is to *honor* it. This slice does not implement querier-side shard filtering.
+**The querier's `__query_shard__` support is assumed (Slice 5 contract):** the querier honors a `__query_shard__="<i>_of_<n>"` matcher on a vector selector by restricting its series scan to the shard whose `fingerprint % n == i`. The frontend's job is to _inject_ that matcher and _merge_ the partials; the querier's job is to _honor_ it. This slice does not implement querier-side shard filtering.
 
 **Slice 6 talks to the querier over HTTP, not via the engine API.** The frontend's `frontend::result::QueryResult` is a **serde JSON DTO** (Prometheus `{"status","data":{"resultType","result"}}`), deliberately distinct from Slice 2's Rust engine enum `krabka_promql::QueryResult` (which is `Scalar`/`InstantVector`/`RangeMatrix`/`Str`). They share a friendly name but are different layers: the engine value model vs. the wire DTO this slice parses out of the querier's response body. Do **not** import Slice 2/5's engine `QueryResult` here — Slice 5 serializes via `query_result_to_json(&QueryResult) -> serde_json::Value` and exposes no typed JSON DTO, so this slice owns `frontend/result.rs` and must keep its byte-shape identical to what Slice 5's `query_result_to_json` emits (pinned by the serde test in Task 1).
 
 **The 8 metrics slices** (this plan = Slice 6):
 
-1. Data layer — block schemas + native-histogram codec + symbol table. *(done)*
+1. Data layer — block schemas + native-histogram codec + symbol table. _(done)_
 2. `krabka-promql` core — parser + operator pattern + selectors + rate-family + aggregations + binary ops + `.test` harness.
 3. Query completeness — `histogram_quantile`, full function catalog, subqueries, `@`/`offset`.
 4. Ingest service — remote_write v1/v2 + OTLP + Kafka produce + distributor + HA dedup + compactor.
 5. Querier + Prometheus HTTP API + hot/cold merge.
-6. **Query-frontend** *(this plan)* — split / shard / cache + the `query-frontend` role binary.
+6. **Query-frontend** _(this plan)_ — split / shard / cache + the `query-frontend` role binary.
 7. Ruler — recording + alerting + rule API.
 8. Hardening — multi-tenancy/limits, remote_read, prometheus/compliance + differential-vs-Mimir.
 
@@ -48,33 +48,35 @@
 
 ## File structure (`crates/metrics/`)
 
-| File | Responsibility |
-|---|---|
-| `src/lib.rs` | add `pub mod frontend;` |
-| `src/frontend/mod.rs` | module decls + public re-exports + `QueryFrontend` orchestrator |
-| `src/frontend/result.rs` | `QueryResult` / `ResultData` / `SampleStream` — the Prometheus-JSON model + matrix stitch + vector merge helpers |
-| `src/frontend/backend.rs` | `QuerierBackend` trait + `InstantRequest`/`RangeRequest` + `MockQuerier` (test) |
-| `src/frontend/http_backend.rs` | `HttpQuerier` — reqwest pool over configurable querier addrs (fan-out target) |
-| `src/frontend/split.rs` | time-splitting: step-aligned per-interval sub-range computation + matrix stitching |
-| `src/frontend/shard.rs` | shardability analysis + `__query_shard__` AST rewrite + shard-merge |
-| `src/frontend/cache.rs` | `ResultCache` trait + `InMemoryCache` (test) + `ObjectStoreCache` + cache key + TTL + `Cache-Control` bypass |
-| `src/frontend/server.rs` | axum router + handlers (`/api/v1/query`, `/api/v1/query_range`) wiring the orchestrator |
-| `src/frontend/config.rs` | `FrontendConfig` (backend addrs, split interval, shard count, cache TTL, timeouts) |
-| `src/bin/krabka-metrics.rs` | (modify/create) `--target query-frontend` role dispatch |
-| `tests/frontend_shard_equivalence.rs` | integration: sharded `sum(rate(...))` == unsharded over canned data |
-| `tests/frontend_split_stitch.rs` | integration: split+stitch == single range over canned data |
+| File                                  | Responsibility                                                                                                   |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `src/lib.rs`                          | add `pub mod frontend;`                                                                                          |
+| `src/frontend/mod.rs`                 | module decls + public re-exports + `QueryFrontend` orchestrator                                                  |
+| `src/frontend/result.rs`              | `QueryResult` / `ResultData` / `SampleStream` — the Prometheus-JSON model + matrix stitch + vector merge helpers |
+| `src/frontend/backend.rs`             | `QuerierBackend` trait + `InstantRequest`/`RangeRequest` + `MockQuerier` (test)                                  |
+| `src/frontend/http_backend.rs`        | `HttpQuerier` — reqwest pool over configurable querier addrs (fan-out target)                                    |
+| `src/frontend/split.rs`               | time-splitting: step-aligned per-interval sub-range computation + matrix stitching                               |
+| `src/frontend/shard.rs`               | shardability analysis + `__query_shard__` AST rewrite + shard-merge                                              |
+| `src/frontend/cache.rs`               | `ResultCache` trait + `InMemoryCache` (test) + `ObjectStoreCache` + cache key + TTL + `Cache-Control` bypass     |
+| `src/frontend/server.rs`              | axum router + handlers (`/api/v1/query`, `/api/v1/query_range`) wiring the orchestrator                          |
+| `src/frontend/config.rs`              | `FrontendConfig` (backend addrs, split interval, shard count, cache TTL, timeouts)                               |
+| `src/bin/krabka-metrics.rs`           | (modify/create) `--target query-frontend` role dispatch                                                          |
+| `tests/frontend_shard_equivalence.rs` | integration: sharded `sum(rate(...))` == unsharded over canned data                                              |
+| `tests/frontend_split_stitch.rs`      | integration: split+stitch == single range over canned data                                                       |
 
 ---
 
 ### Task 1: Crate deps + `frontend` module scaffold + the Prometheus-JSON result model
 
 **Files:**
+
 - Modify: `crates/metrics/Cargo.toml`
 - Modify: `crates/metrics/src/lib.rs`
 - Create: `crates/metrics/src/frontend/mod.rs`
 - Create: `crates/metrics/src/frontend/result.rs`
 
 **Interfaces:**
+
 - Produces:
   - `enum ResultData { Matrix(Vec<SampleStream>), Vector(Vec<InstantSample>), Scalar(ScalarSample), String(StringSample) }` (serde, tagged `resultType`/`result` to match Prometheus JSON).
   - `struct SampleStream { metric: BTreeMap<String,String>, values: Vec<(f64, String)> }` — a matrix series (`values` = `[ts, "value"]` pairs; value is a string per Prometheus JSON).
@@ -285,7 +287,7 @@ pub fn series_key(metric: &BTreeMap<String, String>) -> String {
 }
 ```
 
-> **Serde verify-note (Prometheus shape):** the internally-tagged `ResultData` (`tag="resultType", content="result"`) emits `{"resultType":"matrix","result":[...]}` — verify with the `matrix_serializes_as_prometheus_json` test. The `(f64, String)` tuple serializes to a 2-element JSON array `[ts, "v"]`, which is Prometheus's exact sample encoding. If a future Slice-5 querier emits `value` for vector and `values` for matrix at the *element* level (it does — that is already modeled by `InstantSample::value` vs `SampleStream::values`), no change is needed.
+> **Serde verify-note (Prometheus shape):** the internally-tagged `ResultData` (`tag="resultType", content="result"`) emits `{"resultType":"matrix","result":[...]}` — verify with the `matrix_serializes_as_prometheus_json` test. The `(f64, String)` tuple serializes to a 2-element JSON array `[ts, "v"]`, which is Prometheus's exact sample encoding. If a future Slice-5 querier emits `value` for vector and `values` for matrix at the _element_ level (it does — that is already modeled by `InstantSample::value` vs `SampleStream::values`), no change is needed.
 
 - [ ] **Step 5: Create `frontend/mod.rs` and wire `lib.rs`**
 
@@ -327,10 +329,12 @@ git commit -m "feat(metrics): query-frontend result model (Prometheus JSON envel
 ### Task 2: `QuerierBackend` trait + `MockQuerier`
 
 **Files:**
+
 - Create: `crates/metrics/src/frontend/backend.rs`
 - Modify: `crates/metrics/src/frontend/mod.rs`
 
 **Interfaces:**
+
 - Produces:
   - `struct InstantRequest { tenant: String, query: String, time_secs: f64 }`.
   - `struct RangeRequest { tenant: String, query: String, start_secs: f64, end_secs: f64, step_secs: f64 }`.
@@ -541,10 +545,12 @@ git commit -m "feat(metrics): QuerierBackend trait + MockQuerier fixture"
 ### Task 3: Time-splitting + matrix stitching
 
 **Files:**
+
 - Create: `crates/metrics/src/frontend/split.rs`
 - Modify: `crates/metrics/src/frontend/mod.rs`
 
 **Interfaces:**
+
 - Produces:
   - `fn split_range(start_secs: f64, end_secs: f64, step_secs: f64, interval_secs: f64) -> Vec<(f64, f64)>` — step-aligned `[start, end]` sub-ranges, each spanning ≤ `interval_secs`, where every sub-range boundary lands on a step grid point (`start + k*step`) and the union of sub-range eval points equals the original eval points exactly (no gaps, no dupes).
   - `fn stitch_matrices(parts: Vec<QueryResult>) -> QueryResult` — concatenate per-series `values` across ordered sub-range matrices, preserving series identity (`series_key`) and time order; surface the first error part as the stitched error.
@@ -632,10 +638,10 @@ Expected: FAIL — `cannot find function split_range`.
 - [ ] **Step 3: Implement `split.rs`**
 
 The alignment rule (Mimir's): sub-range boundaries are snapped to an **absolute**
-interval grid (multiples of `interval`, e.g. `00:00 UTC` day boundaries), *not*
+interval grid (multiples of `interval`, e.g. `00:00 UTC` day boundaries), _not_
 to a grid relative to `start`. This is what lets a moving time window reuse
 cached older sub-ranges: a sub-range that falls entirely inside one absolute
-interval bucket has the *same* `(start, end)` — and therefore the same cache key
+interval bucket has the _same_ `(start, end)` — and therefore the same cache key
 — regardless of which outer window asked for it. Each sub-range collects the
 step-grid eval points (`start + j*step`) that land in one absolute bucket
 `[k*interval, (k+1)*interval)`; consecutive sub-ranges share no eval point.
@@ -733,7 +739,7 @@ pub fn stitch_matrices(parts: Vec<QueryResult>) -> QueryResult {
 }
 ```
 
-> **Boundary verify-note:** `split_range` uses Mimir's **absolute** interval-grid alignment (boundaries snapped to multiples of `interval`, e.g. `00:00 UTC` day boundaries — *not* `start + k*span`). A 24h split of a 7d range yields sub-queries whose eval points tile the original grid with no overlap or gap, and — critically — a *shifted* window reuses the interior tiles unchanged: `split_range(0,100,10,40) = [(0,30),(40,70),(80,100)]` and `split_range(40,140,10,40) = [(40,70),(80,110),(120,140)]` share the identical `(40,70)` tile, so its `(tenant, query, start, end, step)` cache key is byte-identical across the two windows and hits on the second query. The `split_is_step_aligned_and_covers_exactly` test pins the "union equals original eval points" invariant; the Task 8 `moving_window_reuses_cached_subranges` test pins the cross-window cache reuse this alignment enables.
+> **Boundary verify-note:** `split_range` uses Mimir's **absolute** interval-grid alignment (boundaries snapped to multiples of `interval`, e.g. `00:00 UTC` day boundaries — _not_ `start + k*span`). A 24h split of a 7d range yields sub-queries whose eval points tile the original grid with no overlap or gap, and — critically — a _shifted_ window reuses the interior tiles unchanged: `split_range(0,100,10,40) = [(0,30),(40,70),(80,100)]` and `split_range(40,140,10,40) = [(40,70),(80,110),(120,140)]` share the identical `(40,70)` tile, so its `(tenant, query, start, end, step)` cache key is byte-identical across the two windows and hits on the second query. The `split_is_step_aligned_and_covers_exactly` test pins the "union equals original eval points" invariant; the Task 8 `moving_window_reuses_cached_subranges` test pins the cross-window cache reuse this alignment enables.
 
 - [ ] **Step 4: Re-export from `mod.rs`**
 
@@ -762,10 +768,12 @@ git commit -m "feat(metrics): query_range time-splitting + matrix stitching"
 ### Task 4: Shardability analysis + `__query_shard__` AST rewrite
 
 **Files:**
+
 - Create: `crates/metrics/src/frontend/shard.rs`
 - Modify: `crates/metrics/src/frontend/mod.rs`
 
 **Interfaces:**
+
 - Produces:
   - `enum ShardPlan { NoShard, Shardable { shards: usize } }`.
   - `fn analyze(query: &str, shards: usize) -> ShardPlan` — parse with `promql_parser`, return `Shardable` iff the top-level expression is a `sum`/`count`/`min`/`max`/`avg` aggregation (the decomposable set) over a sub-expression containing only shardable leaves; else `NoShard`.
@@ -831,7 +839,7 @@ Expected: FAIL — `cannot find function analyze`.
 
 - [ ] **Step 3: Implement `shard.rs`**
 
-This is the churn-prone surface (`promql-parser` 0.10 AST). The exact enum/struct names in `promql_parser::parser::Expr` (e.g. `AggregateExpr`, `VectorSelector`, `Matcher`, `MatchOp`) must be verified against the 0.10 docs; the test pins *behavior* (shardability decision + injected matcher text), so any API drift surfaces as a compile error to fix against the real names.
+This is the churn-prone surface (`promql-parser` 0.10 AST). The exact enum/struct names in `promql_parser::parser::Expr` (e.g. `AggregateExpr`, `VectorSelector`, `Matcher`, `MatchOp`) must be verified against the 0.10 docs; the test pins _behavior_ (shardability decision + injected matcher text), so any API drift surfaces as a compile error to fix against the real names.
 
 ```rust
 //! Vertical query sharding (Mimir's `__query_shard__` scheme). A shardable
@@ -942,7 +950,7 @@ fn inject_into_selectors(expr: &mut Expr, shard_value: &str) {
 }
 ```
 
-> **promql-parser 0.10 API verify-note (the churn surface):** the 11 `Expr` variants (`VectorSelector`/`MatrixSelector`/`Aggregate`/`Call`/`Binary`/`Paren`/`Subquery`/`Unary`/`NumberLiteral`/`StringLiteral`/`Extension` — there is **no** `StepInvariant` variant; @-modifier step-invariance is carried on `VectorSelector.at`), the matcher constructor (`Matcher::new(MatchOp::Equal, name: &str, value: &str)` — both args are `&str`, so pass `QUERY_SHARD_LABEL` / `shard_value` directly, not `.to_string()`), the builder `Matchers::append(self, Matcher) -> Self` (it **consumes and returns** `self`, so the implementation rebinds via `vs.matchers = std::mem::take(&mut vs.matchers).append(...)` — mutating-in-place would silently drop the matcher and over-count every shard), the aggregate-op token accessor (`agg.op.id()` → `TokenId` = `u16`, and the `T_SUM`…`T_AVG` token constants are `u16`), and `Expr: Display` (`to_string()` re-renders the query) are all **promql-parser 0.10** surface. If any name differs, fix it against the 0.10 docs — the tests pin the *behavior* (shardable decision + `i_of_n` matcher text in the rendered string), not the type names. If `op.id()` is instead `agg.op` being a token id directly, drop the `.id()`.
+> **promql-parser 0.10 API verify-note (the churn surface):** the 11 `Expr` variants (`VectorSelector`/`MatrixSelector`/`Aggregate`/`Call`/`Binary`/`Paren`/`Subquery`/`Unary`/`NumberLiteral`/`StringLiteral`/`Extension` — there is **no** `StepInvariant` variant; @-modifier step-invariance is carried on `VectorSelector.at`), the matcher constructor (`Matcher::new(MatchOp::Equal, name: &str, value: &str)` — both args are `&str`, so pass `QUERY_SHARD_LABEL` / `shard_value` directly, not `.to_string()`), the builder `Matchers::append(self, Matcher) -> Self` (it **consumes and returns** `self`, so the implementation rebinds via `vs.matchers = std::mem::take(&mut vs.matchers).append(...)` — mutating-in-place would silently drop the matcher and over-count every shard), the aggregate-op token accessor (`agg.op.id()` → `TokenId` = `u16`, and the `T_SUM`…`T_AVG` token constants are `u16`), and `Expr: Display` (`to_string()` re-renders the query) are all **promql-parser 0.10** surface. If any name differs, fix it against the 0.10 docs — the tests pin the _behavior_ (shardable decision + `i_of_n` matcher text in the rendered string), not the type names. If `op.id()` is instead `agg.op` being a token id directly, drop the `.id()`.
 
 - [ ] **Step 4: Re-export from `mod.rs`**
 
@@ -971,9 +979,11 @@ git commit -m "feat(metrics): shardability analysis + __query_shard__ AST rewrit
 ### Task 5: Shard-merge (the correctness centerpiece)
 
 **Files:**
+
 - Modify: `crates/metrics/src/frontend/shard.rs` (add `merge_shards`)
 
 **Interfaces:**
+
 - Consumes: `QueryResult`, `ResultData`, `SampleStream`, `InstantSample`, `series_key`, the parsed top-level aggregation op.
 - Produces:
   - `fn merge_shards(op: AggrOp, parts: Vec<QueryResult>) -> QueryResult` — combine N shard partials into the single result the unsharded query would have produced. `Sum`/`Count` → add partial values per `(series_key, timestamp)`; `Min`/`Max` → min/max per `(series_key, timestamp)`; `Avg` is **not** an `AggrOp` — the orchestrator decomposes `avg(x)` into `sum(x)`/`count(x)` and recombines via `divide_results` (this fn never sees `Avg`). Works for both matrix (`query_range`) and vector (`query`) partials.
@@ -1334,11 +1344,13 @@ git commit -m "feat(metrics): shard-merge (sum/count/min/max) — sharded == uns
 ### Task 6: `FrontendConfig` + `QueryFrontend` orchestrator
 
 **Files:**
+
 - Create: `crates/metrics/src/frontend/config.rs`
 - Create the orchestrator in: `crates/metrics/src/frontend/mod.rs` (struct `QueryFrontend`)
 - Modify: `crates/metrics/src/frontend/mod.rs` (re-exports)
 
 **Interfaces:**
+
 - Produces:
   - `struct FrontendConfig { backend_addrs: Vec<String>, split_interval_secs: f64, shard_count: usize, cache_ttl_secs: u64, request_timeout: Duration, listen_addr: SocketAddr }` (+ `Default`).
   - `struct QueryFrontend<B: QuerierBackend, C: ResultCache> { backend: Arc<B>, cache: Arc<C>, cfg: FrontendConfig }`.
@@ -1661,7 +1673,7 @@ impl<B: QuerierBackend, C: ResultCache> QueryFrontend<B, C> {
 use crate::frontend::{shard, split};
 ```
 
-> **`avg` decomposition note (implemented):** `analyze` returns `Shardable` for `avg` (it is in `is_decomposable_aggr`), and `aggr_op_of` returns `None` for `avg` (it is not an `AggrOp`). Rather than fall through to an un-sharded dispatch, `run_sub_range` calls `shard::decompose_avg(query)` *first*: when the top-level op is `avg`, it derives `sum(<inner>)` and `count(<inner>)`, shards and merges each via `shard_range`, then recombines with `shard::divide_results` (merged-sum / merged-count per `(series, timestamp)`). This delivers the FOCUS-required `avg → sum/count` decomposition fully sharded, while keeping `merge_shards` total over the four exact-combine ops. The end-to-end equivalence is pinned by Task 8's `sharded_avg_equals_unsharded` test. (`instant_query` in Task 10 applies the same `decompose_avg` path for `/api/v1/query`.)
+> **`avg` decomposition note (implemented):** `analyze` returns `Shardable` for `avg` (it is in `is_decomposable_aggr`), and `aggr_op_of` returns `None` for `avg` (it is not an `AggrOp`). Rather than fall through to an un-sharded dispatch, `run_sub_range` calls `shard::decompose_avg(query)` _first_: when the top-level op is `avg`, it derives `sum(<inner>)` and `count(<inner>)`, shards and merges each via `shard_range`, then recombines with `shard::divide_results` (merged-sum / merged-count per `(series, timestamp)`). This delivers the FOCUS-required `avg → sum/count` decomposition fully sharded, while keeping `merge_shards` total over the four exact-combine ops. The end-to-end equivalence is pinned by Task 8's `sharded_avg_equals_unsharded` test. (`instant_query` in Task 10 applies the same `decompose_avg` path for `/api/v1/query`.)
 
 - [ ] **Step 6: Run to verify it passes**
 
@@ -1682,10 +1694,12 @@ git commit -m "feat(metrics): QueryFrontend orchestrator (split+shard+fan-out+me
 ### Task 7: Result cache — key, TTL, `InMemoryCache`, `ObjectStoreCache`
 
 **Files:**
+
 - Modify: `crates/metrics/src/frontend/cache.rs` (add key fn, `InMemoryCache`, `ObjectStoreCache`)
 - Modify: `crates/metrics/src/frontend/mod.rs` (re-exports)
 
 **Interfaces:**
+
 - Produces:
   - `fn cache_key(tenant: &str, query: &str, start: f64, end: f64, step: f64) -> String` — stable, collision-resistant key (tenant first; floats by bit pattern hex so `1.0` and `1` don't alias).
   - `struct InMemoryCache { ttl: Duration }` — `DashMap`/`Mutex<HashMap>` of `key → (stored_at, QueryResult)`; honors TTL on `get`.
@@ -1873,7 +1887,7 @@ impl ResultCache for ObjectStoreCache {
 }
 ```
 
-> **object_store 0.13 verify-note (churn surface):** `ObjectStore::get(&Path) -> GetResult` with `.meta.last_modified: chrono::DateTime<Utc>` and `.bytes().await`, `put(&Path, PutPayload)` (the `bytes.into()` builds a `PutPayload` from `Bytes` at 0.13 — if the signature is `put(&Path, PutPayload, PutOptions)` add `Default::default()`), and `Path::child` are object_store 0.13 surface. `chrono` is already in the workspace graph via object_store; if not exposed, add `chrono` as a dep (it's transitively present). The round-trip test pins behavior; fix method names against 0.13 docs if they drift. The FNV-1a key hash is deliberately simple (no crypto) — collisions across distinct keys are astronomically unlikely for cache keys and a collision only causes a cache miss, never a wrong answer (the key is *not* re-validated on read, so if stronger collision safety is wanted, store the full key in the JSON and compare on `get`).
+> **object_store 0.13 verify-note (churn surface):** `ObjectStore::get(&Path) -> GetResult` with `.meta.last_modified: chrono::DateTime<Utc>` and `.bytes().await`, `put(&Path, PutPayload)` (the `bytes.into()` builds a `PutPayload` from `Bytes` at 0.13 — if the signature is `put(&Path, PutPayload, PutOptions)` add `Default::default()`), and `Path::child` are object_store 0.13 surface. `chrono` is already in the workspace graph via object_store; if not exposed, add `chrono` as a dep (it's transitively present). The round-trip test pins behavior; fix method names against 0.13 docs if they drift. The FNV-1a key hash is deliberately simple (no crypto) — collisions across distinct keys are astronomically unlikely for cache keys and a collision only causes a cache miss, never a wrong answer (the key is _not_ re-validated on read, so if stronger collision safety is wanted, store the full key in the JSON and compare on `get`).
 
 - [ ] **Step 4: Add `chrono` if needed + re-export from `mod.rs`**
 
@@ -1898,15 +1912,17 @@ git commit -m "feat(metrics): ResultCache — in-memory + object-store, TTL, spl
 ### Task 8: Split-and-cache reuse + shard-equivalence integration tests
 
 **Files:**
+
 - Create: `crates/metrics/tests/frontend_split_stitch.rs`
 - Create: `crates/metrics/tests/frontend_shard_equivalence.rs`
 
 **Interfaces:**
+
 - Consumes the public `frontend` API end-to-end with `MockQuerier` + `InMemoryCache`.
 
 - [ ] **Step 1: Split-and-cache reuse test (`frontend_split_stitch.rs`)**
 
-The headline cache behavior: a moving window reuses cached older sub-ranges. Query `[0, 100]` then the *moved* window `[40, 140]` with a 40s split. Because boundaries snap to the absolute interval grid, the two windows share the interior tile `(40, 70)`; on the second query that tile is served from cache, so the moved window issues backend calls only for its *new* tiles `(80, 110)` and `(120, 140)` — exactly two, not three.
+The headline cache behavior: a moving window reuses cached older sub-ranges. Query `[0, 100]` then the _moved_ window `[40, 140]` with a 40s split. Because boundaries snap to the absolute interval grid, the two windows share the interior tile `(40, 70)`; on the second query that tile is served from cache, so the moved window issues backend calls only for its _new_ tiles `(80, 110)` and `(120, 140)` — exactly two, not three.
 
 ```rust
 use std::collections::BTreeMap;
@@ -2082,7 +2098,7 @@ async fn sharded_avg_equals_unsharded() {
 Run: `cargo test -p krabka-metrics --test frontend_split_stitch --test frontend_shard_equivalence`
 Expected: PASS.
 
-> **Mock-stub ordering caveat:** `MockQuerier` pops stubs FIFO and repeats the last. The `sum`-shard test programs 4 distinct stubs (one per shard) in shard-index order; the `avg` test programs 8 (4 `sum`-shard stubs, then 4 `count`-shard stubs) because the orchestrator fully awaits the sharded `sum(...)` sub-query before the sharded `count(...)` one. This works because `join_all` preserves index order in the returned `Vec` and the *dispatch* order into the mock is the deterministic `(0..shards)` map order (and, for `avg`, sum-then-count). If a future change makes dispatch concurrent-nondeterministic w.r.t. stub consumption, switch `MockQuerier` to match on `RangeRequest.query` (its `__query_shard__` value and `sum`/`count` prefix) instead of FIFO (a small fixture upgrade; flagged here, not needed yet).
+> **Mock-stub ordering caveat:** `MockQuerier` pops stubs FIFO and repeats the last. The `sum`-shard test programs 4 distinct stubs (one per shard) in shard-index order; the `avg` test programs 8 (4 `sum`-shard stubs, then 4 `count`-shard stubs) because the orchestrator fully awaits the sharded `sum(...)` sub-query before the sharded `count(...)` one. This works because `join_all` preserves index order in the returned `Vec` and the _dispatch_ order into the mock is the deterministic `(0..shards)` map order (and, for `avg`, sum-then-count). If a future change makes dispatch concurrent-nondeterministic w.r.t. stub consumption, switch `MockQuerier` to match on `RangeRequest.query` (its `__query_shard__` value and `sum`/`count` prefix) instead of FIFO (a small fixture upgrade; flagged here, not needed yet).
 
 - [ ] **Step 4: Commit**
 
@@ -2098,10 +2114,12 @@ git commit -m "test(metrics): frontend split-and-cache reuse + shard-equivalence
 ### Task 9: `HttpQuerier` fan-out backend (reqwest pool)
 
 **Files:**
+
 - Create: `crates/metrics/src/frontend/http_backend.rs`
 - Modify: `crates/metrics/src/frontend/mod.rs`
 
 **Interfaces:**
+
 - Produces:
   - `struct HttpQuerier { http: reqwest::Client, addrs: Vec<String>, next: AtomicUsize, timeout: Duration }` implementing `QuerierBackend`.
   - `fn new(addrs: Vec<String>, timeout: Duration) -> Result<HttpQuerier, BackendError>`.
@@ -2327,12 +2345,14 @@ git commit -m "feat(metrics): HttpQuerier reqwest fan-out backend"
 ### Task 10: axum server + handlers + `--target query-frontend` role binary
 
 **Files:**
+
 - Create: `crates/metrics/src/frontend/server.rs`
 - Create/Modify: `crates/metrics/src/bin/krabka-metrics.rs`
 - Modify: `crates/metrics/src/frontend/mod.rs`
 - Modify: `crates/metrics/Cargo.toml` (add `[[bin]]` if not present)
 
 **Interfaces:**
+
 - Produces:
   - `fn router(frontend: Arc<QueryFrontend<HttpQuerier, …>>) -> axum::Router` — `/api/v1/query` + `/api/v1/query_range` (GET + POST), tenant from `X-Scope-OrgID`, `Cache-Control` parsed to `CacheControl`, returns the `QueryResult` as JSON.
   - `async fn run_query_frontend(cfg: FrontendConfig, cache, shutdown) -> std::io::Result<()>` — bind `cfg.listen_addr`, serve the router.
@@ -2670,7 +2690,7 @@ name = "krabka-metrics"
 path = "src/bin/krabka-metrics.rs"
 ```
 
-> **Binary-config note:** this slice wires the role *dispatch* and a working in-memory-backed `ObjectStoreCache`; real config loading (backend addrs / object-store selection / listen addr from flags or a config file) lands in Slice 8 hardening. The default `FrontendConfig` is enough to boot and pass the server test, which targets the library router, not the binary.
+> **Binary-config note:** this slice wires the role _dispatch_ and a working in-memory-backed `ObjectStoreCache`; real config loading (backend addrs / object-store selection / listen addr from flags or a config file) lands in Slice 8 hardening. The default `FrontendConfig` is enough to boot and pass the server test, which targets the library router, not the binary.
 
 - [ ] **Step 6: Run to verify it passes + whole-crate gate**
 
@@ -2690,6 +2710,7 @@ git commit -m "feat(metrics): query-frontend axum server + --target query-fronte
 ## Self-review
 
 **Spec coverage (against §6.4 query-frontend + §11 Slice 6):**
+
 - **Time-splitting** (step-aligned per-interval sub-ranges, stitch matrices) → Tasks 3, 6, 8.
 - **Query sharding** (Mimir `__query_shard__` injection via parsed AST, shardability decision, parallel dispatch, correct merge, no-shard fallback for non-decomposable) → Tasks 4, 5, 6, 8.
 - **Fan-out** (HTTP client pool, configurable backends, parallel dispatch w/ timeouts, merge into one Prometheus JSON) → Tasks 2 (trait), 6 (`join_all`), 9 (`HttpQuerier`).
@@ -2700,11 +2721,12 @@ git commit -m "feat(metrics): query-frontend axum server + --target query-fronte
 **Contract fidelity:** consumes the Slice 5 querier surface exactly (`/api/v1/query`, `/api/v1/query_range`, Prometheus JSON `resultType`, `X-Scope-OrgID`). The `QueryResult` model (Task 1) is shaped to Prometheus's JSON and pinned by a serde test; the no-op path (single sub-range, non-shardable, cache-miss) round-trips the querier's body unchanged — the byte-equality analog.
 
 **Churn-prone surfaces — structured + behavior-pinned + verify-noted:**
+
 - `promql-parser` 0.10 AST (`shard.rs`) — exact `Expr` variant / `Matcher` / token-constant names verify-noted; behavior pinned by shardability + injected-matcher-text tests.
 - `reqwest` 0.13 + querier HTTP contract (`http_backend.rs`) — pinned by a loopback axum-stub test asserting request shape + response parse; verify-note for method drift.
 - `object_store` 0.13 (`cache.rs`) — `GetResult.meta.last_modified` / `bytes()` / `put` signatures verify-noted; round-trip test pins behavior; FNV-key collision analysis included.
 
-**`avg` decomposition — implemented (FOCUS deliverable):** `avg` is deliberately not an `AggrOp`, but it *is* sharded: the orchestrator detects a top-level `avg` via `shard::decompose_avg`, dispatches `sum(<inner>)` and `count(<inner>)` each fully sharded (rewrite-per-shard → fan-out → `merge_shards`), then recombines with `shard::divide_results` (merged-sum / merged-count per `(series, timestamp)`). This avoids a wrong "average of per-shard averages" while keeping `merge_shards` total over the four exact-combine ops. The `range_query` and `instant_query` paths share the decomposition, and the `sharded_avg_equals_unsharded` integration test (Task 8) pins sharded-`avg` == unsharded.
+**`avg` decomposition — implemented (FOCUS deliverable):** `avg` is deliberately not an `AggrOp`, but it _is_ sharded: the orchestrator detects a top-level `avg` via `shard::decompose_avg`, dispatches `sum(<inner>)` and `count(<inner>)` each fully sharded (rewrite-per-shard → fan-out → `merge_shards`), then recombines with `shard::divide_results` (merged-sum / merged-count per `(series, timestamp)`). This avoids a wrong "average of per-shard averages" while keeping `merge_shards` total over the four exact-combine ops. The `range_query` and `instant_query` paths share the decomposition, and the `sharded_avg_equals_unsharded` integration test (Task 8) pins sharded-`avg` == unsharded.
 
 **Placeholder scan:** no "TBD"/"similar to Task N"/"add error handling". Every step has runnable code or an exact command. The hand-waves (3rd-party API method names at arrow/reqwest/object_store/promql-parser versions) are each bounded with a verify-against-docs note and pinned by a behavior test, never left vague.
 

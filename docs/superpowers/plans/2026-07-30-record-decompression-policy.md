@@ -27,11 +27,13 @@
 ### Task 1: Shared validated decompression policy
 
 **Files:**
+
 - Modify: `crates/compression/Cargo.toml`
 - Modify: `crates/compression/src/lib.rs`
 - Modify: `Cargo.lock`
 
 **Interfaces:**
+
 - Produces: `RecordDecompressionPolicy::new(Ratio, ByteSize, ByteSize) -> Result<Self, String>`
 - Produces: `RecordDecompressionPolicy::output_limit(self, ByteSize) -> ByteSize`
 - Produces: `RECORD_DECOMPRESSION_HARD_MAX_RATIO`, `RECORD_DECOMPRESSION_HARD_MAX_OUTPUT`
@@ -166,11 +168,13 @@ git commit -m "feat(compression): add record decode policy"
 ### Task 2: Policy-aware v2 record decoding
 
 **Files:**
+
 - Modify: `crates/protocol/src/records/owned.rs`
 - Modify: `crates/protocol/src/records/borrowed.rs`
 - Modify: `crates/protocol/src/records/payload.rs`
 
 **Interfaces:**
+
 - Consumes: `krabka_compression::RecordDecompressionPolicy`
 - Produces: `RecordBatch::decode_with_policy`
 - Produces: borrowed `RecordBatch::decode_borrow_with_policy`
@@ -257,11 +261,13 @@ git commit -m "refactor(protocol): share record decode limits"
 ### Task 3: Policy-aware legacy record decoding
 
 **Files:**
+
 - Modify: `crates/records-legacy/src/set.rs`
 - Modify: `crates/records-legacy/src/bridge.rs`
 - Modify: `crates/records-legacy/src/lib.rs`
 
 **Interfaces:**
+
 - Consumes: `RecordDecompressionPolicy`
 - Produces: `decode_message_set_with_policy`
 - Produces: `legacy_to_v2_with_policy`
@@ -341,11 +347,13 @@ git commit -m "refactor(records): share legacy decode limits"
 ### Task 4: Broker configuration surface
 
 **Files:**
+
 - Modify: `crates/broker/src/config.rs`
 - Modify: `crates/broker/src/file_config.rs`
 - Modify: `crates/broker/src/bin/broker.rs`
 
 **Interfaces:**
+
 - Consumes: `RecordDecompressionPolicy::new`
 - Produces: three validated `BrokerConfig` fields
 - Produces: CLI/environment and `[runtime]` overlays
@@ -431,10 +439,12 @@ git commit -m "feat(broker): expose record decode policy"
 ### Task 5: Thread policy through Produce fallback decoding
 
 **Files:**
+
 - Modify: `crates/broker/src/handlers/produce.rs`
 - Test: `crates/broker/tests/produce_legacy_upconvert.rs`
 
 **Interfaces:**
+
 - Consumes: broker record-decompression fields
 - Consumes: `RecordsPayload::from_bytes_with_policy`
 - Consumes: `legacy_to_v2_with_policy`
@@ -504,12 +514,14 @@ git commit -m "feat(broker): apply record decode limits"
 ### Task 6: Kafka CRD and operator rendering
 
 **Files:**
+
 - Modify: `crates/operator/Cargo.toml`
 - Modify: `crates/operator/src/crd/kafka.rs`
 - Modify: `deploy/crds/crabka.io_kafkas.yaml`
 - Modify: `Cargo.lock`
 
 **Interfaces:**
+
 - Consumes: shared policy validation
 - Produces: three `BrokerTuning` fields and rendered broker runtime TOML
 
@@ -572,9 +584,11 @@ git commit -m "feat(operator): expose record decode policy"
 ### Task 7: Audit closure and full verification
 
 **Files:**
+
 - Modify: `docs/configuration-audit.md`
 
 **Interfaces:**
+
 - Consumes: all prior task deliverables
 - Produces: completed `records-legacy` coverage entry and verification evidence
 

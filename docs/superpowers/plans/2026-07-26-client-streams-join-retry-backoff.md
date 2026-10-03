@@ -37,6 +37,7 @@
 ### Task 1: Validate and route the Client Streams join retry backoff
 
 **Files:**
+
 - Modify: `crates/client-streams/src/membership/client.rs`
 - Modify: `crates/client-streams/src/membership/mod.rs`
 - Modify: `crates/client-streams/src/runtime/app.rs`
@@ -44,6 +45,7 @@
 - Modify: `crates/client-streams/src/lib.rs`
 
 **Interfaces:**
+
 - Produces: `pub const DEFAULT_STREAMS_JOIN_RETRY_BACKOFF: Duration`
 - Produces: `pub struct StreamsJoinRetryBackoff(Duration)`
 - Produces: `StreamsJoinRetryBackoff::new(Duration) -> Result<Self, String>`
@@ -353,12 +355,14 @@ git commit -m "feat(streams): configure join retry backoff"
 ### Task 2: Expose the demo CLI, environment, and Compose setting
 
 **Files:**
+
 - Modify: `crates/observability-demo-app/src/main.rs`
 - Create: `crates/observability-demo-app/tests/streams_join_retry_config.rs`
 - Modify: `crates/observability-demo-app/tests/observability_demo_config.rs`
 - Modify: `demo/observability/docker-compose.yml`
 
 **Interfaces:**
+
 - Consumes: `StreamsJoinRetryBackoff`
 - Produces: `--streams-join-retry-backoff-ms`
 - Produces: `KRABKA_DEMO_STREAMS_JOIN_RETRY_BACKOFF_MS`
@@ -590,9 +594,11 @@ git commit -m "feat(demo): expose Streams join retry"
 ### Task 3: Record audit closure and verify the slice
 
 **Files:**
+
 - Modify: `docs/configuration-audit.md`
 
 **Interfaces:**
+
 - Consumes: Tasks 1 and 2 committed behavior
 - Produces: reproducible scanner totals, exclusive focused-reference classification, gate evidence, and one concrete next unresolved operational owner
 

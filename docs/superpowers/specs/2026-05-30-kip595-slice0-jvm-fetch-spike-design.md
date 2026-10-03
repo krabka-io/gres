@@ -96,7 +96,7 @@ The code is disposable. The kept artifact is the findings doc.
 
 ## Components
 
-1. **Wire ground-truth capture** *(first task, before any Crabka code)* — stand
+1. **Wire ground-truth capture** _(first task, before any Crabka code)_ — stand
    up a pure-JVM KRaft cluster (1 controller + 1 broker, `mirror.gcr.io/apache/kafka:4.0.0`)
    and capture the real controller↔broker metadata `ApiVersions` + `Fetch`
    exchange on the wire (tcpdump/pcap or a transparent TCP tee on loopback).
@@ -139,7 +139,7 @@ JVM broker observer                    Crabka controller (spike)
 
 Spike-grade. On any decode mismatch, log the offending bytes and the JVM's
 reaction and record it in the findings doc. No production error paths. A JVM
-rejection *is* a finding — iterate the bytes until the JVM accepts them.
+rejection _is_ a finding — iterate the bytes until the JVM accepts them.
 
 ## Testing / acceptance
 

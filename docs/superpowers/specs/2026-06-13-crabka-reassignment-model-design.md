@@ -4,6 +4,7 @@
 **Status:** Approved (design); plan + implementation to follow
 **Workstream:** A (stateright correctness models) — KIP-455 partition reassignment, the last strong model candidate after the consensus / share-group / ISR / failover trilogy-plus.
 **Predecessor specs:**
+
 - `2026-06-13-crabka-isr-replica-state-model-design.md` (ISR/HWM; #515)
 - `2026-06-13-crabka-failover-recovery-model-design.md` (failover/unclean-recovery; #516)
 
@@ -14,7 +15,7 @@ Model-check the pure KIP-455 reassignment-completion core
 [stateright](https://github.com/stateright/stateright), exhaustively exploring
 every interleaving of replica catch-up, broker liveness, and completion ticks,
 and proving the reassignment-safety invariants — above all that a partition's
-replica set never switches off its leader (the leader is handed off *before* it
+replica set never switches off its leader (the leader is handed off _before_ it
 is removed) and the ISR stays a subset of the replica set throughout.
 
 This is the **wrap-real** counterpart for partition reassignment, structurally
@@ -132,7 +133,7 @@ descendant module of `reassignment`.
 
 - **No alter-request validation / start path** (`alter_partition_reassignments.rs`
   — turns a client `AlterPartitionReassignments` into the `adding`/`removing`
-  record). This slice models the *convergence* core, not request validation.
+  record). This slice models the _convergence_ core, not request validation.
 - **No async task plumbing** (`run` loop, image watch, `submit_change`).
 - **No multi-partition concurrency / cancellation.** Single-partition
   reassignment lifecycle. (`compute_reassignment_progress` already handles each
@@ -180,7 +181,7 @@ struct ReassignModel {
 
 - `AdmitToIsr(node)` — for `node ∈ replicas`, `node ∉ isr`: add it to `isr`
   (in replica order). Models a lagging/adding replica catching up and the
-  controller admitting it. (Only ever *adds* a caught-up replica, so it is
+  controller admitting it. (Only ever _adds_ a caught-up replica, so it is
   always safe.)
 - `Die(node)` / `Revive(node)` — toggle `alive` (keep ≥1 alive). Affects which
   replicas are eligible new leaders in the handoff phase.
@@ -191,6 +192,7 @@ struct ReassignModel {
   transition).
 
 `next_state` for `ReassignStep`:
+
 1. Clone state, build `pr`, `let decision = reassign_one(&pr, &alive_set)`.
 2. `assert_step(&pre, &decision)` — panic on any safety violation.
 3. If `Some(next)`, set `leader/isr/adding/removing/replicas/leader_epoch` from
@@ -199,6 +201,7 @@ struct ReassignModel {
 ### Properties
 
 **State-level — `Property::always`:**
+
 - `isr_subset_replicas` — `isr ⊆ replicas`.
 - `leader_in_replicas` — `leader ∈ replicas`.
 - `leader_in_isr` — `leader ∈ isr` (Kafka invariant; the model never drops the
@@ -211,10 +214,11 @@ struct ReassignModel {
 shape is classified from `(pre, next)`: a **handoff** is `next.leader !=
 pre.leader`; otherwise a `Some` with `next.adding` and `next.removing` both
 empty is a **completion**; any other `Some` shape is unexpected and panics.
+
 - `leader_epoch_monotonic` — `next.leader_epoch >= pre.leader_epoch`.
 - On a **handoff**: the replica set, ISR, adding, and removing are
   **unchanged**; `next.leader ∈ pre.isr`, `next.leader ∈ target`, `next.leader ∈
-  alive`, `next.leader ∉ pre.removing`; `leader_epoch == pre.leader_epoch + 1`.
+alive`, `next.leader ∉ pre.removing`; `leader_epoch == pre.leader_epoch + 1`.
 - On a **completion**: **`next.leader ∈ next.replicas`** (the replica set never
   switches off the leader — the headline safety), `next.replicas == target`
   (`= pre.replicas − pre.removing`), `next.isr ⊆ next.replicas`, `next.adding`
@@ -223,6 +227,7 @@ empty is a **completion**; any other `Some` shape is unexpected and panics.
   member was in `pre.isr` (no progress before replication completes).
 
 **Non-vacuity — `Property::sometimes`:**
+
 - `can_complete` — reach a state with `adding == [] && removing == []`
   (reassignment finished).
 - `can_handoff` — leadership moved mid-reassignment. Formulated
@@ -259,9 +264,9 @@ completion ≤1), so the space is tiny (low hundreds, like the failover model).
 
 ## File structure
 
-| File | Responsibility |
-| --- | --- |
-| `crates/broker/src/reassignment.rs` | (modify) add `reassign_one`; rewrite `compute_reassignment_progress` to call it; declare `#[cfg(test)] #[path="reassignment_model.rs"] mod reassignment_model;`. |
+| File                                      | Responsibility                                                                                                                                                          |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `crates/broker/src/reassignment.rs`       | (modify) add `reassign_one`; rewrite `compute_reassignment_progress` to call it; declare `#[cfg(test)] #[path="reassignment_model.rs"] mod reassignment_model;`.        |
 | `crates/broker/src/reassignment_model.rs` | (create) the model: `ReassignModel`/`ReassignState`/`ReassignAction`, the `Model` impl + `assert_step`, the watchdog-friendly `run` harness, and the `#[test]` configs. |
 
 ## Testing strategy

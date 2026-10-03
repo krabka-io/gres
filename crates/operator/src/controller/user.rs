@@ -13,17 +13,17 @@ use std::{
 };
 
 use base64::Engine as _;
-use krabka_client_admin::{
-    AclEntry, AclEntryFilter, AclOperation, AdminError, DEFAULT_SCRAM_ITERATIONS, PatternType,
-    PermissionType, ResourceType, ScramDeletion, ScramUpsertion,
-};
-use krabka_units::{Time, convert::TimeExt as _, fmt::Human as _, minutes};
 use futures::StreamExt as _;
 use k8s_openapi::{
     ByteString,
     api::core::v1::Secret,
     apimachinery::pkg::apis::meta::v1::{ObjectMeta, OwnerReference},
 };
+use krabka_client_admin::{
+    AclEntry, AclEntryFilter, AclOperation, AdminError, DEFAULT_SCRAM_ITERATIONS, PatternType,
+    PermissionType, ResourceType, ScramDeletion, ScramUpsertion,
+};
+use krabka_units::{Time, convert::TimeExt as _, fmt::Human as _, minutes};
 use kube::{
     Resource, ResourceExt as _,
     api::{Api, Patch, PatchParams},

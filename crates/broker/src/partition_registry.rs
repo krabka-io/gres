@@ -11,8 +11,8 @@
 
 use std::sync::Arc;
 
-use krabka_ids::PartitionIndex;
 use dashmap::DashMap;
+use krabka_ids::PartitionIndex;
 
 use crate::partition::Partition;
 

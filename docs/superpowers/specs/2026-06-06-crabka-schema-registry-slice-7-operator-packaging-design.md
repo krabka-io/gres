@@ -18,7 +18,7 @@
 ## 1. Background
 
 `krabka-schema-registry` is a standalone Confluent-compatible registry: a Kafka
-*client* of the Crabka broker whose state lives in the `_schemas` topic. Slices
+_client_ of the Crabka broker whose state lives in the `_schemas` topic. Slices
 1–6 made it functional (3-format registry + compat, deletes/modes/lookups,
 references, HA via the broker's `"sr"` Kafka-group election + write-forwarding,
 and security: REST authn/authz/TLS + SR↔broker client auth). It is configured
@@ -29,12 +29,13 @@ The operator (`crates/operator/`) already manages the broker via a `Kafka` CRD
 (+ `KafkaNodePool`, `KafkaTopic`, `KafkaUser`, `KafkaRebalance`) with a kube-rs
 reconciler. No `SchemaRegistry` CRD exists yet. Packaging is **melange + apko**
 (Wolfi), not Dockerfiles; the operator + broker ship as OCI images built in CI.
-The grpc-gateway (the most recent standalone service) got *neither* a CRD nor a
+The grpc-gateway (the most recent standalone service) got _neither_ a CRD nor a
 chart, so this slice is the first new service to receive the full treatment.
 
 ## 2. Goals / non-goals
 
 **Goals**
+
 - A `SchemaRegistry` CRD (`crabka.io/v1alpha1`) with first-class typed fields for
   the SR config surface that the binary actually supports today.
 - A reconciler that renders a `Deployment` + `Service` + `ConfigMap` + `Secret`
@@ -46,6 +47,7 @@ chart, so this slice is the first new service to receive the full treatment.
 - Validation: mock-client reconcile unit tests + a kind e2e round-trip.
 
 **Non-goals (YAGNI / deferred)**
+
 - **JWKS-backed Bearer auth.** SR's `--bearer` supports `off|unsecured` only
   today. The CRD models `bearer.mode: unsecured` (+ `principalClaim`); a
   production JWKS mode needs the (already-present) `krabka-security` JWKS
@@ -61,13 +63,13 @@ chart, so this slice is the first new service to receive the full treatment.
 
 Five units, each independently reviewable:
 
-| Unit | Files | Responsibility |
-|---|---|---|
-| CRD | `crates/operator/src/crd/schema_registry.rs` (+ `crd/mod.rs` re-exports, `gen_crds.rs` registration) | The `SchemaRegistry` Spec/Status types + generated CRD YAML. |
-| Reconciler | `crates/operator/src/controller/schema_registry.rs` (+ `controller/mod.rs`; child-resource renderers near `controller/common.rs`) | Watch `SchemaRegistry`+`Kafka`; render+SSA the child resources; patch status. |
-| Packaging | `packaging/melange/krabka-schema-registry.yaml`, `packaging/apko/krabka-schema-registry.yaml`, `.github/workflows/operator-e2e.yml` (build-images loop) | Build the OCI image in CI. |
-| Helm + manifests | `charts/krabka-schema-registry/**`, `deploy/crds/crabka.io_schemaregistries.yaml`, `charts/krabka-operator/templates/clusterrole.yaml` (RBAC) | Non-operator install path + CRD manifest + operator RBAC. |
-| Docs | `website/` (or `docs/`) deploy page, `README.md` capability table | Document deployment; flip `❌ → ✅`. |
+| Unit             | Files                                                                                                                                                   | Responsibility                                                                |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| CRD              | `crates/operator/src/crd/schema_registry.rs` (+ `crd/mod.rs` re-exports, `gen_crds.rs` registration)                                                    | The `SchemaRegistry` Spec/Status types + generated CRD YAML.                  |
+| Reconciler       | `crates/operator/src/controller/schema_registry.rs` (+ `controller/mod.rs`; child-resource renderers near `controller/common.rs`)                       | Watch `SchemaRegistry`+`Kafka`; render+SSA the child resources; patch status. |
+| Packaging        | `packaging/melange/krabka-schema-registry.yaml`, `packaging/apko/krabka-schema-registry.yaml`, `.github/workflows/operator-e2e.yml` (build-images loop) | Build the OCI image in CI.                                                    |
+| Helm + manifests | `charts/krabka-schema-registry/**`, `deploy/crds/crabka.io_schemaregistries.yaml`, `charts/krabka-operator/templates/clusterrole.yaml` (RBAC)           | Non-operator install path + CRD manifest + operator RBAC.                     |
+| Docs             | `website/` (or `docs/`) deploy page, `README.md` capability table                                                                                       | Document deployment; flip `❌ → ✅`.                                          |
 
 **Workload = `Deployment` (not `StatefulSet`).** SR is stateless — all registry
 state is in `_schemas` and leader election runs through the broker's `"sr"`
@@ -75,11 +77,12 @@ group (slice 5). N replicas all join the group; one is elected primary; the rest
 forward mutating requests to the primary's advertised URL. No PVC.
 
 ### Key decisions (alternatives considered)
-- **Deployment vs StatefulSet** → Deployment (stateless). *StatefulSet/PVC
-  rejected — no local persistent state.*
+
+- **Deployment vs StatefulSet** → Deployment (stateless). _StatefulSet/PVC
+  rejected — no local persistent state._
 - **Config delivery: CRD → container args/env (+ Secret)** vs adding a
   config-file loader to SR → args/env (reuses slice-6's existing CLI surface).
-  *Config-file loader rejected — scope creep into the SR crate.*
+  _Config-file loader rejected — scope creep into the SR crate._
 - **Kafka association: `crabka.io/cluster` label** (mirrors `KafkaTopic`,
   `controller/topic.rs`) vs a `spec.kafkaRef` field → label, for consistency
   with existing CRDs. A `spec.bootstrapServers` override covers external Kafka.
@@ -170,7 +173,7 @@ mounts them. Non-secret knobs are inline typed fields.
 
 **This is the full typed security surface SR supports today** (require-auth,
 realm, basic, bearer-unsecured, TLS + client-auth, authz super-users + refresh).
-SR↔broker *client* security (SASL/mTLS) is **derived** from the managed Kafka's
+SR↔broker _client_ security (SASL/mTLS) is **derived** from the managed Kafka's
 internal listener — not a CRD field (see §5).
 
 ## 5. The reconciler
@@ -218,6 +221,7 @@ internal listener — not a CRD field (see §5).
 ## 6. Packaging
 
 Clone the broker recipes:
+
 - `packaging/melange/krabka-schema-registry.yaml` — pinned Rust toolchain,
   `cargo build --release --bin krabka-schema-registry -p krabka-schema-registry`,
   install to `/usr/bin/krabka-schema-registry`.
@@ -269,13 +273,13 @@ Clone the broker recipes:
 
 ## 10. Phasing (one PR, batched)
 
-| Batch | Tasks | Files (non-overlapping within a batch) |
-|---|---|---|
-| 1 | Packaging | `packaging/melange/*`, `packaging/apko/*`, `operator-e2e.yml` build-images |
-| 2 | CRD + gen + schema test | `crd/schema_registry.rs`, `crd/mod.rs`, `gen_crds.rs`, generated `deploy/crds/*.yaml`, CRD schema test |
-| 3 | Reconciler + unit tests | `controller/schema_registry.rs`, `controller/mod.rs`, `controller/common.rs` (renderers), `tests/reconcile_schema_registry.rs`, operator `--default-schema-registry-image` flag |
-| 4 | Helm + RBAC | `charts/krabka-schema-registry/**`, `charts/krabka-operator/templates/clusterrole.yaml` |
-| 5 | e2e + docs + README | `operator-e2e.yml` e2e steps, docs page, `README.md` |
+| Batch | Tasks                   | Files (non-overlapping within a batch)                                                                                                                                          |
+| ----- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | Packaging               | `packaging/melange/*`, `packaging/apko/*`, `operator-e2e.yml` build-images                                                                                                      |
+| 2     | CRD + gen + schema test | `crd/schema_registry.rs`, `crd/mod.rs`, `gen_crds.rs`, generated `deploy/crds/*.yaml`, CRD schema test                                                                          |
+| 3     | Reconciler + unit tests | `controller/schema_registry.rs`, `controller/mod.rs`, `controller/common.rs` (renderers), `tests/reconcile_schema_registry.rs`, operator `--default-schema-registry-image` flag |
+| 4     | Helm + RBAC             | `charts/krabka-schema-registry/**`, `charts/krabka-operator/templates/clusterrole.yaml`                                                                                         |
+| 5     | e2e + docs + README     | `operator-e2e.yml` e2e steps, docs page, `README.md`                                                                                                                            |
 
 Batches 1 and 2 don't touch overlapping files → parallelizable. Batch 3 depends
 on 2 (the CRD types). Batches 4–5 depend on 3.

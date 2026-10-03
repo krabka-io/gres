@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Give `krabka-object-store` a shared, typed, mockable object-store *operation* surface (`ObjectOps` trait + a concrete `ObjectStoreClient`), and route `krabka-remote-storage`'s tiered-storage engine (put / multipart / ranged-get / get / delete) through it — centralising the multipart-threshold decision, and replacing the fragile `"not found:"` string-prefix match with a structured `ObjectStoreError::NotFound`.
+**Goal:** Give `krabka-object-store` a shared, typed, mockable object-store _operation_ surface (`ObjectOps` trait + a concrete `ObjectStoreClient`), and route `krabka-remote-storage`'s tiered-storage engine (put / multipart / ranged-get / get / delete) through it — centralising the multipart-threshold decision, and replacing the fragile `"not found:"` string-prefix match with a structured `ObjectStoreError::NotFound`.
 
-**Architecture:** Plan 1 (`2026-07-05-crabka-object-store-substrate-crate.md`) unified object-store *construction*. This plan unifies *access*: one async op trait (`ObjectOps`) with a single concrete implementation over `Arc<dyn object_store::ObjectStore>`, so the put/multipart/get/get_range/head/list/delete logic lives once. `remote-storage`'s synchronous `RemoteStorageManager` engine keeps its own `block()`-style bridge (renamed `block_os`) at its boundary and calls the async `ObjectOps` methods through it; the multipart branch and the `object_store::Error` → structured error mapping move into the substrate. `remote-storage`'s public API, key layout, KIP range semantics, and behavior are all preserved and guarded by its existing test suite.
+**Architecture:** Plan 1 (`2026-07-05-crabka-object-store-substrate-crate.md`) unified object-store _construction_. This plan unifies _access_: one async op trait (`ObjectOps`) with a single concrete implementation over `Arc<dyn object_store::ObjectStore>`, so the put/multipart/get/get_range/head/list/delete logic lives once. `remote-storage`'s synchronous `RemoteStorageManager` engine keeps its own `block()`-style bridge (renamed `block_os`) at its boundary and calls the async `ObjectOps` methods through it; the multipart branch and the `object_store::Error` → structured error mapping move into the substrate. `remote-storage`'s public API, key layout, KIP range semantics, and behavior are all preserved and guarded by its existing test suite.
 
 **Tech Stack:** Rust 2024 (pinned stable 1.96.0), `object_store` 0.13 (workspace-pinned), `async-trait`, `bytes`, `futures`, `thiserror`, `mockall` (dev), `tokio`, `assert2`, `cargo +nightly fmt`, `clippy::pedantic` (`unsafe_code = "forbid"`).
 
@@ -32,12 +32,14 @@
 ## File Structure
 
 **Modified — `crates/object-store/`:**
+
 - `Cargo.toml` — add `async-trait`, `bytes`, `futures` deps; `mockall` dev-dep.
 - `src/error.rs` — add an `Io(#[from] std::io::Error)` variant (needed by `put_from_path`).
 - `src/ops.rs` — **new** — `ObjectOps` trait (`#[cfg_attr(test, mockall::automock)]`) + concrete `ObjectStoreClient`. One responsibility: the shared op surface.
 - `src/lib.rs` — export `ObjectOps`, `ObjectStoreClient`.
 
 **Modified — `crates/remote-storage/`:**
+
 - `src/s3.rs` — swap the `store: Arc<dyn ObjectStore>` field for `ops: ObjectStoreClient`; replace `put_path`/`put_path_multipart`/`put_bytes`/`block`/`map_object_store_error` with `ObjectOps` calls through a `block_os` bridge; structured `NotFound`.
 - `src/error.rs` — add `From<krabka_object_store::ObjectStoreError> for RemoteStorageError`.
 
@@ -46,6 +48,7 @@
 ## Task 1: Add `ObjectOps` dependencies to the substrate
 
 **Files:**
+
 - Modify: `crates/object-store/Cargo.toml`
 
 - [ ] **Step 1: Add the runtime + dev dependencies**
@@ -86,6 +89,7 @@ git commit -m "build(object-store): add async-trait/bytes/futures + mockall for 
 `put_from_path` reads a local file, so the error type needs an I/O variant.
 
 **Files:**
+
 - Modify: `crates/object-store/src/error.rs`
 
 - [ ] **Step 1: Write the failing test**
@@ -133,6 +137,7 @@ git commit -m "feat(object-store): add ObjectStoreError::Io variant"
 ## Task 3: `ObjectOps` trait + concrete `ObjectStoreClient`
 
 **Files:**
+
 - Create: `crates/object-store/src/ops.rs`
 - Modify: `crates/object-store/src/lib.rs`
 
@@ -399,6 +404,7 @@ git commit -m "feat(object-store): add ObjectOps trait + ObjectStoreClient impl"
 Swap the raw `store` handle for an `ObjectStoreClient`, bridge its async ops through a renamed `block_os`, move the multipart-threshold branch into the substrate call, and replace the `"not found:"` string-prefix match with the structured `ObjectStoreError::NotFound`. The existing `remote-storage` suite guards behavior.
 
 **Files:**
+
 - Modify: `crates/remote-storage/src/error.rs`
 - Modify: `crates/remote-storage/src/s3.rs`
 
@@ -650,6 +656,7 @@ In `crates/remote-storage/src/s3.rs`, replace the four trait-method bodies:
 - [ ] **Step 5: Fix the `s3.rs` test module for the moved constructor tests**
 
 Two `#[cfg(test)]` tests in `s3.rs` reference the deleted engine internals or moved items. In `crates/remote-storage/src/s3.rs`'s `mod tests`:
+
 - The engine tests (`rsm(...)` helper, copy-then-fetch, ranged fetch, each index type, idempotent delete, prefix isolation, and the multipart tests `put_path_uses_multipart_above_threshold` / `multipart_flushes_partial_tail_chunk`) all drive the **public** `RemoteStorageManager` trait via `S3RemoteStorage::with_store(...)`, so they keep working unchanged — the multipart path now runs through `ObjectOps::put_from_path` but is still exercised end-to-end. Leave them.
 - If any test called the now-deleted private `put_path`/`put_bytes` directly (grep the test module for `\.put_path(`, `\.put_bytes(`, `\.put_path_multipart(`), rewrite it to drive the public trait method instead (e.g. `copy_log_segment_data`), since those private helpers no longer exist.
 
@@ -728,6 +735,7 @@ git commit -m "style(object-store): cargo +nightly fmt"
 ## Self-Review
 
 **1. Spec coverage (Ch. 0 op-unification — the `ObjectOps` seam deferred from plan 1):**
+
 - Shared typed op surface → Task 3 (`ObjectOps` trait + `ObjectStoreClient`, with the multipart-threshold branch centralised in `put_from_path`). ✅
 - `remote-storage` routes its engine ops through it → Task 4 (copy/fetch/delete via `ObjectOps`, `block_os` bridge). ✅
 - Structured `NotFound` replaces the string-prefix match → Task 4 (`Err(ObjectStoreError::NotFound(_))` arms in `fetch_log_segment`/`fetch_index`/`delete_log_segment_data`; `map_object_store_error` deleted). ✅

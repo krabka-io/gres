@@ -34,15 +34,15 @@ This unblocks operator slice 50c (CRD field for
 
 ## Non-deliverables (out of scope)
 
-| Item | Status |
-|------|--------|
-| 50c — operator surface for introspection (CRD + Secret mount + reconciler) | Future slice |
-| Hybrid validator (try JWT first, fall back to introspection) | Out — one validator type per listener |
-| Token caching | Out — RFC 7662 §4 discourages caching without explicit TTL; SASL is once per connection so the cost is acceptable |
-| `client_secret_post` / `private_key_jwt` client auth to introspection | Out — Basic Auth only |
-| Outbound mTLS from broker to IdP (broker presenting its own cert) | Not in any roadmap slice |
-| Per-listener introspection config | Still rejected by the slice-50 cross-listener canonical-tuple guard; lifts in future 49h |
-| Per-token rate-limiting / circuit-breaking of introspection calls | Out — single reqwest timeout (default 10s) is the only safety net |
+| Item                                                                       | Status                                                                                                            |
+| -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| 50c — operator surface for introspection (CRD + Secret mount + reconciler) | Future slice                                                                                                      |
+| Hybrid validator (try JWT first, fall back to introspection)               | Out — one validator type per listener                                                                             |
+| Token caching                                                              | Out — RFC 7662 §4 discourages caching without explicit TTL; SASL is once per connection so the cost is acceptable |
+| `client_secret_post` / `private_key_jwt` client auth to introspection      | Out — Basic Auth only                                                                                             |
+| Outbound mTLS from broker to IdP (broker presenting its own cert)          | Not in any roadmap slice                                                                                          |
+| Per-listener introspection config                                          | Still rejected by the slice-50 cross-listener canonical-tuple guard; lifts in future 49h                          |
+| Per-token rate-limiting / circuit-breaking of introspection calls          | Out — single reqwest timeout (default 10s) is the only safety net                                                 |
 
 ## Architecture & data flow
 
@@ -144,20 +144,22 @@ introspection_http_timeout_ms = 10000   # optional; default 10000
 
 **Validator selection** in `FileOAuthBearerConfig::apply_to`:
 
-| `jwks_endpoint_uri` | `introspection_endpoint_uri` | Selected validator |
-|---|---|---|
-| set | unset | `Signed` (49b) |
-| unset | set | `Introspection` (49d) |
-| set | set | Reject at config-load: `"jwks_endpoint_uri and introspection_endpoint_uri are mutually exclusive"` |
-| unset | unset | `Unsecured` (49 — dev only) |
+| `jwks_endpoint_uri` | `introspection_endpoint_uri` | Selected validator                                                                                 |
+| ------------------- | ---------------------------- | -------------------------------------------------------------------------------------------------- |
+| set                 | unset                        | `Signed` (49b)                                                                                     |
+| unset               | set                          | `Introspection` (49d)                                                                              |
+| set                 | set                          | Reject at config-load: `"jwks_endpoint_uri and introspection_endpoint_uri are mutually exclusive"` |
+| unset               | unset                        | `Unsecured` (49 — dev only)                                                                        |
 
 **Mandatory fields when `introspection_endpoint_uri` is set:**
+
 - `introspection_client_id` (non-empty string).
 - `introspection_client_secret_path` (path to a readable file; content is the password, trailing newline trimmed).
 
 Missing either → config-load error.
 
 **Optional:**
+
 - `userinfo_endpoint_uri` — enables userinfo enrichment.
 - `introspection_http_timeout_ms` — default 10000.
 - `idp_tls_trust` — shared with JWKS path. When unset, reqwest's default webpki-roots apply.
@@ -166,15 +168,15 @@ Missing either → config-load error.
 
 Greenfield rename per CLAUDE.md. Touched in this slice:
 
-| File | Change |
-|------|--------|
-| `crates/broker/src/file_config.rs` | `FileOAuthBearerConfig.jwks_tls_trust` field renamed; serde tag flips automatically (snake_case). Doc updated to "shared across JWKS, introspection, userinfo". |
-| `crates/broker/src/config.rs` | `BrokerConfig.oauthbearer_jwks_tls_trust` → `oauthbearer_idp_tls_trust`. Default impl + `for_tests` updated. |
-| `crates/broker/src/oauth_jwks.rs` | `JwksRefresher.tls_trust` field's doc updated (semantic, no rename of the field — it's a private struct field used only for the JWKS path). |
-| `crates/broker/src/broker.rs` | The `JwksRefresher { tls_trust: config.oauthbearer_jwks_tls_trust.clone(), ... }` line flips to `oauthbearer_idp_tls_trust`. |
-| `crates/operator/src/controller/listeners.rs` | `render_broker_toml` emits `idp_tls_trust = "..."` instead of `jwks_tls_trust = "..."`. One-line change. |
-| `crates/operator/src/controller/listeners.rs` tests | The slice-50b TOML tests asserting `jwks_tls_trust = …` flip to `idp_tls_trust = …`. ~2-3 test edits. |
-| `crates/broker/src/file_config.rs` tests | The slice-49c tests asserting `cfg.oauthbearer_jwks_tls_trust` flip to `cfg.oauthbearer_idp_tls_trust`. ~2 test edits. |
+| File                                                | Change                                                                                                                                                          |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `crates/broker/src/file_config.rs`                  | `FileOAuthBearerConfig.jwks_tls_trust` field renamed; serde tag flips automatically (snake_case). Doc updated to "shared across JWKS, introspection, userinfo". |
+| `crates/broker/src/config.rs`                       | `BrokerConfig.oauthbearer_jwks_tls_trust` → `oauthbearer_idp_tls_trust`. Default impl + `for_tests` updated.                                                    |
+| `crates/broker/src/oauth_jwks.rs`                   | `JwksRefresher.tls_trust` field's doc updated (semantic, no rename of the field — it's a private struct field used only for the JWKS path).                     |
+| `crates/broker/src/broker.rs`                       | The `JwksRefresher { tls_trust: config.oauthbearer_jwks_tls_trust.clone(), ... }` line flips to `oauthbearer_idp_tls_trust`.                                    |
+| `crates/operator/src/controller/listeners.rs`       | `render_broker_toml` emits `idp_tls_trust = "..."` instead of `jwks_tls_trust = "..."`. One-line change.                                                        |
+| `crates/operator/src/controller/listeners.rs` tests | The slice-50b TOML tests asserting `jwks_tls_trust = …` flip to `idp_tls_trust = …`. ~2-3 test edits.                                                           |
+| `crates/broker/src/file_config.rs` tests            | The slice-49c tests asserting `cfg.oauthbearer_jwks_tls_trust` flip to `cfg.oauthbearer_idp_tls_trust`. ~2 test edits.                                          |
 
 ## Code surface — concrete shapes
 
@@ -347,6 +349,7 @@ pub enum BuildError {
 ### `crates/broker/src/file_config.rs` + `config.rs`
 
 `FileOAuthBearerConfig` gains:
+
 ```rust
 #[serde(default)]
 pub introspection_endpoint_uri: Option<String>,
@@ -423,20 +426,20 @@ The slice-50b TOML-render tests (`render_broker_toml_emits_jwks_tls_trust_when_t
 
 ## File-level change map
 
-| File | Change |
-|------|--------|
-| `crates/security/src/oauthbearer.rs` | New `IntrospectionValidator` + `IntrospectionClient` trait + `IntrospectionError` enum; new `AuthError::IntrospectionTransport` variant; `OAuthBearerValidator::validate` becomes `async fn`; ~13 new unit tests + a `MockIntrospectionClient` test fixture |
-| `crates/security/src/lib.rs` | Re-exports for the new public items |
-| `crates/security/Cargo.toml` | Add `async-trait` dev-dep (if not already a dep) for the trait + mock |
-| `crates/broker/src/oauth_introspection.rs` | NEW — `ReqwestIntrospectionClient`, `BuildError`; ~9 new HTTPS integration tests via tokio-rustls + rcgen |
-| `crates/broker/src/lib.rs` | New `mod oauth_introspection;` |
-| `crates/broker/src/file_config.rs` | 5 new `FileOAuthBearerConfig` fields; `jwks_tls_trust` → `idp_tls_trust` rename; `apply_to` validator-selection + secret-file read + `ReqwestIntrospectionClient::new` call; ~6 new unit tests + 1 rename of an existing test |
-| `crates/broker/src/config.rs` | `oauthbearer_jwks_tls_trust` → `oauthbearer_idp_tls_trust` rename |
-| `crates/broker/src/oauth_jwks.rs` | `JwksRefresher.tls_trust` doc-comment update; rename of caller-passed value (the field name itself can stay if it's an internal struct field — verify) |
-| `crates/broker/src/broker.rs` | One line: `tls_trust: config.oauthbearer_idp_tls_trust.clone()` |
-| `crates/broker/src/sasl_handlers.rs` (or wherever the OAUTHBEARER SASL handler lives) | `.validate(token, now)?` → `.validate(token, now).await?` (one or two call sites) |
-| `crates/operator/src/controller/listeners.rs` | `render_broker_toml`: emit `idp_tls_trust` instead of `jwks_tls_trust` (one line); 2-3 test assertions flipped |
-| `STATUS.md` | New `## Slice 49d` entry |
+| File                                                                                  | Change                                                                                                                                                                                                                                                      |
+| ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `crates/security/src/oauthbearer.rs`                                                  | New `IntrospectionValidator` + `IntrospectionClient` trait + `IntrospectionError` enum; new `AuthError::IntrospectionTransport` variant; `OAuthBearerValidator::validate` becomes `async fn`; ~13 new unit tests + a `MockIntrospectionClient` test fixture |
+| `crates/security/src/lib.rs`                                                          | Re-exports for the new public items                                                                                                                                                                                                                         |
+| `crates/security/Cargo.toml`                                                          | Add `async-trait` dev-dep (if not already a dep) for the trait + mock                                                                                                                                                                                       |
+| `crates/broker/src/oauth_introspection.rs`                                            | NEW — `ReqwestIntrospectionClient`, `BuildError`; ~9 new HTTPS integration tests via tokio-rustls + rcgen                                                                                                                                                   |
+| `crates/broker/src/lib.rs`                                                            | New `mod oauth_introspection;`                                                                                                                                                                                                                              |
+| `crates/broker/src/file_config.rs`                                                    | 5 new `FileOAuthBearerConfig` fields; `jwks_tls_trust` → `idp_tls_trust` rename; `apply_to` validator-selection + secret-file read + `ReqwestIntrospectionClient::new` call; ~6 new unit tests + 1 rename of an existing test                               |
+| `crates/broker/src/config.rs`                                                         | `oauthbearer_jwks_tls_trust` → `oauthbearer_idp_tls_trust` rename                                                                                                                                                                                           |
+| `crates/broker/src/oauth_jwks.rs`                                                     | `JwksRefresher.tls_trust` doc-comment update; rename of caller-passed value (the field name itself can stay if it's an internal struct field — verify)                                                                                                      |
+| `crates/broker/src/broker.rs`                                                         | One line: `tls_trust: config.oauthbearer_idp_tls_trust.clone()`                                                                                                                                                                                             |
+| `crates/broker/src/sasl_handlers.rs` (or wherever the OAUTHBEARER SASL handler lives) | `.validate(token, now)?` → `.validate(token, now).await?` (one or two call sites)                                                                                                                                                                           |
+| `crates/operator/src/controller/listeners.rs`                                         | `render_broker_toml`: emit `idp_tls_trust` instead of `jwks_tls_trust` (one line); 2-3 test assertions flipped                                                                                                                                              |
+| `STATUS.md`                                                                           | New `## Slice 49d` entry                                                                                                                                                                                                                                    |
 
 ## Acceptance criteria
 

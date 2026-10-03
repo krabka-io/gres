@@ -12,13 +12,13 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use harness::{first_i64, run};
 use krabka_gres_ranges::{
     CheckpointManifest, InDoubtMarker, MapEpoch, MergeRangeCommand, RangeId, RangeKey, RangeMap,
     RangeSpec, SplitCommand, SplitError, SplitHooks, SplitState, SplitStateStore, SplitStep,
     SuccessorDescriptor, TableId, TenantName, run_merge, run_split,
 };
 use krabka_pgwire::engine::Engine;
-use harness::{first_i64, run};
 
 const MAX_PAUSED_WRITES: usize = 6;
 

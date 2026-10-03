@@ -21,7 +21,7 @@ read path on `Fetch` are deferred to 48c / 48d.
 The copy subsystem is a self-contained vertical: a segment is durably
 offloaded and tracked in remote metadata (`CopySegmentStarted` →
 `CopySegmentFinished`), observable and testable on its own. Deciding
-*when* a local copy is safe to delete is a separate, additive concern
+_when_ a local copy is safe to delete is a separate, additive concern
 (48c). No dead code: the per-topic `remote.storage.enable` Kafka config
 and the broker-global enablement are both consumed by the task this slice
 adds.
@@ -31,7 +31,7 @@ adds.
 - **Per-topic** `remote.storage.enable` (Kafka-standard topic config) →
   new `LogConfig.remote_storage_enable: bool` (default `false`, Kafka's
   default). Threaded through `config_keys::{validate_topic_config,
-  is_recognized, apply_to_log_config}`.
+is_recognized, apply_to_log_config}`.
 - **Broker-global** `BrokerConfig.remote_log_storage_dir: Option<PathBuf>`.
   `Some(dir)` enables tiered storage and roots the `LocalTieredStorage`;
   `None` (default) leaves it off. Collapses Kafka's

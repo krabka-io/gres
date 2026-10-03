@@ -37,12 +37,12 @@ tooling and client configs work unchanged:
 
 ### New and modified crates
 
-| Crate | Change |
-|-------|--------|
-| `krabka-security` (new) | Pure-logic SCRAM + PLAIN verifiers, credential hashing, listener+TLS config types. No I/O. Shared by broker and CLI. |
-| `krabka-cli` (new) | `crabka format --add-scram` bootstrap tool. |
-| `krabka-metadata` | New `V1ScramCredential` + `V1DeleteScramCredential` records; image entry; `scram_credential()` accessor. |
-| `krabka-broker` | Listener registry; per-listener accept loops; TLS termination; SASL handshake handlers; per-connection auth state machine; `AlterUserScramCredentials` handler; inter-broker client wrapper. |
+| Crate                   | Change                                                                                                                                                                                       |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `krabka-security` (new) | Pure-logic SCRAM + PLAIN verifiers, credential hashing, listener+TLS config types. No I/O. Shared by broker and CLI.                                                                         |
+| `krabka-cli` (new)      | `crabka format --add-scram` bootstrap tool.                                                                                                                                                  |
+| `krabka-metadata`       | New `V1ScramCredential` + `V1DeleteScramCredential` records; image entry; `scram_credential()` accessor.                                                                                     |
+| `krabka-broker`         | Listener registry; per-listener accept loops; TLS termination; SASL handshake handlers; per-connection auth state machine; `AlterUserScramCredentials` handler; inter-broker client wrapper. |
 
 `krabka-security` exists as its own crate so the format CLI can produce
 a `ScramCredential` using the exact code the broker validates against,
@@ -293,7 +293,7 @@ initial cluster-id record.
 ### `AlterUserScramCredentials` (api_key 51)
 
 1. Request: `Upsertions: [{ name, mechanism, iterations, salt,
-   salted_password }]`, `Deletions: [{ name, mechanism }]`. The
+salted_password }]`, `Deletions: [{ name, mechanism }]`. The
    client (`kafka-configs --alter --entity-type users`) computes the
    PBKDF2 hash and salt locally; the broker stores them as given.
 2. Authorization: `principal.name == BrokerConfig.super_user_name`,
@@ -427,12 +427,12 @@ initial cluster-id record.
 - `jvm_sasl_plain_produce_consume` — broker with SASL_PLAINTEXT
   listener and super-user creds. `kafka-console-producer` with
   `security.protocol=SASL_PLAINTEXT,sasl.mechanism=PLAIN,
-  sasl.jaas.config=...` produces 10 records;
+sasl.jaas.config=...` produces 10 records;
   `kafka-console-consumer` reads them back.
 - `jvm_sasl_scram_sha512_produce_consume` — same but
   `sasl.mechanism=SCRAM-SHA-512`. User provisioned via
   `kafka-configs --alter --entity-type users --entity-name alice
-  --add-config 'SCRAM-SHA-512=[password=foo]'` (JVM translates this
+--add-config 'SCRAM-SHA-512=[password=foo]'` (JVM translates this
   to `AlterUserScramCredentials`).
 - `jvm_tls_handshake_succeeds` — broker with SSL listener
   (self-signed cert), JVM client with
@@ -469,11 +469,11 @@ initial cluster-id record.
 
 ## Wire-protocol additions
 
-| api_key | Name | Versions targeted |
-|---------|------|-------------------|
-| 17 | SaslHandshake | v1 |
-| 36 | SaslAuthenticate | v2 (flexible) |
-| 51 | AlterUserScramCredentials | v0 (flexible) |
+| api_key | Name                      | Versions targeted |
+| ------- | ------------------------- | ----------------- |
+| 17      | SaslHandshake             | v1                |
+| 36      | SaslAuthenticate          | v2 (flexible)     |
+| 51      | AlterUserScramCredentials | v0 (flexible)     |
 
 `Metadata` response: populate the per-listener `endpoints` array on
 each broker (v9+), which the codec already supports.

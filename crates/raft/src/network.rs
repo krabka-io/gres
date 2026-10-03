@@ -21,10 +21,10 @@ use std::{
 
 use async_trait::async_trait;
 use bytes::Bytes;
+use dashmap::DashMap;
 use krabka_client_core::{ClientError, Connection, ConnectionOptions};
 use krabka_ids::{ApiKey, ApiVersion};
 use krabka_metadata::voters::VoterSet;
-use dashmap::DashMap;
 
 use crate::{
     error::RaftError,

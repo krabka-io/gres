@@ -120,6 +120,7 @@ crates/broker/tests/
 ## Error handling
 
 `change_membership` can fail with:
+
 - `ForwardToLeader` — caller hit a non-leader broker. Test helpers iterate
   the cluster looking for the leader; production callers retry via
   metadata refresh (same pattern as `submit_change`).
@@ -137,6 +138,7 @@ because openraft's own test suite covers correctness; we add only
 krabka-level integration coverage via the un-ignored tests.
 
 Acceptance:
+
 - `cargo test -p krabka-broker --test leader_election` — 4/4 pass on
   Linux (currently 3/4)
 - `cargo test -p krabka-broker --test jvm_acceptance --ignored` — 9/9

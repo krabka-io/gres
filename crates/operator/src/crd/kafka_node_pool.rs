@@ -1,5 +1,5 @@
-use krabka_units::ByteSize;
 use k8s_openapi::api::core::v1::ResourceRequirements;
+use krabka_units::ByteSize;
 use kube::CustomResource;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};

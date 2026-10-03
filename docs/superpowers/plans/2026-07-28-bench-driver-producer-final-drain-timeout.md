@@ -73,7 +73,7 @@ fn producer_final_drain_timeout_rejects_invalid_values() {
 ```
 
 - [ ] Add failing CLI tests for the 10-second default, invalid values, and a
-  child-process environment/CLI precedence check using:
+      child-process environment/CLI precedence check using:
 
 ```text
 BENCH_PRODUCER_FINAL_DRAIN_TIMEOUT_SECONDS=11
@@ -111,9 +111,9 @@ producer_final_drain_timeout_seconds: ProducerFinalDrainTimeoutSeconds,
 ```
 
 - [ ] Add `producer_final_drain_timeout` to `DriverConfig` and `ProducerTask`.
-  Copy it at task spawn and destructure it in `run_producer`. Remove the
-  producer loop's redundant `sid` local and use `cfg.scenario_id` directly so
-  the existing `run` function does not cross its strict line-count limit.
+      Copy it at task spawn and destructure it in `run_producer`. Remove the
+      producer loop's redundant `sid` local and use `cfg.scenario_id` directly so
+      the existing `run` function does not cross its strict line-count limit.
 
 - [ ] Replace only:
 
@@ -218,12 +218,12 @@ Classify every bench-driver scanner and focused-search line into mutually
 exclusive categories and identify the next real unresolved owner.
 
 - [ ] Append `## Bench Driver Producer Final-Drain Timeout` to
-  `docs/configuration-audit.md`, recording default, validation, precedence,
-  value/deployment flows, preserved behavior, exact counts, gates, and the
-  next unresolved owner.
+      `docs/configuration-audit.md`, recording default, validation, precedence,
+      value/deployment flows, preserved behavior, exact counts, gates, and the
+      next unresolved owner.
 
 - [ ] Re-run the package, Clippy, nightly format, help-entry, shell/render,
-  diff, lockfile, and scanner gates.
+      diff, lockfile, and scanner gates.
 
 - [ ] Commit only the audit:
 

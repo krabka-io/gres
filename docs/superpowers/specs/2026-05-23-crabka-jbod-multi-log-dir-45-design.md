@@ -6,7 +6,7 @@
 across multiple log directories on one broker, place new partitions by
 least-loaded balancing, and report per-directory contents over the wire via
 `DescribeLogDirs` (api key 35). This is the read/placement half of KIP-113;
-the intra-broker replica *move* (`AlterReplicaLogDirs`, api key 34) is
+the intra-broker replica _move_ (`AlterReplicaLogDirs`, api key 34) is
 deferred to slice 45b. First slice of Phase 8 (storage gaps).
 
 ---
@@ -45,14 +45,14 @@ deferred to slice 45b. First slice of Phase 8 (storage gaps).
 
 ### Out (deferred)
 
-| Concern | Slice |
-|---|---|
-| `AlterReplicaLogDirs` move + future-log catch-up (KIP-113 write side) | 45b |
-| `DescribeLogDirsResult.total_bytes` / `usable_bytes` (volume statvfs) | 45b |
-| `kafka-reassign-partitions` `log_dirs` per-replica field | 45b |
-| Offline-log-dir handling / `KAFKA_STORAGE_ERROR` on a dead disk | 45b |
-| `Kafka.spec.storage` JBOD operator surface | 46 |
-| `IsCordoned` (v5) semantics | future |
+| Concern                                                               | Slice  |
+| --------------------------------------------------------------------- | ------ |
+| `AlterReplicaLogDirs` move + future-log catch-up (KIP-113 write side) | 45b    |
+| `DescribeLogDirsResult.total_bytes` / `usable_bytes` (volume statvfs) | 45b    |
+| `kafka-reassign-partitions` `log_dirs` per-replica field              | 45b    |
+| Offline-log-dir handling / `KAFKA_STORAGE_ERROR` on a dead disk       | 45b    |
+| `Kafka.spec.storage` JBOD operator surface                            | 46     |
+| `IsCordoned` (v5) semantics                                           | future |
 
 ### Semantics for slice 45
 
@@ -117,7 +117,7 @@ all of that topic):
 2. `partition_size = sum_partition_dir(dir/topic-partition)`.
 3. `offset_lag = max(0, LEO − HW)` when the partition is loaded, else 0.
 4. Group by topic; emit one `DescribeLogDirsResult { error_code: 0,
-   log_dir: <canonical abs path>, topics, .. }`. `total_bytes` /
+log_dir: <canonical abs path>, topics, .. }`. `total_bytes` /
    `usable_bytes` keep the generated `-1` ("unknown") default.
 
 Backs `kafka-log-dirs --describe`.

@@ -17,10 +17,10 @@ Two crates change:
 
 ### Wire surface (added or extended)
 
-| API key | Name              | Notes |
-|--------:|-------------------|-------|
-| 22      | InitProducerId    | Real impl; returns `(producer_id, producer_epoch)`. Rejects non-empty `transactional_id` with `TRANSACTIONAL_ID_AUTHORIZATION_FAILED`. |
-| 0       | Produce           | Extended (slice 4). Reads `(pid, epoch, base_seq)` from each batch; consults `ProducerState`; emits `OUT_OF_ORDER_SEQUENCE_NUMBER` (45), `DUPLICATE_SEQUENCE_NUMBER` (46), or `INVALID_PRODUCER_EPOCH` (90) where appropriate. |
+| API key | Name           | Notes                                                                                                                                                                                                                          |
+| ------: | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+|      22 | InitProducerId | Real impl; returns `(producer_id, producer_epoch)`. Rejects non-empty `transactional_id` with `TRANSACTIONAL_ID_AUTHORIZATION_FAILED`.                                                                                         |
+|       0 | Produce        | Extended (slice 4). Reads `(pid, epoch, base_seq)` from each batch; consults `ProducerState`; emits `OUT_OF_ORDER_SEQUENCE_NUMBER` (45), `DUPLICATE_SEQUENCE_NUMBER` (46), or `INVALID_PRODUCER_EPOCH` (90) where appropriate. |
 
 KIP-360 (producer-id-recovery) wire points (`TxnOffsetCommit`, `AddPartitionsToTxn`, etc.) stay `UNSUPPORTED_VERSION` — they're slice 9 (transactions).
 
@@ -157,6 +157,7 @@ The workspace `Cargo.toml` adds `bon = "3"` to `[workspace.dependencies]`.
 - **`Producer::close()`** — `flush()`, then cancel the sender, then drop the inner client.
 
 - **`ProducerBuilder`** — `#[bon::builder]` on an async `Producer::start` constructor. Fields:
+
   ```rust
   bootstrap: String,
   client_id: String,                // default "krabka-producer"
@@ -171,6 +172,7 @@ The workspace `Cargo.toml` adds `bon = "3"` to `[workspace.dependencies]`.
   retries: i32,                     // default i32::MAX
   retry_backoff: Duration,          // default 100ms
   ```
+
   `.build()` runs ApiVersions, fetches Metadata for the bootstrap topic list (empty by default → no preload), conditionally calls `InitProducerId` when `enable_idempotence = true`, then spawns the sender task and returns the `Producer`. Idempotence + `acks=Zero` is a build-time error (`ProducerError::InvalidConfig`).
 
 - **`Accumulator`** — per-(topic, partition). State: `VecDeque<InProgressBatch>` plus `current_batch: Option<InProgressBatch>`. Each `InProgressBatch` contains the raw record bytes, the per-record metadata (oneshot tx + offset_delta), `base_sequence` (assigned at send-time), and the current uncompressed size. `try_append(record) -> AppendResult` returns `Appended(oneshot_rx)`, `BatchFull`, or `Backpressure` (when `max_block` exceeded).
@@ -264,13 +266,13 @@ The `check_and_reserve` / `commit` split keeps the per-partition mutex held only
 
 ### Wire codes (new in `crates/broker/src/codes.rs`)
 
-| Code | Name                                    | Where |
-|-----:|-----------------------------------------|-------|
-| 45   | OUT_OF_ORDER_SEQUENCE_NUMBER            | Produce dedup check fails: `base_sequence != last_seq + 1`. |
-| 46   | DUPLICATE_SEQUENCE_NUMBER               | Produce sees a previously-committed `base_sequence` — reply with cached `base_offset`. |
-| 47   | INVALID_PRODUCER_ID_MAPPING             | Reserved (slice 9). |
-| 53   | INVALID_PRODUCER_EPOCH                  | Lower-epoch producer fenced by newer instance. |
-| 67   | TRANSACTIONAL_ID_AUTHORIZATION_FAILED   | `InitProducerId` carries a `transactional_id` that we don't support. |
+| Code | Name                                  | Where                                                                                  |
+| ---: | ------------------------------------- | -------------------------------------------------------------------------------------- |
+|   45 | OUT_OF_ORDER_SEQUENCE_NUMBER          | Produce dedup check fails: `base_sequence != last_seq + 1`.                            |
+|   46 | DUPLICATE_SEQUENCE_NUMBER             | Produce sees a previously-committed `base_sequence` — reply with cached `base_offset`. |
+|   47 | INVALID_PRODUCER_ID_MAPPING           | Reserved (slice 9).                                                                    |
+|   53 | INVALID_PRODUCER_EPOCH                | Lower-epoch producer fenced by newer instance.                                         |
+|   67 | TRANSACTIONAL_ID_AUTHORIZATION_FAILED | `InitProducerId` carries a `transactional_id` that we don't support.                   |
 
 ### Internal `BrokerError` (one new variant)
 

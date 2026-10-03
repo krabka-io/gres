@@ -10,6 +10,7 @@
 //! `NOT_CONTROLLER`. This mirrors `alter_partition`.
 
 use bytes::Bytes;
+use futures_util::future::BoxFuture;
 use krabka_metadata::{MetadataImage, MetadataRecord, PartitionDirAssignmentRecord};
 use krabka_protocol::{
     Decode,
@@ -21,7 +22,6 @@ use krabka_protocol::{
         },
     },
 };
-use futures_util::future::BoxFuture;
 
 use crate::{broker::Broker, codes, error::BrokerError};
 

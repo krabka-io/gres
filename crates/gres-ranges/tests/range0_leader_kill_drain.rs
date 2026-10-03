@@ -1,7 +1,7 @@
 mod harness;
 
-use krabka_gres_ranges::RangeId;
 use harness::{FaultEvent, SystemHarness, TableAccount, process::ProcessHarness};
+use krabka_gres_ranges::RangeId;
 
 #[tokio::test]
 async fn range0_writer_kill_drain_is_fence_plus_prologue_before_serving() {

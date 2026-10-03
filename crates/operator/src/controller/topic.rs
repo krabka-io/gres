@@ -8,11 +8,11 @@
 
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
+use futures::StreamExt as _;
 use krabka_client_admin::{
     AdminClientLike, CreatePartitionsOp, CreateTopicSpec, IncrementalAlterOp,
     TopicReplicationStatus,
 };
-use futures::StreamExt as _;
 use kube::{
     Resource, ResourceExt as _,
     api::{Api, Patch, PatchParams},

@@ -11,16 +11,16 @@ Spike tweak under evaluation: `crates/raft/src/server.rs::api_versions_response_
   static (`controller.quorum.voters`, kraft.version=0) quorum of two Crabka
   controllers (ids 1, 2) + one `mirror.gcr.io/apache/kafka:4.0.0` controller (id 3) elects a
   **Crabka** leader, and the **JVM transitions to `FollowerState(leader=<crabka
-  node>)`** — it accepts the Crabka leader over the real KIP-595 wire.
+node>)`** — it accepts the Crabka leader over the real KIP-595 wire.
 - **Replication leader→JVM-follower: NO (blocked).** The JVM follower never
   advances its high-watermark (`MetadataLoader … still don't know the high water
-  mark yet`), loops Follower→Prospective→Follower on fetch timeout. The Fetch
+mark yet`), loops Follower→Prospective→Follower on fetch timeout. The Fetch
   response from the Crabka leader is not being accepted as log progress.
 - **cluster_id transform: VERIFIED.** `uuid::Uuid` 16 bytes ⇄ Kafka
   base64-url-no-pad string round-trips exactly; no cluster-id mismatch on the
   wire (JVM logged the identical `clusterId='TWtVM09FVkJOVGN3TlRKRQ'`).
 - **Directory ids at v0: CONFIRMED a non-issue for election.** The JVM treats
-  the *target* voter's directory id as nil (`voteDirectoryId=AAAA…AA`,
+  the _target_ voter's directory id as nil (`voteDirectoryId=AAAA…AA`,
   `directoryId=<undefined>` for all peers) and matches Crabka voters by **node
   id alone**, exactly as predicted.
 
@@ -53,7 +53,7 @@ kraft.version=1 (rules out **(C)** for the election milestone). See
    two sides share the identical 16 bytes.
 3. **JVM is the dialer.** At v0 the JVM's `RaftManager` actively connects out to
    every other voter (id 1, id 2) and drives `ApiVersions` → `Vote`/`Fetch`. So
-   Crabka's *inbound* controller-listener path is what must satisfy the JVM, not
+   Crabka's _inbound_ controller-listener path is what must satisfy the JVM, not
    Crabka's outbound dialer.
 4. **Directory-id semantics at v0** (captured from a real JVM Vote v2, below):
    the JVM sends its OWN `replicaDirectoryId` (non-nil) but a nil
@@ -103,7 +103,7 @@ a **version-aware** body:
   speaks — Fetch(1) `0..=17`, ApiVersions(18) `0..=4`, Vote(52) `0..=2`,
   BeginQuorumEpoch(53) `0..=1`, EndQuorumEpoch(54) `0..=1`, FetchSnapshot(59)
   `0..=1` — plus a trailing `throttle_time_ms` and tagged-field bytes. The
-  *response header* stays v0 (no leading tagged byte) per the documented
+  _response header_ stays v0 (no leading tagged byte) per the documented
   `ApiVersions` asymmetry.
 
 This was validated with a Python mock first, then in the real broker.
@@ -175,7 +175,7 @@ concrete blocker after election.
   diverging-epoch path must drive this correctly cross-impl. Not reached yet
   because Gap 2's topic-id mismatch precedes it.
 - **`cluster_id` in Fetch/Vote.** Crabka sends `cluster_id: None`
-  (`transport.rs` lines 354/378/399/554). The JVM *does* send a non-null
+  (`transport.rs` lines 354/378/399/554). The JVM _does_ send a non-null
   cluster_id and validates it. Election still succeeded with Crabka sending
   None, so the JVM does not hard-require it on inbound RPCs at v0 — but Crabka
   echoing the real cluster_id on responses is worth setting once Gap 2 is
@@ -202,7 +202,7 @@ matched by node id — Crabka's nil/zero directory id interoperates for election
 
 **(B) — static suffices for cross-impl ELECTION; a small enumerated set of
 static-mode wire fixes is needed for full election+replication.** There is no
-evidence the JVM requires kraft.version=1 to *join and follow* a static quorum
+evidence the JVM requires kraft.version=1 to _join and follow_ a static quorum
 (it elects and attaches as follower at v0). Slice 5 should therefore be a
 focused set of static-mode wire fixes, not full KIP-853 dynamic reconfiguration:
 
@@ -226,8 +226,8 @@ focused set of static-mode wire fixes, not full KIP-853 dynamic reconfiguration:
    convention may be needed.
 
 Dynamic reconfiguration (kraft.version=1 / KIP-853) is **not** required to reach
-the Slice-5 election milestone and remains a Slice-6+ concern only if the *use
-case* needs add/remove-voter at runtime.
+the Slice-5 election milestone and remains a Slice-6+ concern only if the _use
+case_ needs add/remove-voter at runtime.
 
 ## Spike artifacts
 

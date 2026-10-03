@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** A per-broker background flusher that batches acked WAL tails from many diskless partitions into one immutable object-storage object (Crabka-private framing), records a `WalFlushRecord` offset→object index on a new `__diskless_wal_index` internal topic, and derives a `flushed` frontier — with the trim seam built but gated off. Async/background, *after* the ack; the produce path is untouched.
+**Goal:** A per-broker background flusher that batches acked WAL tails from many diskless partitions into one immutable object-storage object (Crabka-private framing), records a `WalFlushRecord` offset→object index on a new `__diskless_wal_index` internal topic, and derives a `flushed` frontier — with the trim seam built but gated off. Async/background, _after_ the ack; the produce path is untouched.
 
-**Architecture:** The flusher (modeled on `remote_log_manager::run`/`tick_all`) reads each led diskless partition's tail via `Log::read_raw(flushed_frontier, high_watermark, budget)` (byte-exact v2 batches, `< hw` so always acked), concatenates the runs into one object with a footer manifest, PUTs it on the raw `Arc<dyn ObjectStore>` from `build_object_store`, then publishes one `WalFlushRecord` to `__diskless_wal_index` via the record-agnostic `KafkaMetadataEventLog`. A projection consumes the topic into a `WalIndexCache` (per-`(tp)` `BTreeMap` floor lookup) whose frontier *is* the `flushed` cursor. No fetch-from-object and no trimming yet.
+**Architecture:** The flusher (modeled on `remote_log_manager::run`/`tick_all`) reads each led diskless partition's tail via `Log::read_raw(flushed_frontier, high_watermark, budget)` (byte-exact v2 batches, `< hw` so always acked), concatenates the runs into one object with a footer manifest, PUTs it on the raw `Arc<dyn ObjectStore>` from `build_object_store`, then publishes one `WalFlushRecord` to `__diskless_wal_index` via the record-agnostic `KafkaMetadataEventLog`. A projection consumes the topic into a `WalIndexCache` (per-`(tp)` `BTreeMap` floor lookup) whose frontier _is_ the `flushed` cursor. No fetch-from-object and no trimming yet.
 
 **Tech Stack:** Rust 2024 (pinned stable 1.96.0), `object_store` 0.13 (via `build_object_store`), `serde`/`serde_wincode`, `tokio`, `bytes`, `uuid`, `assert2`, `cargo +nightly fmt`, `clippy::pedantic` (`unsafe_code = "forbid"`).
 
@@ -46,6 +46,7 @@
 A self-contained builder + parser for the object body: `[MAGIC · version] · concatenated runs · [manifest] · [footer_len · MAGIC]`.
 
 **Files:**
+
 - Create: `crates/broker/src/diskless/wal_object.rs`
 - Create: `crates/broker/src/diskless/mod.rs`; Modify: `crates/broker/src/lib.rs`
 
@@ -275,6 +276,7 @@ git commit -m "feat(broker): diskless WAL combined-object framing codec"
 The durable index record + the in-memory projection with the `segment_for`-style floor lookup and the derived `flushed` frontier.
 
 **Files:**
+
 - Create: `crates/broker/src/diskless/wal_index.rs`; Modify: `crates/broker/src/diskless/mod.rs`
 
 - [ ] **Step 1: Write the failing tests**
@@ -441,6 +443,7 @@ git commit -m "feat(broker): WalFlushRecord + WalIndexCache floor-lookup project
 Reuse the record-agnostic `KafkaMetadataEventLog` to publish `WalFlushRecord` bytes and consume them into a shared `WalIndexCache`, behind a fail-closed boot facade.
 
 **Files:**
+
 - Create: `crates/broker/src/diskless/index_log.rs`; Modify: `crates/broker/src/diskless/mod.rs`, `crates/broker/Cargo.toml`
 
 - [ ] **Step 1: Study the transport API**
@@ -467,6 +470,7 @@ mod tests {
 - [ ] **Step 3: Implement `DisklessIndexLog`**
 
 Create `crates/broker/src/diskless/index_log.rs` with a struct that:
+
 - holds an `Arc<KafkaMetadataEventLog>` (from `KafkaMetadataEventLog::start` against `__diskless_wal_index`, provisioned like `ensure_topic` with `cleanup.policy=compact`),
 - exposes `async fn publish_flush(&self, partition: i32, rec: &WalFlushRecord) -> Result<i64, ...>` = `event_log.publish(partition, rec.to_bytes()?.into())`,
 - runs a projection pump (mirror `manager.rs` `pump_loop`) that consumes each partition's events, `WalFlushRecord::from_bytes`, and `cache.lock().apply(&rec)` into a shared `Arc<Mutex<WalIndexCache>>`,
@@ -503,6 +507,7 @@ git commit -m "feat(broker): __diskless_wal_index event-log + projection pump"
 Tie it together: tick → led diskless partitions → `read_raw` tail → build object → PUT → publish `WalFlushRecord`.
 
 **Files:**
+
 - Create: `crates/broker/src/diskless/flusher.rs`; Modify: `crates/broker/src/diskless/mod.rs`
 
 - [ ] **Step 1: Constants + a single-partition flush unit test**
@@ -537,6 +542,7 @@ index.publish_flush(part_of(&key), &WalFlushRecord { object_key: key, format_ver
 ```
 
 Notes:
+
 - `last_offset_of(&run)` = the last batch's `base_offset + last_offset_delta` in the verbatim bytes; compute it while reading (the `RawRead` gives `start_offset`; the last offset is `read_raw`'s `current-1` — expose it, or derive from the final batch header). Simplest: have the flusher request `read_raw` and also capture the partition's `hw - 1` as the run's `last_offset` only when the run reaches `hw` (it does, since the upper bound is `hw`); otherwise parse the last batch header. Prefer capturing from `read_raw` — add a `last_offset` to `RawRead` if not present (it tracks `current` internally at `log.rs:853`).
 - `flush_uuid`: generate per flush (the codebase forbids `Math.random`; use `uuid::Uuid::new_v4()` — `uuid` is a normal dep, not the workflow sandbox).
 - Build on the raw `Arc<dyn ObjectStore>` from `build_object_store(&cfg)`; `store.put`/`put_multipart` are `object_store` 0.13 trait methods.
@@ -561,6 +567,7 @@ git commit -m "feat(broker): per-broker diskless flush worker (read->object->ind
 Wire the flush frontier to trimming, but default it off.
 
 **Files:**
+
 - Modify: `crates/broker/src/diskless/flusher.rs`
 
 - [ ] **Step 1: Write the failing test**
@@ -600,6 +607,7 @@ git commit -m "feat(broker): gated (default-off) diskless local-WAL trim seam"
 ## Task 6: Cross-cutting proof tests
 
 **Files:**
+
 - Modify: `crates/broker/src/diskless/flusher.rs` (or a `diskless/tests.rs`)
 
 - [ ] **Step 1: Recoverability round-trip (behavior, not source)**

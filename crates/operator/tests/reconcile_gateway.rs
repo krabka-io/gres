@@ -19,11 +19,11 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use assert2::{assert, check};
+use http::{Method, Response};
 use krabka_operator::{
     controller::grpc_gateway::reconcile,
     crd::grpc_gateway::{KafkaGrpcGateway, KafkaGrpcGatewaySpec},
 };
-use http::{Method, Response};
 
 #[path = "shared/mod.rs"]
 mod shared;

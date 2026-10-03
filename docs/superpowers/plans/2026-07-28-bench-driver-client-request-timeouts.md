@@ -83,7 +83,7 @@ builder boundaries. Reuse the existing shell `envsubst` deployment path.
   `default_consumer_request_timeout(Stack) -> ClientRequestTimeoutSeconds`
 - Produces:
   `DriverConfig::{producer_request_timeout_seconds,
-  consumer_request_timeout_seconds}`
+consumer_request_timeout_seconds}`
 - Consumes: `refined_type::rule::MinMaxU64<1, 2_147_483>`
 
 - [ ] **Step 1: Add failing validated-type and default tests**

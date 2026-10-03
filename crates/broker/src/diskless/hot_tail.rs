@@ -3,9 +3,9 @@
 use std::{collections::BTreeMap, sync::Mutex};
 
 use bytes::Bytes;
+use dashmap::DashMap;
 use krabka_ids::PartitionIndex;
 use krabka_protocol::records::RecordBatch;
-use dashmap::DashMap;
 use uuid::Uuid;
 
 /// Advisory cache of recently quorum-committed diskless WAL batches.

@@ -11,7 +11,7 @@ Deliver a Rust Kubernetes operator that brings Crabka to feature-parity with [St
 ## Decisions captured during brainstorm
 
 1. **Scope:** Roadmap-level document covering full Strimzi parity, decomposed into ordered slices grouped into phases. First slice picked at the end of the doc.
-2. **CRD compatibility:** Strimzi-*shaped* CRDs (same kinds, same field structure where it applies) under our own API group `crabka.io`. Not drop-in compatible with `kafka.strimzi.io/v1beta2`. A migration tool is a Phase 12 slice, not the primary surface.
+2. **CRD compatibility:** Strimzi-_shaped_ CRDs (same kinds, same field structure where it applies) under our own API group `crabka.io`. Not drop-in compatible with `kafka.strimzi.io/v1beta2`. A migration tool is a Phase 12 slice, not the primary surface.
 3. **Crabka-core gaps:** The roadmap drives Crabka-core slices too. Operator slices and core slices are interleaved by dependency.
 4. **Time horizon:** Single long roadmap to full parity, no MVP gate; first slice picked at the end.
 5. **Decomposition style:** Feature-driven numbered slices in Crabka's existing rhythm (`Slice N: <feature>`). Each slice is one cohesive end-to-end PR.
@@ -62,143 +62,143 @@ Current Crabka head is at Slice 16c. Operator work begins at Slice 17. Each slic
 
 ### Phase 1 — Operator foundation
 
-| Slice | Title | Summary |
-|------:|-------|---------|
-| 17 | Operator runtime scaffold + Helm chart | kube-rs `Controller` plumbing, Lease leader election, healthz, RBAC, namespace-watch config, tracing, `/metrics` endpoint, kind-based CI smoke test. Ships a placeholder `Kafka` CRD that just logs reconciles — no workload yet. |
+| Slice | Title                                  | Summary                                                                                                                                                                                                                           |
+| ----: | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+|    17 | Operator runtime scaffold + Helm chart | kube-rs `Controller` plumbing, Lease leader election, healthz, RBAC, namespace-watch config, tracing, `/metrics` endpoint, kind-based CI smoke test. Ships a placeholder `Kafka` CRD that just logs reconciles — no workload yet. |
 
 ### Phase 2 — Cluster CRD core
 
-| Slice | Title | Summary |
-|------:|-------|---------|
-| 18 | `Kafka` CRD minimal | KRaft mixed-mode cluster, ephemeral storage, one internal PLAINTEXT listener, headless `Service`, `ConfigMap` + cluster-ID `Secret` + `StatefulSet`, status subresource. |
-| 19 | `KafkaNodePool` CRD | Controller-only / broker-only / mixed pools, one StatefulSet per pool, `Kafka.spec` references pools. |
-| 20 | Pod templates | Affinity, tolerations, labels, annotations, resources on `Kafka` and `KafkaNodePool`. Cross-cutting field surface reused by every later workload CRD. |
-| 21 | Rolling restart on config drift | Config-hash annotation, one-at-a-time restart waiting for readiness + ISR recovery. |
-| 22 | **Crabka core:** `ControlledShutdown` handler | Operator can drain a broker before restart (KIP-baseline RPC). Unblocks slice 21's full safety. |
-| 23 | Network policies | `Kafka.spec.kafka.networkPolicy` generates `NetworkPolicy` for broker/controller traffic. |
+| Slice | Title                                         | Summary                                                                                                                                                                  |
+| ----: | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+|    18 | `Kafka` CRD minimal                           | KRaft mixed-mode cluster, ephemeral storage, one internal PLAINTEXT listener, headless `Service`, `ConfigMap` + cluster-ID `Secret` + `StatefulSet`, status subresource. |
+|    19 | `KafkaNodePool` CRD                           | Controller-only / broker-only / mixed pools, one StatefulSet per pool, `Kafka.spec` references pools.                                                                    |
+|    20 | Pod templates                                 | Affinity, tolerations, labels, annotations, resources on `Kafka` and `KafkaNodePool`. Cross-cutting field surface reused by every later workload CRD.                    |
+|    21 | Rolling restart on config drift               | Config-hash annotation, one-at-a-time restart waiting for readiness + ISR recovery.                                                                                      |
+|    22 | **Crabka core:** `ControlledShutdown` handler | Operator can drain a broker before restart (KIP-baseline RPC). Unblocks slice 21's full safety.                                                                          |
+|    23 | Network policies                              | `Kafka.spec.kafka.networkPolicy` generates `NetworkPolicy` for broker/controller traffic.                                                                                |
 
 ### Phase 3 — Day-2 cluster ops
 
-| Slice | Title | Summary |
-|------:|-------|---------|
-| 24 | Persistent storage | PVC templates, `storageClass`, retain-vs-delete on cluster delete. |
-| 25 | External listener — NodePort | Per-broker bootstrap services, advertised-listener computation. |
-| 26 | External listener — LoadBalancer | Cloud-provider LB per broker + bootstrap LB. |
-| 27 | External listener — Ingress / Route | SNI per broker on Ingress; OpenShift `Route`. |
-| 28 | Version upgrades | Pinned `inter.broker.protocol.version`-style flag, ordered rolling upgrade, downgrade-window enforcement. |
+| Slice | Title                               | Summary                                                                                                   |
+| ----: | ----------------------------------- | --------------------------------------------------------------------------------------------------------- |
+|    24 | Persistent storage                  | PVC templates, `storageClass`, retain-vs-delete on cluster delete.                                        |
+|    25 | External listener — NodePort        | Per-broker bootstrap services, advertised-listener computation.                                           |
+|    26 | External listener — LoadBalancer    | Cloud-provider LB per broker + bootstrap LB.                                                              |
+|    27 | External listener — Ingress / Route | SNI per broker on Ingress; OpenShift `Route`.                                                             |
+|    28 | Version upgrades                    | Pinned `inter.broker.protocol.version`-style flag, ordered rolling upgrade, downgrade-window enforcement. |
 
 ### Phase 4 — Security & certificate management
 
-| Slice | Title | Summary |
-|------:|-------|---------|
-| 29 | **Crabka core:** mTLS client authentication on listeners | Currently absent. Unblocks slices 30 and 37. |
-| 30 | Cluster CA + clients CA generation | Operator-managed CA Secrets, keystore Secrets, renewal CronJob. Inter-broker mTLS using cluster CA. |
-| 31 | Listener auth wiring (TLS + SCRAM-SHA-512) | Surface existing Crabka auth as CRD listener config. |
-| 32 | **Crabka core:** SASL/SCRAM-SHA-256 | Port from SHA-512 path. |
-| 33 | **Crabka core:** Certificate hot-reload | Swap server certs without restart. Required for non-disruptive CA rotation. |
-| 34 | CA rotation orchestration | Coordinated cluster roll using slice 33's hot-reload. |
+| Slice | Title                                                    | Summary                                                                                             |
+| ----: | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+|    29 | **Crabka core:** mTLS client authentication on listeners | Currently absent. Unblocks slices 30 and 37.                                                        |
+|    30 | Cluster CA + clients CA generation                       | Operator-managed CA Secrets, keystore Secrets, renewal CronJob. Inter-broker mTLS using cluster CA. |
+|    31 | Listener auth wiring (TLS + SCRAM-SHA-512)               | Surface existing Crabka auth as CRD listener config.                                                |
+|    32 | **Crabka core:** SASL/SCRAM-SHA-256                      | Port from SHA-512 path.                                                                             |
+|    33 | **Crabka core:** Certificate hot-reload                  | Swap server certs without restart. Required for non-disruptive CA rotation.                         |
+|    34 | CA rotation orchestration                                | Coordinated cluster roll using slice 33's hot-reload.                                               |
 
 ### Phase 5 — Topic + User
 
-| Slice | Title | Summary |
-|------:|-------|---------|
-| 35 | `KafkaTopic` CRD | Unidirectional reconciliation (CreateTopics, AlterConfigs, CreatePartitions, DeleteTopics) via Crabka admin client. |
-| 36 | `KafkaUser` — SCRAM-SHA-512 + ACLs | Both already present in Crabka. Operator generates user-credential `Secret`, manages ACLs. |
-| 37 | `KafkaUser` — mTLS | Per-user cert from clients CA, exposed as `Secret`. Depends on slice 29. |
-| 38 | `KafkaUser` — client quotas | Wire `AlterClientQuotas` (already in Crabka) from `KafkaUser.spec.quotas`. |
+| Slice | Title                              | Summary                                                                                                             |
+| ----: | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+|    35 | `KafkaTopic` CRD                   | Unidirectional reconciliation (CreateTopics, AlterConfigs, CreatePartitions, DeleteTopics) via Crabka admin client. |
+|    36 | `KafkaUser` — SCRAM-SHA-512 + ACLs | Both already present in Crabka. Operator generates user-credential `Secret`, manages ACLs.                          |
+|    37 | `KafkaUser` — mTLS                 | Per-user cert from clients CA, exposed as `Secret`. Depends on slice 29.                                            |
+|    38 | `KafkaUser` — client quotas        | Wire `AlterClientQuotas` (already in Crabka) from `KafkaUser.spec.quotas`.                                          |
 
 ### Phase 6 — Observability
 
-| Slice | Title | Summary |
-|------:|-------|---------|
-| 39 | **Crabka core:** Prometheus metrics exporter | Surface JMX-equivalent metrics named to match upstream Kafka. |
-| 40 | `Kafka.spec.metricsConfig` | `ServiceMonitor` / `PodMonitor` generation + scrape config. |
-| 41 | Configurable logging | `Kafka.spec.logging` → `tracing` env filter via `ConfigMap`. |
-| 42 | **Crabka core:** OTLP distributed tracing | Optional but charted on roadmap. Surfaces via a follow-up CRD-config slice. |
+| Slice | Title                                        | Summary                                                                     |
+| ----: | -------------------------------------------- | --------------------------------------------------------------------------- |
+|    39 | **Crabka core:** Prometheus metrics exporter | Surface JMX-equivalent metrics named to match upstream Kafka.               |
+|    40 | `Kafka.spec.metricsConfig`                   | `ServiceMonitor` / `PodMonitor` generation + scrape config.                 |
+|    41 | Configurable logging                         | `Kafka.spec.logging` → `tracing` env filter via `ConfigMap`.                |
+|    42 | **Crabka core:** OTLP distributed tracing    | Optional but charted on roadmap. Surfaces via a follow-up CRD-config slice. |
 
 ### Phase 7 — Rebalance & reassignment
 
-| Slice | Title | Summary |
-|------:|-------|---------|
-| 43 | **Crabka core:** Native rebalancer service | Goal-seeking partition placement built on existing KIP-455 + KIP-73 primitives. REST API: propose / dry-run / execute / status. Anomaly detection deferred. |
-| 44 | `KafkaRebalance` CRD | Operator drives the rebalancer service. |
+| Slice | Title                                      | Summary                                                                                                                                                     |
+| ----: | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+|    43 | **Crabka core:** Native rebalancer service | Goal-seeking partition placement built on existing KIP-455 + KIP-73 primitives. REST API: propose / dry-run / execute / status. Anomaly detection deferred. |
+|    44 | `KafkaRebalance` CRD                       | Operator drives the rebalancer service.                                                                                                                     |
 
 ### Phase 8 — Storage gaps
 
-| Slice | Title | Summary |
-|------:|-------|---------|
-| 45 | **Crabka core:** JBOD / multi-log-dir + KIP-113 | Per-partition log-dir placement, log-dir reassignment. |
-| 46 | JBOD in `Kafka.spec.storage` | Multi-PVC per pod, per-broker log-dir balance. |
-| 47 | **Crabka core:** Log compaction | `cleanup.policy=compact`, cleaner thread, tombstone retention. Exposed through existing `KafkaTopic`, no extra operator slice. |
-| 48 | **Crabka core:** Tiered storage (KIP-405) | Large; likely splits into sub-slices when planned. An operator-surfacing follow-up slice (number assigned at plan time) lands after the core work. |
+| Slice | Title                                           | Summary                                                                                                                                            |
+| ----: | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+|    45 | **Crabka core:** JBOD / multi-log-dir + KIP-113 | Per-partition log-dir placement, log-dir reassignment.                                                                                             |
+|    46 | JBOD in `Kafka.spec.storage`                    | Multi-PVC per pod, per-broker log-dir balance.                                                                                                     |
+|    47 | **Crabka core:** Log compaction                 | `cleanup.policy=compact`, cleaner thread, tombstone retention. Exposed through existing `KafkaTopic`, no extra operator slice.                     |
+|    48 | **Crabka core:** Tiered storage (KIP-405)       | Large; likely splits into sub-slices when planned. An operator-surfacing follow-up slice (number assigned at plan time) lands after the core work. |
 
 ### Phase 9 — Auth & authorization extensions
 
-| Slice | Title | Summary |
-|------:|-------|---------|
-| 49 | **Crabka core:** SASL/OAUTHBEARER | |
-| 50 | `KafkaUser` OAuth + listener OAuth config | |
-| 51 | **Crabka core:** Delegation tokens | Surfaced by a follow-up `KafkaUser` field. |
-| 52 | **Crabka core:** SASL/GSSAPI (optional) | Only if user demand emerges. |
-| 53 | Authorization plugin: OPA bridge | |
-| 54 | Authorization plugin: Keycloak | |
+| Slice | Title                                     | Summary                                    |
+| ----: | ----------------------------------------- | ------------------------------------------ |
+|    49 | **Crabka core:** SASL/OAUTHBEARER         |                                            |
+|    50 | `KafkaUser` OAuth + listener OAuth config |                                            |
+|    51 | **Crabka core:** Delegation tokens        | Surfaced by a follow-up `KafkaUser` field. |
+|    52 | **Crabka core:** SASL/GSSAPI (optional)   | Only if user demand emerges.               |
+|    53 | Authorization plugin: OPA bridge          |                                            |
+|    54 | Authorization plugin: Keycloak            |                                            |
 
 ### Phase 10 — Ecosystem: Connect
 
-| Slice | Title | Summary |
-|------:|-------|---------|
-| 55 | **Crabka core:** Kafka Connect equivalent — runtime | Distributed worker: REST API, connector lifecycle, task assignment, JSON/Avro/Protobuf converters. |
-| 56 | `KafkaConnect` CRD | Operator deploys Connect worker `Deployment`s. |
-| 57 | `KafkaConnect.spec.build` | Declarative plugin list, image build via Kaniko or BuildConfig. |
-| 58 | `KafkaConnector` CRD | Operator submits connector configs to Connect REST API. |
+| Slice | Title                                               | Summary                                                                                            |
+| ----: | --------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+|    55 | **Crabka core:** Kafka Connect equivalent — runtime | Distributed worker: REST API, connector lifecycle, task assignment, JSON/Avro/Protobuf converters. |
+|    56 | `KafkaConnect` CRD                                  | Operator deploys Connect worker `Deployment`s.                                                     |
+|    57 | `KafkaConnect.spec.build`                           | Declarative plugin list, image build via Kaniko or BuildConfig.                                    |
+|    58 | `KafkaConnector` CRD                                | Operator submits connector configs to Connect REST API.                                            |
 
 ### Phase 11 — Ecosystem: MirrorMaker2 + Bridge
 
-| Slice | Title | Summary |
-|------:|-------|---------|
-| 59 | **Crabka core:** MirrorMaker2 (on Connect) | |
-| 60 | `KafkaMirrorMaker2` CRD | |
-| 61 | **Crabka core:** REST bridge (HTTP→Kafka proxy) | |
-| 62 | `KafkaBridge` CRD | |
+| Slice | Title                                           | Summary |
+| ----: | ----------------------------------------------- | ------- |
+|    59 | **Crabka core:** MirrorMaker2 (on Connect)      |         |
+|    60 | `KafkaMirrorMaker2` CRD                         |         |
+|    61 | **Crabka core:** REST bridge (HTTP→Kafka proxy) |         |
+|    62 | `KafkaBridge` CRD                               |         |
 
 ### Phase 12 — Parity tail
 
-| Slice | Title | Summary |
-|------:|-------|---------|
-| 63 | **Crabka core:** Static membership (KIP-345) + `KafkaUser`/`KafkaTopic` follow-ups | |
-| 64 | **Crabka core:** KIP-848 next-gen consumer group protocol | |
-| 65 | **Crabka core:** KIP-841 force-elect / unclean-recovery toggle + `Kafka` CRD field | |
-| 66 | **Crabka core:** IPv6 ACL host filter + `KafkaUser` ACL acceptance | |
-| 67 | **Crabka core:** Broker-side recompression | |
-| 68 | Optional: Schema Registry equivalent + CRD | Whether to take on a Schema Registry is debatable; left as optional. |
+| Slice | Title                                                                              | Summary                                                              |
+| ----: | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+|    63 | **Crabka core:** Static membership (KIP-345) + `KafkaUser`/`KafkaTopic` follow-ups |                                                                      |
+|    64 | **Crabka core:** KIP-848 next-gen consumer group protocol                          |                                                                      |
+|    65 | **Crabka core:** KIP-841 force-elect / unclean-recovery toggle + `Kafka` CRD field |                                                                      |
+|    66 | **Crabka core:** IPv6 ACL host filter + `KafkaUser` ACL acceptance                 |                                                                      |
+|    67 | **Crabka core:** Broker-side recompression                                         |                                                                      |
+|    68 | Optional: Schema Registry equivalent + CRD                                         | Whether to take on a Schema Registry is debatable; left as optional. |
 
 ## Crabka-core dependency map
 
 The operator features intertwine with Crabka-core slices. The table below makes each operator → core dependency explicit so each slice is fully deliverable when its turn comes.
 
-| Core slice | Capability | Unblocks operator slice(s) |
-|-----------:|------------|----------------------------|
-| 22 | `ControlledShutdown` request handler | 21 (rolling restart with graceful drain) |
-| 29 | mTLS client authentication | 30 (cluster CA + inter-broker mTLS), 37 (`KafkaUser` mTLS) |
-| 32 | SASL/SCRAM-SHA-256 | follow-up to 31 (listener SCRAM-256), follow-up to 36 (KafkaUser SCRAM-256) |
-| 33 | Certificate hot-reload | 34 (non-disruptive CA rotation) |
-| 39 | Prometheus metrics exporter | 40 (`Kafka.spec.metricsConfig`) |
-| 42 | OTLP tracing | 41-follow-up |
-| 43 | Native rebalancer service | 44 (`KafkaRebalance`) |
-| 45 | JBOD / multi-log-dir | 46 (`Kafka.spec.storage` JBOD) |
-| 47 | Log compaction | exposed via existing `KafkaTopic`; no extra slice |
-| 48 | Tiered storage | `Kafka.spec.storage.tieredStorage` operator-surfacing follow-up slice |
-| 49 | SASL/OAUTHBEARER | 50 (`KafkaUser` OAuth) |
-| 51 | Delegation tokens | future `KafkaUser` field |
-| 52 | SASL/GSSAPI | future `KafkaUser` Kerberos field |
-| 55 | Connect runtime | 56–58 |
-| 59 | MirrorMaker2 | 60 |
-| 61 | REST bridge | 62 |
-| 63 | Static membership | future `KafkaUser`/`KafkaTopic` fields |
-| 64 | KIP-848 | none direct |
-| 65 | KIP-841 | `Kafka` CRD field exposure |
-| 66 | IPv6 ACL host filter | `KafkaUser` ACL acceptance |
-| 67 | Broker-side recompression | exposed via existing topic config |
+| Core slice | Capability                           | Unblocks operator slice(s)                                                  |
+| ---------: | ------------------------------------ | --------------------------------------------------------------------------- |
+|         22 | `ControlledShutdown` request handler | 21 (rolling restart with graceful drain)                                    |
+|         29 | mTLS client authentication           | 30 (cluster CA + inter-broker mTLS), 37 (`KafkaUser` mTLS)                  |
+|         32 | SASL/SCRAM-SHA-256                   | follow-up to 31 (listener SCRAM-256), follow-up to 36 (KafkaUser SCRAM-256) |
+|         33 | Certificate hot-reload               | 34 (non-disruptive CA rotation)                                             |
+|         39 | Prometheus metrics exporter          | 40 (`Kafka.spec.metricsConfig`)                                             |
+|         42 | OTLP tracing                         | 41-follow-up                                                                |
+|         43 | Native rebalancer service            | 44 (`KafkaRebalance`)                                                       |
+|         45 | JBOD / multi-log-dir                 | 46 (`Kafka.spec.storage` JBOD)                                              |
+|         47 | Log compaction                       | exposed via existing `KafkaTopic`; no extra slice                           |
+|         48 | Tiered storage                       | `Kafka.spec.storage.tieredStorage` operator-surfacing follow-up slice       |
+|         49 | SASL/OAUTHBEARER                     | 50 (`KafkaUser` OAuth)                                                      |
+|         51 | Delegation tokens                    | future `KafkaUser` field                                                    |
+|         52 | SASL/GSSAPI                          | future `KafkaUser` Kerberos field                                           |
+|         55 | Connect runtime                      | 56–58                                                                       |
+|         59 | MirrorMaker2                         | 60                                                                          |
+|         61 | REST bridge                          | 62                                                                          |
+|         63 | Static membership                    | future `KafkaUser`/`KafkaTopic` fields                                      |
+|         64 | KIP-848                              | none direct                                                                 |
+|         65 | KIP-841                              | `Kafka` CRD field exposure                                                  |
+|         66 | IPv6 ACL host filter                 | `KafkaUser` ACL acceptance                                                  |
+|         67 | Broker-side recompression            | exposed via existing topic config                                           |
 
 **Pure operator work** (no Crabka-core dependency): all of Phase 1, Phase 2 except slice 22, Phase 3, slices 30 + 31 of Phase 4, slices 35 + 36 + 38 of Phase 5.
 

@@ -17,7 +17,7 @@
 ## Invariants
 
 1. **Acked ⇒ fsync'd on f+1 AZ-distributed disks.** Never ack before quorum-durable; survive f node/AZ losses and full-quorum power loss.
-2. **The seam is unchanged.** `QuorumWalStore` implements `WalStore::append_durable`; `finalize_ack`/`await_hw_at_least`/offset assignment/fetch/flush are untouched — only the WalStore impl and the HW *source* change.
+2. **The seam is unchanged.** `QuorumWalStore` implements `WalStore::append_durable`; `finalize_ack`/`await_hw_at_least`/offset assignment/fetch/flush are untouched — only the WalStore impl and the HW _source_ change.
 3. **Reuse the core, not the metadata engine.** Instantiate `QuorumStateMachine` per group; the watermark is the majority-th-largest via the verified `recompute_high_watermark` — do not re-derive it.
 4. **The WAL retains only the un-flushed tail.** Per-replica WAL segments are trimmed on flush (Slice 3's `flushed_offset`), so replication is bounded by the flush window, not permanent N× storage.
 5. **Single-writer preserved.** 6a changes durability only; leaderless writes (6b), the concurrent sequencer (6c), and the full gate + Jepsen (6d) are out.
@@ -44,6 +44,7 @@
 Each WAL group's durable log is a `Log` (reused) whose offset/epoch metadata the core reads through `LogView` (`crates/kraft-core/src/types.rs:40-48`).
 
 **Files:**
+
 - Create: `crates/broker/src/wal/quorum/log_view.rs`; `crates/broker/src/wal/quorum/mod.rs`
 
 - [ ] **Step 1: Write the failing test**
@@ -78,6 +79,7 @@ git commit -m "feat(broker): shard WAL log + LogView over the reused Log"
 A leaner analog of `crates/raft/src/kraft/controller.rs`, but its "apply" is a durable-watermark advance (not a `MetadataImage` reduction). It drives `QuorumStateMachine::on_event(event, &shard_log, now) -> Vec<Action>` and executes the actions.
 
 **Files:**
+
 - Create: `crates/broker/src/wal/quorum/engine.rs`
 
 - [ ] **Step 1: Write the failing test (3-replica in-process quorum)**
@@ -128,6 +130,7 @@ git commit -m "feat(broker): per-shard WAL engine driving the sans-IO QuorumStat
 ## Task 3: `ShardId→engine` registry + shard-addressed wire routing
 
 **Files:**
+
 - Create: `crates/broker/src/wal/quorum/registry.rs`, `crates/broker/src/wal/quorum/wire.rs`
 
 - [ ] **Step 1: Registry (failing test → implement)**
@@ -150,6 +153,7 @@ git commit -m "feat(broker): WAL shard registry + shard-addressed KIP-595 routin
 ## Task 4: Durable persist + reload on restart
 
 **Files:**
+
 - Modify: `crates/broker/src/wal/quorum/engine.rs`; (if needed) `crates/kraft-core/src/core.rs`
 
 - [ ] **Step 1: Write the failing test**
@@ -163,7 +167,7 @@ A replica persists its `QuorumState` on every `Action::PersistQuorumState`; on r
 
 - [ ] **Step 2: Run to verify it fails; implement**
 
-`persist_quorum_state(&QuorumState)` writes epoch/votedKey/leaderId durably (fsync). On engine open, load the persisted `QuorumState` and construct `QuorumStateMachine::new(me, loaded_state, election_timeout_ms)` — `new` already takes the state (`core.rs:40`), so reload is `new(persisted)`; the shard log is reopened via `Log::open` (Slice-5 recovery). Add a `from_durable` convenience on the engine (not the core). *If the crash model (Task 6) needs to reset a live machine, add a `QuorumStateMachine::reload(&mut self, state)` helper — flagged absent in grounding.*
+`persist_quorum_state(&QuorumState)` writes epoch/votedKey/leaderId durably (fsync). On engine open, load the persisted `QuorumState` and construct `QuorumStateMachine::new(me, loaded_state, election_timeout_ms)` — `new` already takes the state (`core.rs:40`), so reload is `new(persisted)`; the shard log is reopened via `Log::open` (Slice-5 recovery). Add a `from_durable` convenience on the engine (not the core). _If the crash model (Task 6) needs to reset a live machine, add a `QuorumStateMachine::reload(&mut self, state)` helper — flagged absent in grounding._
 
 - [ ] **Step 3: Commit**
 
@@ -179,6 +183,7 @@ git commit -m "feat(broker): durable persist + reload of WAL-shard consensus sta
 ## Task 5: `QuorumWalStore` — the `WalStore` impl (composes everything)
 
 **Files:**
+
 - Create/Modify: `crates/broker/src/wal/quorum/mod.rs`
 
 - [ ] **Step 1: Write the failing test**
@@ -203,6 +208,7 @@ git commit -m "feat(broker): QuorumWalStore (fsync-quorum WalStore behind the Sl
 ## Task 6: First proof delta — the quorum frontier
 
 **Files:**
+
 - Modify: the Slice-5 diskless crash model (`crates/broker/src/diskless_crash_model.rs`)
 
 - [ ] **Step 1: Extend the model**

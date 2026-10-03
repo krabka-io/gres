@@ -10,7 +10,7 @@
 
 **Spec:** [`docs/superpowers/specs/2026-07-06-crabka-msg6-queue-rpc-design.md`](../specs/2026-07-06-crabka-msg6-queue-rpc-design.md).
 
-**PREREQUISITES:** none unlanded — the broker KIP-932 stack and the native `ShareConsumer` are built. (MSG-1 is precedent, not prerequisite: the headers addition here is on the *share* path.) The v1.1 vector work (Task 6) touches the umbrella crate once it exists; Tasks 1–5 are independent of it.
+**PREREQUISITES:** none unlanded — the broker KIP-932 stack and the native `ShareConsumer` are built. (MSG-1 is precedent, not prerequisite: the headers addition here is on the _share_ path.) The v1.1 vector work (Task 6) touches the umbrella crate once it exists; Tasks 1–5 are independent of it.
 
 ---
 
@@ -45,6 +45,7 @@
 ## Task 1 (∥ Task 2): `ShareConsumerRecord.headers`
 
 **Files:**
+
 - Modify: `crates/client-consumer/src/share/types.rs`, `src/share/poll.rs`
 
 - [ ] **Step 1: Write the failing test** — produce a record with headers `[("ce-type"→"order"), ("nullv"→None)]`; a `ShareConsumer` in explicit mode `poll`s it; assert `rec.headers == vec![("ce-type", Some(b"order")), ("nullv", None)]` (lossless, order-preserving — the MSG-1 internal shape). Extend an existing share integration test (`crates/broker/tests/share_consume.rs` or the crate's own harness) rather than building a new one.
@@ -63,7 +64,7 @@ git commit -m "feat(client-consumer): carry record headers on the share-group po
 ## Task 2 (∥ Task 1): The proto surface
 
 - [ ] **Step 1:** Add the three RPCs + messages from the spec verbatim (`QueueAcquireRequest/Response`, `QueuedMessage` with `map<string,bytes> headers` + `delivery_count`, `QueueAckType`, `QueueAckEntry`, per-entry `QueueAckResult`, `QueueRenewRequest/Response`) to `gateway.proto`; regenerate.
-- [ ] **Step 2:** `cargo build -p krabka-grpc-gateway` green (handlers arrive in Task 4 — connectrpc-axum tolerates unregistered RPCs until the builder wires them; if the generated builder *requires* all handlers, stub them returning `Unimplemented` in this task and note it). Commit.
+- [ ] **Step 2:** `cargo build -p krabka-grpc-gateway` green (handlers arrive in Task 4 — connectrpc-axum tolerates unregistered RPCs until the builder wires them; if the generated builder _requires_ all handlers, stub them returning `Unimplemented` in this task and note it). Commit.
 
 ```bash
 git add crates/grpc-gateway/proto
@@ -75,6 +76,7 @@ git commit -m "feat(gateway): queue RPC surface (Acquire/Acknowledge/Renew) in t
 ## Task 3: The session table
 
 **Files:**
+
 - Create: `crates/grpc-gateway/src/queue.rs`
 
 - [ ] **Step 1: Write the failing unit tests**
@@ -125,6 +127,7 @@ git commit -m "feat(gateway): QueueAcquire/Acknowledge/Renew handlers over Share
 ## Task 5: The five behaviors + headers + the JVM cross-check
 
 **Files:**
+
 - Modify: `crates/grpc-gateway/tests/queue.rs`
 
 - [ ] **Step 1: Write the behavior tests**

@@ -63,13 +63,13 @@ Five sub-plans, ordered by dependency:
 1e 0.1.0 publish prep           └── needs 1d green
 ```
 
-| # | Sub-plan | Crates touched | Done means |
-|---|---|---|---|
-| 1a | Codegen generalization | `krabka-protocol-codegen`, `krabka-protocol` (curated representative schemas) | Emitters handle every IR construct used by 4.2 schemas: arrays of primitives, arrays of structs, nested struct types, all 11 primitive types found in the schemas, every declared tagged field as a typed field. Snapshot tests pass for a curated 5–8 message set spanning all shapes; codegen IR validation accepts every 4.2 schema; mass rollout is *not* turned on yet. |
-| 1b | `krabka-compression` | new `krabka-compression` crate | Pure-Rust where viable (flate2 with `rust_backend`, `snap`, `lz4_flex`; `zstd` C-backed). Encode + decode for gzip, snappy, lz4, zstd, each behind a default-enabled feature flag. Differential tests against the JVM `org.apache.kafka.common.utils.*` codecs via a Java sidecar. |
-| 1c | Typed `RecordBatch` v2 | `krabka-protocol` | New `records` module with `RecordBatch` v2 (header fields, CRC-32C, attributes including compression, base offset/sequence, producer ID/epoch) and `Vec<Record>`. Eager decompression via 1b on decode, eager recompression on encode. JVM-differential per compression codec. |
-| 1d | Mass rollout | `krabka-protocol`, `krabka-protocol-codegen` | All 197 schemas turned on. Every `(api_key, version)` pair passes the three diff checks at PR-CI budget. Captured-traffic corpus grows to at least one entry per realistically capturable pair (synthetic OK with the existing `synthetic = true` flag). `KNOWN_ISSUES.md` enumerates any deliberate exclusions with rationale. |
-| 1e | 0.1.0 publish | `krabka-protocol`, `krabka-compression` | crates.io metadata, `cargo deny` clean, `cargo semver-checks` set up, `cargo publish --dry-run` clean, `CHANGELOG.md` with `[0.1.0]` entry, docs.rs builds clean for both, GitHub `v0.1.0` release tagged. Both crates installable via `cargo add`. |
+| #   | Sub-plan               | Crates touched                                                                | Done means                                                                                                                                                                                                                                                                                                                                                                   |
+| --- | ---------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1a  | Codegen generalization | `krabka-protocol-codegen`, `krabka-protocol` (curated representative schemas) | Emitters handle every IR construct used by 4.2 schemas: arrays of primitives, arrays of structs, nested struct types, all 11 primitive types found in the schemas, every declared tagged field as a typed field. Snapshot tests pass for a curated 5–8 message set spanning all shapes; codegen IR validation accepts every 4.2 schema; mass rollout is _not_ turned on yet. |
+| 1b  | `krabka-compression`   | new `krabka-compression` crate                                                | Pure-Rust where viable (flate2 with `rust_backend`, `snap`, `lz4_flex`; `zstd` C-backed). Encode + decode for gzip, snappy, lz4, zstd, each behind a default-enabled feature flag. Differential tests against the JVM `org.apache.kafka.common.utils.*` codecs via a Java sidecar.                                                                                           |
+| 1c  | Typed `RecordBatch` v2 | `krabka-protocol`                                                             | New `records` module with `RecordBatch` v2 (header fields, CRC-32C, attributes including compression, base offset/sequence, producer ID/epoch) and `Vec<Record>`. Eager decompression via 1b on decode, eager recompression on encode. JVM-differential per compression codec.                                                                                               |
+| 1d  | Mass rollout           | `krabka-protocol`, `krabka-protocol-codegen`                                  | All 197 schemas turned on. Every `(api_key, version)` pair passes the three diff checks at PR-CI budget. Captured-traffic corpus grows to at least one entry per realistically capturable pair (synthetic OK with the existing `synthetic = true` flag). `KNOWN_ISSUES.md` enumerates any deliberate exclusions with rationale.                                              |
+| 1e  | 0.1.0 publish          | `krabka-protocol`, `krabka-compression`                                       | crates.io metadata, `cargo deny` clean, `cargo semver-checks` set up, `cargo publish --dry-run` clean, `CHANGELOG.md` with `[0.1.0]` entry, docs.rs builds clean for both, GitHub `v0.1.0` release tagged. Both crates installable via `cargo add`.                                                                                                                          |
 
 Each sub-plan gets its own brainstorm → plan → execute cycle. This
 document only details 1a below.
@@ -108,15 +108,15 @@ For each `MessageSpec`, walk the fields tree and emit:
 
 ## Field-type mapping
 
-| Schema type | Owned | Borrowed |
-|---|---|---|
-| `bool`, `int8`, `int16`, `int32`, `int64`, `uint16`, `float64` | the same Rust primitive | same |
-| `string` | `String` (or `Option<String>` if nullable) | `&'a str` / `Option<&'a str>` |
-| `bytes` | `bytes::Bytes` / `Option<Bytes>` | `&'a [u8]` / `Option<&'a [u8]>` |
-| `uuid` | `Uuid` newtype (defined in `primitives::uuid`) | same |
-| `records` | `bytes::Bytes` in 1a (opaque); 1c replaces with typed `RecordBatch` | `&'a [u8]` in 1a |
-| `[]<elem>` | `Vec<T>` (or `Option<Vec<T>>` if nullable) | `Vec<T<'a>>` (outer `Vec` owned; entries borrow) |
-| `Struct` (PascalCase) | reference to the generated struct | reference to the generated `<'a>` struct |
+| Schema type                                                    | Owned                                                               | Borrowed                                         |
+| -------------------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------ |
+| `bool`, `int8`, `int16`, `int32`, `int64`, `uint16`, `float64` | the same Rust primitive                                             | same                                             |
+| `string`                                                       | `String` (or `Option<String>` if nullable)                          | `&'a str` / `Option<&'a str>`                    |
+| `bytes`                                                        | `bytes::Bytes` / `Option<Bytes>`                                    | `&'a [u8]` / `Option<&'a [u8]>`                  |
+| `uuid`                                                         | `Uuid` newtype (defined in `primitives::uuid`)                      | same                                             |
+| `records`                                                      | `bytes::Bytes` in 1a (opaque); 1c replaces with typed `RecordBatch` | `&'a [u8]` in 1a                                 |
+| `[]<elem>`                                                     | `Vec<T>` (or `Option<Vec<T>>` if nullable)                          | `Vec<T<'a>>` (outer `Vec` owned; entries borrow) |
+| `Struct` (PascalCase)                                          | reference to the generated struct                                   | reference to the generated `<'a>` struct         |
 
 **Borrowed arrays of structs intentionally own the outer `Vec`.** A
 true zero-copy decode would require the wire layout to match the
@@ -228,7 +228,7 @@ The sub-plan ships when **all** of these hold:
    crate root, listing every (request, response) pair in the 4.2
    schemas with their version ranges in rustdoc.
 7. `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test
-   --workspace` all green on the CI matrix.
+--workspace` all green on the CI matrix.
 
 ---
 
@@ -248,15 +248,14 @@ re-litigated per sub-plan.
   feature, snappy via `snap`, lz4 via `lz4_flex`, zstd via `zstd`
   (links C `libzstd`; no mature pure-Rust alternative exists).
 - **Trait surface.** A single `Compression` trait with `compress(&self,
-  &[u8]) -> Bytes` and `decompress(&self, &[u8]) -> Result<Bytes,
-  _>`, plus a `CompressionType` enum (`None`, `Gzip`, `Snappy`,
+&[u8]) -> Bytes` and `decompress(&self, &[u8]) -> Result<Bytes,
+_>`, plus a `CompressionType` enum (`None`, `Gzip`, `Snappy`,
   `Lz4`, `Zstd`) matching Kafka's wire bit values for record-batch
   attributes.
 
 ## Typed `RecordBatch` shape (1c)
 
-- **v2 only.** Reading legacy v0/v1 batches is a `krabka-log` (slice
-  3) concern.
+- **v2 only.** Reading legacy v0/v1 batches is a `krabka-log` (slice 3) concern.
 - **CRC validation on decode, regeneration on encode.** Kafka uses
   CRC-32C (Castagnoli) for v2; the `crc32c` crate provides it.
 - **Decompression is eager.** Decoding a `RecordBatch` returns a
@@ -282,7 +281,7 @@ re-litigated per sub-plan.
   the printed seed. CI prints seed and a hex diff. No flaky-skip
   mechanism.
 - **`KNOWN_ISSUES.md`:** at repo root, enumerates anything 1d
-  *deliberately* excludes from diff testing (e.g., messages
+  _deliberately_ excludes from diff testing (e.g., messages
   `kafka-clients` cannot encode). Empty is acceptable; any entry
   needs an offending pair, a reason, and a planned resolution.
 
@@ -291,7 +290,7 @@ re-litigated per sub-plan.
 - **API stability:** none pre-1.0. `CHANGELOG.md` tracks every break.
 - **Kafka protocol version pin** documented on the docs.rs landing
   page and README: "0.1.x = Kafka 4.2 protocol." Bumping the upstream
-  Kafka pin is a *minor* version bump pre-1.0; a *major* bump is
+  Kafka pin is a _minor_ version bump pre-1.0; a _major_ bump is
   reserved for genuine API redesigns.
 - **`cargo-deny`:** advisories deny, bans warn, sources allow
   `crates-io`, licenses allow Apache-2.0 / MIT / BSD-3-Clause / ISC /
@@ -306,7 +305,7 @@ re-litigated per sub-plan.
 
 ## Generated-code aesthetics
 
-- `#![allow(clippy::pedantic)]` only in the *wrapper modules*, not at
+- `#![allow(clippy::pedantic)]` only in the _wrapper modules_, not at
   workspace scope. Pedantic stays on for hand-written code.
 - No `#[derive(Hash)]` by default on generated types (`Bytes` and `f64`
   complicate it). Add per-type when a consumer needs it.

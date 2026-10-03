@@ -50,7 +50,7 @@ Crabka's decoder instead propagates a decode error for the trailing fragment.
 That bubbles up: `RecordsPayload::decode` → `FetchResponse` decode →
 `Client::send` → `Consumer::poll` all return `Err`, stalling the consumer.
 
-Crabka's *own* broker hides this because its decode-free pass-through
+Crabka's _own_ broker hides this because its decode-free pass-through
 (`Log::read_raw`, [`crates/broker/src/handlers/fetch.rs`](../../../crates/broker/src/handlers/fetch.rs))
 serves only whole v2 batches and excludes a partial trailing batch. So
 crabka→crabka works and crabka→Kafka does not — exactly the asymmetry the
@@ -167,6 +167,7 @@ coordinator and is not part of this work. Flag as a possible follow-up.
 ## Testing (TDD)
 
 **Gap 1 (unit, socket-free):**
+
 - A Fetch response with multiple complete batches plus a truncated trailing
   fragment decodes all complete batches and discards the fragment.
 - A truncated **Produce** records field still errors strictly
@@ -174,6 +175,7 @@ coordinator and is not part of this work. Flag as a possible follow-up.
 - Offset-advance past a partition whose batches are all dropped/empty.
 
 **Gap 2 (mock/in-memory coordinator):**
+
 - A coordinator returning code 14 N times then 0 — `build()` and rejoin
   succeed after backoff.
 - Exceeding `coordinator_load_timeout` surfaces the last error.

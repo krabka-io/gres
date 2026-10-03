@@ -19,6 +19,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use bytes::{Bytes, BytesMut};
+use futures_util::future::BoxFuture;
 use krabka_ids::PartitionIndex;
 use krabka_protocol::{
     Decode, Encode,
@@ -30,7 +31,6 @@ use krabka_protocol::{
         },
     },
 };
-use futures_util::future::BoxFuture;
 
 use crate::{
     broker::Broker,

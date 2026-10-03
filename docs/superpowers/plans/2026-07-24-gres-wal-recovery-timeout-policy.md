@@ -49,16 +49,16 @@ generated Kubernetes CRDs.
 - `connect_timeout()` and `request_timeout()` accessors
 
 - [ ] Add RED tests for exact defaults, zero rejection in either builder
-  argument, distinctive durations, and replacement without changing fetch
-  fields.
+      argument, distinctive durations, and replacement without changing fetch
+      fields.
 - [ ] Add a small `wal_connection_options` constructor test requiring exact
-  client id, security, connect timeout, and request timeout. Use it from
-  `open_wal_connection`; do not mock TCP.
+      client id, security, connect timeout, and request timeout. Use it from
+      `open_wal_connection`; do not mock TCP.
 - [ ] Implement private `Duration` fields validated through
-  `refined_type::rule::GreaterU64<0>`. The existing constructor installs
-  validated compiled defaults; `with_timeouts` replaces them.
+      `refined_type::rule::GreaterU64<0>`. The existing constructor installs
+      validated compiled defaults; `with_timeouts` replaces them.
 - [ ] Pass `RecoveryReadPolicy` into both raw connection callers:
-  `KafkaCommittedWalReader::open_connection` and `LiveEndDialer::dial`.
+      `KafkaCommittedWalReader::open_connection` and `LiveEndDialer::dial`.
 - [ ] Prove the sampler still builds a zero-wait fetch request.
 - [ ] Run:
 
@@ -99,19 +99,19 @@ git commit -m "feat(gres): configure recovery connection timeouts"
   / `KRABKA_GRES_WAL_RECOVERY_REQUEST_TIMEOUT_MS`
 
 - [ ] Extend the existing child-process recovery-policy test from four
-  environment variables/values to six. Require defaults, environment values,
-  and true CLI-over-environment precedence via raw production Clap parsing.
+      environment variables/values to six. Require defaults, environment values,
+      and true CLI-over-environment precedence via raw production Clap parsing.
 - [ ] Add RED zero and explicit local-mode rejection assertions for both
-  fields, including the pre-listener programmatic path.
+      fields, including the pre-listener programmatic path.
 - [ ] Add both `Option<PositiveMillis>` fields and include them in the existing
-  inert-use validator.
+      inert-use validator.
 - [ ] Build the existing four-value `RecoveryReadPolicy`, then call
-  `with_timeouts` with effective substrate-owned defaults or parser values.
+      `with_timeouts` with effective substrate-owned defaults or parser values.
 - [ ] Extend both unit and integration env-disabled test parser helpers from
-  four fields to six; rerun full library and runtime tests under a hostile
-  six-variable environment.
+      four fields to six; rerun full library and runtime tests under a hostile
+      six-variable environment.
 - [ ] Extend the shared recovery-config propagation test with distinctive
-  timeouts; add no new constructor path.
+      timeouts; add no new constructor path.
 - [ ] Run:
 
 ```bash
@@ -128,7 +128,7 @@ git diff --check
 ```
 
 - [ ] Repeat Gres library and runtime tests with all six recovery environment
-  variables set to valid hostile values.
+      variables set to valid hostile values.
 - [ ] Commit:
 
 ```bash
@@ -149,16 +149,16 @@ git commit -m "feat(gres): expose recovery connection timeouts"
 - Regenerate: `deploy/crds/crabka.io_greses.yaml`
 
 - [ ] Add RED round-trip, schema-minimum, exact-default, and zero-error-path
-  tests for `walRecoveryConnectTimeoutMs` and
-  `walRecoveryRequestTimeoutMs`.
+      tests for `walRecoveryConnectTimeoutMs` and
+      `walRecoveryRequestTimeoutMs`.
 - [ ] Add optional `u64` fields with schema minimum one and validated
-  `PositiveMillis` effective fields using substrate-owned defaults.
+      `PositiveMillis` effective fields using substrate-owned defaults.
 - [ ] Extend exact distinctive and omitted/default Deployment assertions for
-  both single-range and multi-range modes.
+      both single-range and multi-range modes.
 - [ ] Render both pairs unconditionally beside existing recovery arguments.
 - [ ] Regenerate all nine CRDs and compare a second fresh generation exactly.
 - [ ] Run the full operator test suite, strict all-target/all-feature Clippy,
-  formatting, and diff checks.
+      formatting, and diff checks.
 - [ ] Commit:
 
 ```bash
@@ -180,14 +180,14 @@ git commit -m "feat(operator): expose recovery timeouts"
 - Update but do not commit: `.superpowers/sdd/progress.md`
 
 - [ ] Re-run the repository scanner and focused timeout searches. Classify:
-  shared defaults, configured production flow, tests/harnesses, fixed values,
-  and deferred timeout owners.
+      shared defaults, configured production flow, tests/harnesses, fixed values,
+      and deferred timeout owners.
 - [ ] Prove the old recovery `Duration::from_secs(10/30)` literals are absent,
-  both raw WAL connection callers receive the policy, and all six
-  CLI/environment/CRD recovery fields have one live consumer.
+      both raw WAL connection callers receive the policy, and all six
+      CLI/environment/CRD recovery fields have one live consumer.
 - [ ] Run full affected tests, strict Clippy, help, all-nine CRD comparison,
-  formatting, and diff checks. Record any unchanged baseline exception
-  precisely.
+      formatting, and diff checks. Record any unchanged baseline exception
+      precisely.
 - [ ] Commit only the audit:
 
 ```bash
@@ -196,6 +196,6 @@ git commit -m "docs(gres): record recovery timeout audit"
 ```
 
 - [ ] Obtain a fresh final review of the complete range and current dirty
-  inventory. Resolve every finding and refresh evidence before READY.
+      inventory. Resolve every finding and refresh evidence before READY.
 
 The wider hardcoded-value configuration goal remains active afterward.

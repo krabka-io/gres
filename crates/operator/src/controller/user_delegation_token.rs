@@ -34,15 +34,15 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use async_trait::async_trait;
 use base64::Engine as _;
-use krabka_client_admin::AdminError;
-use krabka_metadata::DelegationToken;
-use krabka_security::KafkaPrincipal;
-use krabka_units::{Time, convert::TimeExt as _, hours};
 use k8s_openapi::{
     ByteString,
     api::core::v1::Secret,
     apimachinery::pkg::apis::meta::v1::{ObjectMeta, OwnerReference},
 };
+use krabka_client_admin::AdminError;
+use krabka_metadata::DelegationToken;
+use krabka_security::KafkaPrincipal;
+use krabka_units::{Time, convert::TimeExt as _, hours};
 use kube::{
     Resource,
     api::{Api, Patch, PatchParams},
@@ -970,8 +970,8 @@ mod tests {
 
     use assert2::{assert, check};
     use clap::Parser;
-    use krabka_units::minutes;
     use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
+    use krabka_units::minutes;
 
     use super::*;
     use crate::{

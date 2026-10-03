@@ -14,12 +14,12 @@ use std::{
     },
 };
 
-use krabka_units::{ByteSize, convert::ByteSizeExt as _};
 use fjall::{
     Iter, KeyspaceCreateOptions, PersistMode, Readable, SingleWriterTxDatabase,
     SingleWriterTxKeyspace, Snapshot,
     config::{PartitioningPolicy, PinningPolicy},
 };
+use krabka_units::{ByteSize, convert::ByteSizeExt as _};
 use refined_type::rule::GreaterU64;
 
 use crate::{Kv, KvError, KvPair, KvSnapshot, RestoreKv, SnapshotKv, WriteOp, store::KvScan};

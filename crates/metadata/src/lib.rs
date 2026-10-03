@@ -56,11 +56,6 @@ mod records;
 pub mod transaction_version;
 
 pub use acl::{AclEntry, AclEntryFilter, AclOperation, PatternType, PermissionType, ResourceType};
-/// KIP-853 voter-set value types, re-exported from the [`krabka_voters`] leaf
-/// crate. The path stays `krabka_metadata::voters`, so existing call sites are
-/// unchanged. The types live in their own crypto-free crate, so the consensus
-/// core can compile to WebAssembly.
-pub use krabka_voters as voters;
 pub use error::MetadataError;
 pub use feature::{
     Feature, bootstrap_feature_records, bootstrap_feature_records_with_overrides, feature,
@@ -68,6 +63,11 @@ pub use feature::{
 };
 pub use image::{DelegationToken, EntityKey, MetadataImage, ThrottleKind, canonicalize_entity};
 pub use kafka_record::{KafkaRecordError, from_kafka_record, to_kafka_record};
+/// KIP-853 voter-set value types, re-exported from the [`krabka_voters`] leaf
+/// crate. The path stays `krabka_metadata::voters`, so existing call sites are
+/// unchanged. The types live in their own crypto-free crate, so the consensus
+/// core can compile to WebAssembly.
+pub use krabka_voters as voters;
 pub use kraft_translate::{
     TranslateError, from_kraft, from_kraft_value, to_kraft, to_kraft_records, to_kraft_values,
 };

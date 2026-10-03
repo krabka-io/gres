@@ -42,9 +42,11 @@ Most tasks touch `network/dispatch.rs` or `handlers/registry.rs`, so they must r
 ### Task 1: Context Constructors
 
 **Files:**
+
 - Modify: `crates/broker/src/handlers/context.rs`
 
 **Interfaces:**
+
 - Consumes: existing `RequestContext<'a>` and `TelemetryContext<'a>` structs.
 - Produces: `RequestContext::new(...) -> RequestContext<'a>` and `TelemetryContext::new(...) -> TelemetryContext<'a>`.
 
@@ -160,10 +162,12 @@ git commit -m "refactor(broker): add request context constructors"
 ### Task 2: Borrowed Parsed Request Module
 
 **Files:**
+
 - Create: `crates/broker/src/network/request.rs`
 - Modify: `crates/broker/src/network/mod.rs`
 
 **Interfaces:**
+
 - Consumes: `crate::handlers::{ApiKeyCode, ApiVersion, CorrelationId}` and `BrokerError`.
 - Produces: `ParsedRequest<'a>`, `parse_request`, `peek_api_key`, `peek_client_id`.
 
@@ -414,12 +418,14 @@ git commit -m "refactor(broker): add borrowed request parser"
 ### Task 3: Plain Handler Registry
 
 **Files:**
+
 - Create: `crates/broker/src/handlers/registry.rs`
 - Modify: `crates/broker/src/handlers/mod.rs`
 - Modify: `crates/broker/src/broker.rs`
 - Modify: `crates/broker/src/network/dispatch.rs`
 
 **Interfaces:**
+
 - Consumes: existing plain four-argument handler functions.
 - Produces: `DispatchRegistry`, `DispatchEntry`, `DispatchKind::Plain`, `RequestQuotaPolicy`, `build_registry()`.
 
@@ -717,10 +723,12 @@ git commit -m "refactor(broker): introduce dispatch registry"
 ### Task 4: Registry Adapters for Raw Context, Produce, and Telemetry Handlers
 
 **Files:**
+
 - Modify: `crates/broker/src/handlers/registry.rs`
 - Modify: `crates/broker/src/network/dispatch.rs`
 
 **Interfaces:**
+
 - Consumes: `RequestContext::new`, `TelemetryContext::new`, existing async handlers with raw request bytes.
 - Produces: `DispatchKind::Context`, `DispatchKind::Produce`, `DispatchKind::Telemetry`, and a registry execution helper that handles these families before the old inline match.
 
@@ -1374,10 +1382,12 @@ git commit -m "refactor(broker): route raw-context handlers through registry"
 ### Task 5: Registry Adapters for Decoded Request and Auth-Gated Handlers
 
 **Files:**
+
 - Modify: `crates/broker/src/handlers/registry.rs`
 - Modify: `crates/broker/src/network/dispatch.rs`
 
 **Interfaces:**
+
 - Consumes: generated request `Decode`, generated response `Encode`, existing decoded-request handlers, existing auth-gated handlers.
 - Produces: `DispatchKind::DecodedContext`, `DispatchKind::EncodedContext`, `DispatchKind::Auth`, and removal of decoded/auth wrapper execution from the inline match.
 
@@ -2028,12 +2038,14 @@ git commit -m "refactor(broker): route decoded and auth handlers through registr
 ### Task 6: Final Registry Dispatch Collapse
 
 **Files:**
+
 - Modify: `crates/broker/src/handlers/registry.rs`
 - Modify: `crates/broker/src/network/dispatch.rs`
 - Modify: `crates/broker/src/network/request.rs`
 - Modify: `crates/broker/src/broker.rs`
 
 **Interfaces:**
+
 - Consumes: all registry handler families.
 - Produces: one registry-backed dispatch path, no ordinary per-API frame wrappers, no standalone `handler_body_flexible` table in `dispatch.rs`.
 
@@ -2447,9 +2459,11 @@ git commit -m "refactor(broker): collapse dispatch onto registry"
 ### Task 7: Full Verification and Documentation Touch-Up
 
 **Files:**
+
 - Modify only files already changed by Tasks 1-6 if formatting, imports, or comments need cleanup.
 
 **Interfaces:**
+
 - Consumes: complete registry dispatch implementation.
 - Produces: formatted, tested, clippy-clean refactor ready for review.
 

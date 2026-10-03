@@ -29,9 +29,9 @@ use std::{
 use actor::{GroupActorHandle, GroupActorMessage, GroupKindTag, MetadataProvider};
 use bytes::Bytes;
 use config::NextGenConfig;
-use krabka_protocol::records::{Record, RecordBatch};
 use dashmap::DashMap;
 use group::CoordinatorGroup;
+use krabka_protocol::records::{Record, RecordBatch};
 use offsets_log::OffsetsLog;
 use share::{
     actor::{ShareGroupActorHandle, ShareGroupActorMessage},

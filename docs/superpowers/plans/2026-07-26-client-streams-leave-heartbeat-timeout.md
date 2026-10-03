@@ -46,6 +46,7 @@
 ### Task 1: Validate and propagate the library timeout
 
 **Files:**
+
 - Modify: `crates/client-streams/src/membership/client.rs`
 - Modify: `crates/client-streams/src/membership/coordinator.rs`
 - Modify: `crates/client-streams/src/membership/mod.rs`
@@ -54,6 +55,7 @@
 - Modify: `crates/client-streams/src/lib.rs`
 
 **Interfaces:**
+
 - Produces:
   `pub const DEFAULT_STREAMS_LEAVE_HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(5)`
 - Produces: `pub struct StreamsLeaveHeartbeatTimeout(Duration)`
@@ -447,6 +449,7 @@ git commit -m "feat(streams): configure leave timeout"
 ### Task 2: Expose the demo CLI, environment, and Compose setting
 
 **Files:**
+
 - Modify: `crates/observability-demo-app/src/main.rs`
 - Create:
   `crates/observability-demo-app/tests/streams_leave_heartbeat_timeout_config.rs`
@@ -455,6 +458,7 @@ git commit -m "feat(streams): configure leave timeout"
 - Modify: `demo/observability/docker-compose.yml`
 
 **Interfaces:**
+
 - Consumes: `StreamsLeaveHeartbeatTimeout`
 - Produces: `--streams-leave-heartbeat-timeout-ms`
 - Produces: `KRABKA_DEMO_STREAMS_LEAVE_HEARTBEAT_TIMEOUT_MS`
@@ -654,9 +658,11 @@ git commit -m "feat(demo): expose Streams leave timeout"
 ### Task 3: Record the completed owner and final verification
 
 **Files:**
+
 - Modify: `docs/configuration-audit.md`
 
 **Interfaces:**
+
 - Consumes: completed library, demo, and Compose behavior from Tasks 1-2
 - Produces: exclusive focused-search classification and the next
   production-consumed configuration owner
@@ -689,7 +695,7 @@ Append `## Client Streams Leave-Heartbeat Timeout` to
 - the raw low-level setters, typed `StreamsApp` setting, and both pre-I/O
   validation boundaries;
 - the exact `StreamsApp -> KafkaStreams -> StreamsMembership ->
-  CoordinatorState -> tokio::time::timeout` flow;
+CoordinatorState -> tokio::time::timeout` flow;
 - unchanged best-effort leave semantics;
 - demo CLI, environment, precedence, role restriction, and Compose owner;
 - why no CRD exists;

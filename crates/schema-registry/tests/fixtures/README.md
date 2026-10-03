@@ -21,11 +21,11 @@ Schema Registry implementation. Do **not** hand-edit them.
 
 ## Schemas registered
 
-| Subject    | Type     | Schema |
-| ---------- | -------- | ------ |
+| Subject    | Type     | Schema                                                                  |
+| ---------- | -------- | ----------------------------------------------------------------------- |
 | `av-value` | AVRO     | `{"type":"record","name":"User","fields":[{"name":"id","type":"int"}]}` |
-| `pb-value` | PROTOBUF | `syntax = "proto3"; message User { int32 id = 1; }` |
-| `js-value` | JSON     | `{"type":"object","properties":{"id":{"type":"integer"}}}` |
+| `pb-value` | PROTOBUF | `syntax = "proto3"; message User { int32 id = 1; }`                     |
+| `js-value` | JSON     | `{"type":"object","properties":{"id":{"type":"integer"}}}`              |
 
 The capture registers AVRO with `schemaType` omitted. This exercises the SR
 default.
@@ -67,15 +67,15 @@ files drive the kafkastore record encode/decode validation.
 
 Observed `_schemas` layout (offsets 0..=4):
 
-| Offset | keytype  | Notes |
-| ------ | -------- | ----- |
+| Offset | keytype  | Notes                                                                                                            |
+| ------ | -------- | ---------------------------------------------------------------------------------------------------------------- |
 | 0, 1   | `NOOP`   | SR writes these leader-election bootstrap noops on startup. `value` is `null`. These are **not** CONFIG records. |
-| 2      | `SCHEMA` | `av-value` v1, id 1. The value **omits** `schemaType`, which is the AVRO default. |
-| 3      | `SCHEMA` | `pb-value` v1, id 2. The value carries `"schemaType":"PROTOBUF"`. |
-| 4      | `SCHEMA` | `js-value` v1, id 3. The value carries `"schemaType":"JSON"`. |
+| 2      | `SCHEMA` | `av-value` v1, id 1. The value **omits** `schemaType`, which is the AVRO default.                                |
+| 3      | `SCHEMA` | `pb-value` v1, id 2. The value carries `"schemaType":"PROTOBUF"`.                                                |
+| 4      | `SCHEMA` | `js-value` v1, id 3. The value carries `"schemaType":"JSON"`.                                                    |
 
 The log holds **no `CONFIG` record**. `GET /config` reports
-`{"compatibilityLevel":"BACKWARD"}` as the *global default*. SR writes a
+`{"compatibilityLevel":"BACKWARD"}` as the _global default_. SR writes a
 `CONFIG` record only when you set a compatibility level explicitly, and this
 capture never sets one.
 

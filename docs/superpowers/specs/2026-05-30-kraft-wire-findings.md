@@ -12,12 +12,12 @@ the 4.0 flexible protocol — it mis-decodes; raw byte parsing was authoritative
 
 Parsed from raw TCP payloads (api_key i16, api_version i16 after the 4-byte length):
 
-| api_key | name | version | count | relevance to decode-only spike |
-|---------|------|---------|-------|-------------------------------|
-| 18 | ApiVersions | **4** | 2 | REQUIRED — observer negotiates first |
-| 1  | Fetch | **17** | 39 | REQUIRED — pull-based metadata replication |
-| 62 | BrokerRegistration | 4 | 1 | NOT needed (broker-mgmt, not Raft) |
-| 63 | BrokerHeartbeat | 1 | 21 | NOT needed (broker-mgmt, not Raft) |
+| api_key | name               | version | count | relevance to decode-only spike             |
+| ------- | ------------------ | ------- | ----- | ------------------------------------------ |
+| 18      | ApiVersions        | **4**   | 2     | REQUIRED — observer negotiates first       |
+| 1       | Fetch              | **17**  | 39    | REQUIRED — pull-based metadata replication |
+| 62      | BrokerRegistration | 4       | 1     | NOT needed (broker-mgmt, not Raft)         |
+| 63      | BrokerHeartbeat    | 1       | 21    | NOT needed (broker-mgmt, not Raft)         |
 
 - **No `FetchSnapshot` (59) was sent** — the log is tiny and un-snapshotted, so the
   observer fetched from offset 0 over plain `Fetch`. Decode-only needs only
@@ -50,8 +50,15 @@ The per-request `replica_state.replica_id` = the observer's node id (2).
 ## `quorum-state` file (`__cluster_metadata-0/quorum-state`)
 
 ```json
-{"clusterId":"","leaderId":1,"leaderEpoch":1,"votedId":-1,"appliedOffset":0,
- "currentVoters":[{"voterId":1}],"data_version":0}
+{
+  "clusterId": "",
+  "leaderId": 1,
+  "leaderEpoch": 1,
+  "votedId": -1,
+  "appliedOffset": 0,
+  "currentVoters": [{ "voterId": 1 }],
+  "data_version": 0
+}
 ```
 
 - **Leader epoch = 1** for the freshly-formatted single-voter cluster.
@@ -63,11 +70,11 @@ The per-request `replica_state.replica_id` = the observer's node id (2).
 
 Decoded batches (all magic 2):
 
-| batch offsets | isControl | contents |
-|---------------|-----------|----------|
-| 0 | true | `SnapshotHeader {"version":0,"lastContainedLogTimestamp":0}` |
-| 1–3 | false | 3× `FEATURE_LEVEL_RECORD`: `metadata.version`=**25**, `group.version`=1, `transaction.version`=2 |
-| 4 | true | `SnapshotFooter {"version":0}` |
+| batch offsets | isControl | contents                                                                                         |
+| ------------- | --------- | ------------------------------------------------------------------------------------------------ |
+| 0             | true      | `SnapshotHeader {"version":0,"lastContainedLogTimestamp":0}`                                     |
+| 1–3           | false     | 3× `FEATURE_LEVEL_RECORD`: `metadata.version`=**25**, `group.version`=1, `transaction.version`=2 |
+| 4             | true      | `SnapshotFooter {"version":0}`                                                                   |
 
 `metadata.version` featureLevel **25** is the kafka:4.0.0 default.
 
@@ -75,18 +82,18 @@ Decoded batches (all magic 2):
 
 Decoded record sequence the observer pulls from offset 0 (all `partitionLeaderEpoch=1`):
 
-| offset | batch isControl | record |
-|--------|-----------------|--------|
-| 0 | true | `LEADER_CHANGE` control record (controlType 2) |
-| 1 | false | `BEGIN_TRANSACTION_RECORD {"name":"Bootstrap records"}` |
-| 2 | false | `FEATURE_LEVEL_RECORD metadata.version=25` |
-| 3 | false | `FEATURE_LEVEL_RECORD group.version=1` |
-| 4 | false | `FEATURE_LEVEL_RECORD transaction.version=2` |
-| 5 | false | `END_TRANSACTION_RECORD {}` |
-| 6 | false | `REGISTER_CONTROLLER_RECORD` (v0): controllerId 1, endpoints, supported features |
-| 7 | false | `REGISTER_BROKER_RECORD` (v3): brokerId 1, fenced, logDirs, features |
-| 8 | false | `BROKER_REGISTRATION_CHANGE_RECORD` (v0) |
-| 9+ | false | periodic `NO_OP_RECORD` (v0), ~one per 500ms |
+| offset | batch isControl | record                                                                           |
+| ------ | --------------- | -------------------------------------------------------------------------------- |
+| 0      | true            | `LEADER_CHANGE` control record (controlType 2)                                   |
+| 1      | false           | `BEGIN_TRANSACTION_RECORD {"name":"Bootstrap records"}`                          |
+| 2      | false           | `FEATURE_LEVEL_RECORD metadata.version=25`                                       |
+| 3      | false           | `FEATURE_LEVEL_RECORD group.version=1`                                           |
+| 4      | false           | `FEATURE_LEVEL_RECORD transaction.version=2`                                     |
+| 5      | false           | `END_TRANSACTION_RECORD {}`                                                      |
+| 6      | false           | `REGISTER_CONTROLLER_RECORD` (v0): controllerId 1, endpoints, supported features |
+| 7      | false           | `REGISTER_BROKER_RECORD` (v3): brokerId 1, fenced, logDirs, features             |
+| 8      | false           | `BROKER_REGISTRATION_CHANGE_RECORD` (v0)                                         |
+| 9+     | false           | periodic `NO_OP_RECORD` (v0), ~one per 500ms                                     |
 
 Note: offsets 1–5 are the bootstrap feature records **wrapped in a transaction**
 (BEGIN/END_TRANSACTION). The control record at offset 0 (`LEADER_CHANGE`) carries the
@@ -158,7 +165,7 @@ logs showed:
 - `[MetadataLoader] finished catching up to the current high water mark of 6` —
   decoded every served record.
 - `Publishing initial metadata at offset OffsetAndEpoch(offset=5, epoch=1) with
-  metadata.version Optional[4.0-IV3]` — parsed the `FEATURE_LEVEL_RECORD` and built
+metadata.version Optional[4.0-IV3]` — parsed the `FEATURE_LEVEL_RECORD` and built
   a `MetadataImage` at metadata.version level 25.
 - **Zero** `CorruptRecordException` / `InvalidRecordException` / metadata-log decode
   faults.
@@ -176,6 +183,7 @@ the concrete facts above.
 ## Disposition
 
 The spike code is **throwaway** and feature-gated (`kraft-spike`, off by default):
+
 - `crates/raft/src/kraft_spike.rs` + `crates/raft/src/kraft_spike_metadata_log.bin`
 - the `#[cfg(feature = "kraft-spike")]` interception block + stub gating in
   `crates/raft/src/server.rs`

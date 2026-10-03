@@ -6,11 +6,11 @@
 use std::sync::Arc;
 
 use assert2::assert;
+use http::{Method, Response};
 use krabka_operator::{
     controller::kafka::reconcile,
     crd::{Kafka, KafkaSpec, Listener, ListenerType},
 };
-use http::{Method, Response};
 
 #[path = "shared/mod.rs"]
 mod shared;

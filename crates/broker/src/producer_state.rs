@@ -4,11 +4,11 @@
 
 use std::{collections::HashMap, sync::Arc};
 
+use dashmap::DashMap;
 use krabka_ids::PartitionIndex;
 use krabka_log::ProducerId;
 use krabka_protocol::records::{decrement_sequence, increment_sequence};
 use krabka_units::{Time, convert::TimeExt as _};
-use dashmap::DashMap;
 use tokio::sync::Mutex;
 
 use crate::partition::LogOffset;

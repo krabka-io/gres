@@ -16,15 +16,15 @@ continue. It does not promise storage compatibility between releases yet.
 
 ## Architecture
 
-| Area | Crates |
-| --- | --- |
-| Server | [`gres`](crates/gres) |
-| Wire protocol | [`pgwire`](crates/pgwire) |
-| Parser and values | [`pgparser`](crates/pgparser), [`pgtypes`](crates/pgtypes) |
-| Execution | [`pgexec`](crates/pgexec), [`pgcatalog`](crates/pgcatalog) |
-| Storage and MVCC | [`pgkv`](crates/pgkv), [`pgmvcc`](crates/pgmvcc) |
-| Distributed runtime | [`gres-substrate`](crates/gres-substrate), [`gres-ranges`](crates/gres-ranges), [`gres-control`](crates/gres-control) |
-| PostgreSQL differential tests | [`gres-conformance`](crates/gres-conformance) |
+| Area                          | Crates                                                                                                                |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Server                        | [`gres`](crates/gres)                                                                                                 |
+| Wire protocol                 | [`pgwire`](crates/pgwire)                                                                                             |
+| Parser and values             | [`pgparser`](crates/pgparser), [`pgtypes`](crates/pgtypes)                                                            |
+| Execution                     | [`pgexec`](crates/pgexec), [`pgcatalog`](crates/pgcatalog)                                                            |
+| Storage and MVCC              | [`pgkv`](crates/pgkv), [`pgmvcc`](crates/pgmvcc)                                                                      |
+| Distributed runtime           | [`gres-substrate`](crates/gres-substrate), [`gres-ranges`](crates/gres-ranges), [`gres-control`](crates/gres-control) |
+| PostgreSQL differential tests | [`gres-conformance`](crates/gres-conformance)                                                                         |
 
 The local server runs either in memory or on a durable local data directory.
 The optional substrate mode stores tenant WAL in an external replicated log and

@@ -27,7 +27,7 @@ manager.wait_for_targets(&target_hwms).await;   // catch up to HWM
 ```
 
 Replay is O(all segments ever recorded). This mirrors Kafka's model
-*before* its `RemoteLogMetadataSnapshotFile`; 48p adds the snapshot.
+_before_ its `RemoteLogMetadataSnapshotFile`; 48p adds the snapshot.
 
 ## Approach (local on-disk snapshot, Kafka's model)
 
@@ -38,7 +38,7 @@ One snapshot per broker under the data dir, e.g.
 
 - format version (u16);
 - per-metadata-partition committed offset: `Vec<(partition: i32, offset:
-  i64)>` — the highest offset applied into the cache for each partition;
+i64)>` — the highest offset applied into the cache for each partition;
 - the full cache: every partition's `RemoteLogSegmentMetadata` (all
   states, terminal included) and `RemotePartitionDeleteMetadata`.
 
@@ -87,7 +87,7 @@ A snapshotter task in `manager.rs`:
    to empty cache + offsets all `-1` (full replay — same as today, so a
    bad snapshot is never fatal).
 2. Build the 48o assignment as `PartitionStart { partition, start_offset:
-   committed + 1 }` for each partition.
+committed + 1 }` for each partition.
 3. `wait_for_targets(&target_hwms)` against current HWMs as before — the
    pump now only needs to apply the delta from `committed + 1` to HWM.
 

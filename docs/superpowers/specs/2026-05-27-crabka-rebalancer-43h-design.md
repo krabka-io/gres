@@ -18,7 +18,7 @@ the broker list lands in `ClusterState::brokers` and is shared via
 should consume the same handle.
 
 Kafka has no protocol surface for advertising the broker's metrics
-endpoint, so the *port* still has to come from the operator. The
+endpoint, so the _port_ still has to come from the operator. The
 broker's slice-39 metrics endpoint defaults to `0.0.0.0:9404`; the
 operator templates broker pods with the same port. A single
 `--metrics-port` flag (default `9404`) handles the uniform case;
@@ -135,13 +135,13 @@ ignored; documented in the flag's doc comment.
 
 ## Error handling
 
-| Failure                                          | Surface                                                                  |
-|--------------------------------------------------|---------------------------------------------------------------------------|
-| No snapshot yet (cold start)                     | `current()` returns empty Vec; loop tick does nothing. First ingest populates; next scrape cycle picks up.|
-| Broker with empty `host` in metadata             | Skipped from `current()` with a one-time WARN per `broker_id`.            |
-| Scrape fails at a discovered target              | Existing `ScrapeLogLevel::Warn` (first-time failure) / `Recovered` / `Debug`. No new error path. |
-| Both `--metrics-scrape-targets` AND `--metrics-port` set | Static wins; port silently ignored. Documented in `--help`.       |
-| `--metrics-port 0` (or other invalid u16)        | Clap rejects at CLI parse — `u16` typed arg.                              |
+| Failure                                                  | Surface                                                                                                    |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| No snapshot yet (cold start)                             | `current()` returns empty Vec; loop tick does nothing. First ingest populates; next scrape cycle picks up. |
+| Broker with empty `host` in metadata                     | Skipped from `current()` with a one-time WARN per `broker_id`.                                             |
+| Scrape fails at a discovered target                      | Existing `ScrapeLogLevel::Warn` (first-time failure) / `Recovered` / `Debug`. No new error path.           |
+| Both `--metrics-scrape-targets` AND `--metrics-port` set | Static wins; port silently ignored. Documented in `--help`.                                                |
+| `--metrics-port 0` (or other invalid u16)                | Clap rejects at CLI parse — `u16` typed arg.                                                               |
 
 ## Testing
 
