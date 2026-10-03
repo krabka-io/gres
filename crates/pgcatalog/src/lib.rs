@@ -3,7 +3,7 @@
 //! The catalog holds tables and their columns, and does CRUD with `PostgreSQL`
 //! error codes. SP3's KV layer stores the data.
 
-#![doc(html_root_url = "https://docs.rs/crabka-pgcatalog/0.4.1")]
+#![doc(html_root_url = "https://docs.rs/crabka-pgcatalog/0.4.2")]
 
 pub mod largeobject;
 pub mod policy;

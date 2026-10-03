@@ -53,7 +53,7 @@
 //! schema-registry or serde integration can sit on top without constraining the
 //! producer API.
 
-#![doc(html_root_url = "https://docs.rs/crabka-client-producer/0.4.1")]
+#![doc(html_root_url = "https://docs.rs/crabka-client-producer/0.4.2")]
 
 mod accumulator;
 mod builder;

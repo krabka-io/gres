@@ -1,6 +1,6 @@
 //! Postgres v3 wire protocol implementation for crabgresql.
 
-#![doc(html_root_url = "https://docs.rs/crabka-pgwire/0.4.1")]
+#![doc(html_root_url = "https://docs.rs/crabka-pgwire/0.4.2")]
 
 pub mod engine;
 pub mod error;

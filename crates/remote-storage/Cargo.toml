@@ -20,8 +20,8 @@ workspace = true
 [dependencies]
 base64 = { workspace = true }
 bytes = { workspace = true }
-crabka-ids = { version = "0.4.1", path = "../ids" }
-crabka-object-store = { version = "0.4.1", path = "../object-store" }
+crabka-ids = { version = "0.4.2", path = "../ids" }
+crabka-object-store = { version = "0.4.2", path = "../object-store" }
 crabka-units = { workspace = true }
 object_store = { workspace = true }
 thiserror = { workspace = true }
@@ -31,8 +31,8 @@ uuid = { workspace = true }
 
 [dev-dependencies]
 assert2 = { workspace = true }
-crabka-log = { version = "0.4.1", path = "../log" }
-crabka-protocol = { version = "0.4.1", path = "../protocol", default-features = false }
+crabka-log = { version = "0.4.2", path = "../log" }
+crabka-protocol = { version = "0.4.2", path = "../protocol", default-features = false }
 sha2 = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }

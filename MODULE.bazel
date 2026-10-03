@@ -7,7 +7,7 @@ and Cargo.lock instead of maintaining a second dependency graph.
 
 module(
     name = "gres",
-    version = "0.4.1",
+    version = "0.4.2",
 )
 
 bazel_dep(name = "platforms", version = "1.1.0")
