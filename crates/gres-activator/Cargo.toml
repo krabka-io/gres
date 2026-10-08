@@ -19,7 +19,7 @@ workspace = true
 async-trait = { workspace = true }
 bytes = { workspace = true }
 clap = { workspace = true, features = ["derive", "env"] }
-krabka-client-core = { version = "0.4.2", path = "../client-core" }
+krabka-client-core = { version = "0.6.0" }
 krabka-gres-control = { version = "0.4.2", path = "../gres-control" }
 krabka-pgwire = { version = "0.4.2", path = "../pgwire" }
 krabka-units = { workspace = true }

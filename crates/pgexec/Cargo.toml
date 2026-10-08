@@ -28,7 +28,7 @@ krabka-pgwire = { version = "0.4.2", path = "../pgwire" }
 # W3C trace-context parsing for the `crabka.traceparent` GUC ingress. A leaf
 # crate by design: `krabka-telemetry` is `publish = false`, and this crate is
 # published.
-krabka-trace-context = { version = "0.4.2", path = "../trace-context" }
+krabka-trace-context = { version = "0.6.0" }
 bytes = { workspace = true }
 shlex = { workspace = true }
 tracing = { workspace = true }

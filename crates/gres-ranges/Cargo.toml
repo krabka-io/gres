@@ -21,7 +21,7 @@ workspace = true
 async-trait = { workspace = true }
 arc-swap = { workspace = true }
 krabka-gres-control = { version = "0.4.2", path = "../gres-control" }
-krabka-security = { path = "../security" }
+krabka-security = { version = "0.6.0" }
 krabka-pgcatalog = { version = "0.4.2", path = "../pgcatalog" }
 krabka-pgexec = { version = "0.4.2", path = "../pgexec" }
 krabka-pgkv = { version = "0.4.2", path = "../pgkv" }
@@ -32,7 +32,7 @@ krabka-pgwire = { version = "0.4.2", path = "../pgwire" }
 # W3C trace-context propagation across the range RPC hop. Deliberately *not*
 # `krabka-telemetry`, which pulls in axum, tonic and the OTLP exporter that a
 # transport crate has no business linking.
-krabka-trace-context = { version = "0.4.2", path = "../trace-context" }
+krabka-trace-context = { version = "0.6.0" }
 krabka-units = { workspace = true }
 derive_more = { workspace = true, features = ["display", "from", "into", "from_str"] }
 futures = { workspace = true }
@@ -48,8 +48,8 @@ tracing = { workspace = true }
 
 [dev-dependencies]
 assert2 = { workspace = true }
-krabka-broker = { path = "../broker" }
-krabka-client-admin = { path = "../client-admin" }
+krabka-broker = { version = "0.7.0" }
+krabka-client-admin = { version = "0.6.0" }
 # Tracing assertions run against exported `SpanData`, not live `Span` handles:
 # `tracing-opentelemetry` resolves a span's parent and trace id at close, so a
 # live handle reports the wrong tree.

@@ -3672,7 +3672,6 @@ impl Engine for SqlEngine {
 mod tests {
     use krabka_pgcatalog::RelationName;
     use krabka_pgwire::engine::Session;
-    use krabka_units::convert::{ByteSizeExt as _, TimeExt as _};
     use tokio::sync::{Barrier, Notify};
 
     use super::*;

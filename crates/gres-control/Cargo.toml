@@ -19,10 +19,10 @@ workspace = true
 
 [dependencies]
 bytes = { workspace = true }
-krabka-client-admin = { version = "0.4.2", path = "../client-admin" }
-krabka-client-core = { version = "0.4.2", path = "../client-core" }
-krabka-client-producer = { version = "0.4.2", path = "../client-producer" }
-krabka-protocol = { version = "0.4.2", path = "../protocol", default-features = false }
+krabka-client-admin = { version = "0.6.0" }
+krabka-client-core = { version = "0.6.0" }
+krabka-client-producer = { version = "0.6.0" }
+krabka-protocol = { version = "0.6.0", default-features = false }
 krabka-units = { workspace = true }
 refined_type = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
@@ -36,7 +36,7 @@ uuid = { workspace = true }
 [dev-dependencies]
 static_assertions = "1"
 assert2 = { workspace = true }
-krabka-broker = { version = "0.4.2", path = "../broker", features = ["test-helpers"] }
+krabka-broker = { version = "0.7.0", features = ["test-helpers"] }
 proptest = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

@@ -3348,16 +3348,16 @@ mod tests {
     fn write_fixture(dir: &tempfile::TempDir, name: &str, fixture: &str) -> PathBuf {
         let path = dir.path().join(name);
         let contents: &[u8] = match fixture {
-            "dev_cert.pem" => include_bytes!("../../security/tests/fixtures/dev_cert.pem"),
-            "dev_key.pem" => include_bytes!("../../security/tests/fixtures/dev_key.pem"),
+            "dev_cert.pem" => include_bytes!("../tests/fixtures/tls/dev_cert.pem"),
+            "dev_key.pem" => include_bytes!("../tests/fixtures/tls/dev_key.pem"),
             "dev_client_ca.pem" => {
-                include_bytes!("../../security/tests/fixtures/dev_client_ca.pem")
+                include_bytes!("../tests/fixtures/tls/dev_client_ca.pem")
             }
             "dev_client_cert.pem" => {
-                include_bytes!("../../security/tests/fixtures/dev_client_cert.pem")
+                include_bytes!("../tests/fixtures/tls/dev_client_cert.pem")
             }
             "dev_client_key.pem" => {
-                include_bytes!("../../security/tests/fixtures/dev_client_key.pem")
+                include_bytes!("../tests/fixtures/tls/dev_client_key.pem")
             }
             _ => unreachable!("fixture name is fixed by this module"),
         };
@@ -3379,7 +3379,7 @@ mod tests {
     #[tokio::test]
     async fn mtls_allowlisted_principal_executes_sql_and_scan() {
         let fixture = MtlsFixture::new(BTreeSet::from([
-            "CN=test-client,OU=integration,O=crabka".to_string()
+            "CN=test-client,OU=integration,O=krabka".to_string()
         ]));
         let address = spawn_tls(Arc::new(EchoService::default()), fixture.server).await;
         let client = FramedTcpClient::with_tls(fixture.client).expect("mTLS client");
@@ -3459,7 +3459,7 @@ mod tests {
     #[tokio::test]
     async fn mtls_allowlisted_principal_executes_generation_fenced_control() {
         let fixture = MtlsFixture::new(BTreeSet::from([
-            "CN=test-client,OU=integration,O=crabka".to_string()
+            "CN=test-client,OU=integration,O=krabka".to_string()
         ]));
         let control = Arc::new(crate::control::GenerationFencedRangeControl::new(
             "tenant-a",
@@ -3515,7 +3515,7 @@ mod tests {
     #[tokio::test]
     async fn plaintext_framing_cannot_invoke_tls_range_service() {
         let fixture = MtlsFixture::new(BTreeSet::from([
-            "CN=test-client,OU=integration,O=crabka".to_string()
+            "CN=test-client,OU=integration,O=krabka".to_string()
         ]));
         let service = Arc::new(EchoService::default());
         let address = spawn_tls(service.clone(), fixture.server).await;

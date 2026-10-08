@@ -19,7 +19,7 @@ use krabka_gres_control::{
     RangeRetirementPhase, Registry, SplitOperationPhase, SplitOperationRecord, TenantName,
     TenantRecord,
 };
-use krabka_operator::{
+use krabka_gres_operator::{
     context::{GresControlHandle, GresControlLike, GresControlWriteError},
     controller::{
         gres_split_operation::{
@@ -208,7 +208,13 @@ impl RangeRetirementAdmin for CountingRetirementAdmin {
             .expect("retirement delete ledger")
             .record_delete_request(&self.expected_topic, names)
             .map_err(krabka_client_admin::AdminError::Protocol)?;
-        let outcomes = self.inner.delete_topics(names, timeout).await?;
+        let outcomes = self
+            .inner
+            .delete_topics(
+                names,
+                krabka_client_admin::TopicMutationOptions::with_timeout(timeout),
+            )
+            .await?;
         if self.error_after_delete && outcomes.iter().all(|outcome| outcome.error.is_none()) {
             self.error_after_delete = false;
             self.ledger
@@ -1167,8 +1173,9 @@ async fn prepare_split_foundation() -> SplitFoundationSetup {
                 partitions: 1,
                 replicas: 1,
                 configs: BTreeMap::default(),
+                replica_assignments: BTreeMap::default(),
             }],
-            krabka_units::secs(30),
+            krabka_client_admin::TopicMutationOptions::with_timeout(krabka_units::secs(30)),
         )
         .await
         .expect("create split sentinel");
@@ -2223,8 +2230,9 @@ async fn prepare_move_nemesis(kill_point: SourceKillPoint) -> PreparedMoveNemesi
                 partitions: 1,
                 replicas: 1,
                 configs: BTreeMap::default(),
+                replica_assignments: BTreeMap::default(),
             }],
-            krabka_units::secs(30),
+            krabka_client_admin::TopicMutationOptions::with_timeout(krabka_units::secs(30)),
         )
         .await
         .expect("create sentinel topic");

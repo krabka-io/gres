@@ -937,10 +937,14 @@ async fn provision_control(bootstrap: &str, tenant: &str, r0_port: u16, r1_port:
         partitions: 1,
         replicas: 1,
         configs: BTreeMap::new(),
+        replica_assignments: BTreeMap::new(),
     })
     .collect::<Vec<_>>();
     let outcomes = admin
-        .create_topics(&topics, krabka_units::secs(30))
+        .create_topics(
+            &topics,
+            krabka_client_admin::TopicMutationOptions::with_timeout(krabka_units::secs(30)),
+        )
         .await
         .expect("create WAL topics");
     assert!(

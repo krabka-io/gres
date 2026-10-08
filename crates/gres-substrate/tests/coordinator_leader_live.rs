@@ -17,8 +17,7 @@ use krabka_gres_substrate::{
 use krabka_pgkv::{Kv, MemKv, WriteOp};
 use krabka_protocol::owned::find_coordinator_request::FindCoordinatorRequest;
 
-#[path = "../../broker/tests/support/mod.rs"]
-mod broker_support;
+mod support;
 
 fn request(seq: u64, key: &[u8]) -> GroupCommitRequest {
     GroupCommitRequest {
@@ -74,7 +73,7 @@ fn raise_fd_limit_for_cluster() {}
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn fencing_falls_back_to_end_txn_when_coordinator_differs_from_partition_leader() {
     raise_fd_limit_for_cluster();
-    let cluster = broker_support::start_n_node_with_retry(3).await;
+    let cluster = support::start_n_node_with_retry(3).await;
     for (broker, _, _) in &cluster {
         broker.wait_until_brokers_registered(3).await;
     }

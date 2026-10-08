@@ -37,7 +37,7 @@ use krabka_pgparser::ast::{
     TableFuncCall, TableFuncColumnDef,
 };
 use krabka_pgtypes::{
-    ArrayDim, ArrayValue, ColumnType, Datum, ElemType, RecordValue, TsVector, TypeError, Weight,
+    ArrayValue, ColumnType, Datum, ElemType, RecordValue, TsVector, TypeError, Weight,
     numeric::NumericValue, usertype::UserTypeRef,
 };
 use krabka_pgwire::engine::FieldDescription;
@@ -3470,7 +3470,7 @@ fn require_default_parser(parser: &Datum) -> Result<(), ExecError> {
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use krabka_pgtypes::{ArrayValue, JsonbValue, jsonb};
+    use krabka_pgtypes::{ArrayDim, ArrayValue, JsonbValue, jsonb};
     use krabka_pgwire::engine::{Engine, QueryResult, Session};
 
     use super::*;

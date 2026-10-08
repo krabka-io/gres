@@ -16,15 +16,13 @@ concurrency:
 
 env:
   CORE_PACKAGES: >-
-    -p krabka-units -p krabka-trace-context -p krabka-pgtypes
-    -p krabka-pgparser -p krabka-pgwire -p krabka-pgkv -p krabka-pgmvcc
-    -p krabka-pgcatalog -p krabka-pgexec -p krabka-gres-conformance
-    -p krabka-client-producer
+    -p krabka-pgtypes -p krabka-pgparser -p krabka-pgwire -p krabka-pgkv
+    -p krabka-pgmvcc -p krabka-pgcatalog -p krabka-pgexec
+    -p krabka-gres-conformance
   CORE_TARGETS: >-
-    //crates/units/... //crates/trace-context/... //crates/pgtypes/...
-    //crates/pgparser/... //crates/pgwire/... //crates/pgkv/...
-    //crates/pgmvcc/... //crates/pgcatalog/... //crates/pgexec/...
-    //crates/gres-conformance/... //crates/client-producer/...
+    //crates/pgtypes/... //crates/pgparser/... //crates/pgwire/...
+    //crates/pgkv/... //crates/pgmvcc/... //crates/pgcatalog/...
+    //crates/pgexec/... //crates/gres-conformance/...
 
 jobs:
   verify:
@@ -41,7 +39,7 @@ jobs:
           repository-cache: true
       - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
         with:
-          toolchain: 1.97.1
+          toolchain: 1.99.0
           components: clippy
       - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
         with:
@@ -90,7 +88,7 @@ jobs:
       - uses: ./.github/actions/free-disk-space
       - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
         with:
-          toolchain: 1.97.1
+          toolchain: 1.99.0
       - name: driver capture safety contract
         run: |
           python3 -m unittest \

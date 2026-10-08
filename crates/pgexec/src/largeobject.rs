@@ -961,7 +961,7 @@ fn large_object_read_too_large() -> ExecError {
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use krabka_pgkv::{Kv as _, MemKv};
+    use krabka_pgkv::MemKv;
 
     use super::*;
 

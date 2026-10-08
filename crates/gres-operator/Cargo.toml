@@ -1,0 +1,75 @@
+[package]
+name = "krabka-gres-operator"
+publish = false
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+description = "Kubernetes operator for Crabka Gres fleets and tenants"
+repository = "https://github.com/krabka-io/gres"
+homepage = "https://github.com/krabka-io/gres"
+documentation = "https://docs.rs/krabka-gres-operator"
+readme = "README.md"
+keywords = ["postgres", "kubernetes", "operator", "crabka", "gres"]
+categories = ["config", "database-implementations"]
+
+[[bin]]
+name = "krabka-gres-operator"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+axum = { workspace = true }
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
+clap = { workspace = true, features = ["env"] }
+futures = { workspace = true }
+hex = { workspace = true }
+k8s-openapi = { workspace = true, features = ["schemars"] }
+krabka-client-admin = { version = "0.6.0" }
+krabka-client-core = { version = "0.6.0" }
+krabka-client-producer = { version = "0.6.0" }
+krabka-gres-control = { version = "0.4.2", path = "../gres-control" }
+krabka-gres-ranges = { version = "0.4.2", path = "../gres-ranges" }
+krabka-gres-substrate = { version = "0.4.2", path = "../gres-substrate" }
+krabka-logfmt = { version = "0.7.0" }
+krabka-object-store = { version = "0.7.0" }
+krabka-pgexec = { version = "0.4.2", path = "../pgexec" }
+krabka-pgkv = { version = "0.4.2", path = "../pgkv" }
+krabka-schema-serde = { version = "0.4.2" }
+krabka-security = { workspace = true }
+krabka-units = { workspace = true }
+kube = { workspace = true }
+native-tls = { workspace = true }
+object_store = { workspace = true }
+postgres-native-tls = { workspace = true }
+prometheus-client = { workspace = true }
+refined_type = { workspace = true }
+rustls = { workspace = true }
+schemars = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+time = { version = "0.3", default-features = false, features = ["macros", "parsing", "formatting"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "signal", "sync", "time"] }
+tokio-postgres = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+x509-parser = { workspace = true }
+
+[dev-dependencies]
+assert2 = { workspace = true }
+base64 = { workspace = true }
+http = "1"
+http-body-util = "0.1"
+hyper = { version = "1", features = ["client", "http1"] }
+mutants = { workspace = true }
+tempfile = { workspace = true }
+tower = { workspace = true }
+uuid = { workspace = true }

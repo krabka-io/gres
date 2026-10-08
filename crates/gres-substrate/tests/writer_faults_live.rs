@@ -43,7 +43,7 @@ impl OneShotFault {
 impl WalWriterFaultInjector for OneShotFault {
     fn inject(&self, stage: WalWriterFaultStage) -> Option<ProducerError> {
         (stage == self.stage && !self.fired.swap(true, Ordering::SeqCst))
-            .then_some(ProducerError::BufferFull)
+            .then_some(ProducerError::SendTimeout)
     }
 }
 
@@ -168,7 +168,11 @@ async fn transient_pre_end_txn_failure_aborts_and_next_group_commits() {
         .commit_group(request(0, b"row/failed", b"must-not-appear"))
         .await
         .expect_err("faulted group must fail after a completed abort");
-    assert!(first.to_string().contains("send buffer full"));
+    assert!(
+        first
+            .to_string()
+            .contains("the batch was not acknowledged before its retries ran out")
+    );
     writer
         .commit_group(request(0, b"row/successor", b"committed"))
         .await

@@ -1,0 +1,45 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: pgdog-admin
+type: Opaque
+stringData:
+  password: change-me
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: alice-gres-password
+type: Opaque
+stringData:
+  password: change-me
+---
+apiVersion: krabka.io/v1alpha1
+kind: Gres
+metadata:
+  name: analytics
+spec:
+  kafka:
+    bootstrapServers: demo-kafka-bootstrap.kafka.svc:9092
+    sasl: false
+  pgdog:
+    replicas: 1
+    listenPort: 6432
+    adminSecretRef:
+      name: pgdog-admin
+      key: password
+  defaults:
+    walReplication: 3
+    checkpointFrames: 10000
+    checkpointSize: 128MiB
+---
+apiVersion: krabka.io/v1alpha1
+kind: GresTenant
+metadata:
+  name: alice
+spec:
+  gres: analytics
+  user: alice
+  passwordSecretRef:
+    name: alice-gres-password
+    key: password

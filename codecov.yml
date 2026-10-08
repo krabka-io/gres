@@ -34,26 +34,6 @@ coverage:
         # still guards overall repo coverage.
         informational: true
 
-# Auto-generated protocol codecs are machine-emitted (encode/decode/populate
-# per record type) and exercised indirectly via the round-trip/integration
-# suites; holding them to per-line patch coverage is noise, so exclude them
-# from coverage entirely.
-ignore:
-  - "crates/protocol/generated/**"
-  # Binary entrypoints are arg-parsing + client wiring + a serve loop — glue
-  # with no unit-testable logic. For the schema-registry binary, the
-  # unit-testable config assembly (CLI flags -> SecurityConfig) lives in the
-  # `cli` lib module and is
-  # covered there; what remains in main() is arg-parsing + the serve/election
-  # loop, exercised end-to-end by the in-process ha.rs / security.rs tests.
-  - "crates/schema-registry/src/bin/**"
-  # The operator's run loop (kube client init, health server, controller spawns,
-  # tokio::select supervision, shutdown) is the lib-side entrypoint glue —
-  # arg-parsing's twin, 0% unit-coverable and exercised only by the kind e2e.
-  # Same rationale as the binary entrypoints above; the controllers' own
-  # reconcile logic stays measured (it's in controller/*.rs, not here).
-  - "crates/operator/src/run.rs"
-
 flags:
   unit:
     carryforward: true

@@ -4,7 +4,7 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 
 gate=scripts/gres-kind-lifecycle.sh
-controller=crates/operator/src/controller/gres_tenant.rs
+controller=crates/gres-operator/src/controller/gres_tenant.rs
 test -x "$gate"
 
 required_patterns=(

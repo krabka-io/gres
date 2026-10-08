@@ -187,9 +187,8 @@ fn recovery_config(bootstrap: &str, tenant: &str, retry_timeout: Duration) -> Li
             defaults.request_timeout(),
             defaults.retries(),
             defaults.retry_backoff(),
-            defaults.routing_retry_budget(),
+            defaults.retry_backoff_max(),
             retry_timeout,
-            defaults.init_max_backoff(),
             defaults.transaction_timeout(),
         )
         .expect("retry policy"),

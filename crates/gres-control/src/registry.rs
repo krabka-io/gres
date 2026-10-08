@@ -10,7 +10,7 @@ use std::{
 };
 
 use bytes::Bytes;
-use krabka_client_admin::{AdminClient, CreateTopicSpec};
+use krabka_client_admin::{AdminClient, CreateTopicSpec, TopicMutationOptions};
 use krabka_client_core::{
     ClientDnsTimeout, ClientFrameMax, Connection, ConnectionDispatchQueueCapacity,
     ConnectionOptions, DEFAULT_FETCH_RESPONSE_MAX, FetchMinBytes, IsolatedFetch,
@@ -1055,8 +1055,7 @@ impl Registry {
             &self.policy,
         )
         .await?;
-        let rx = self.producer.send(producer_record).await;
-        rx.await.map_err(|_| ControlError::ProducerAckDropped)??;
+        self.producer.send(producer_record).await?;
         Ok(())
     }
 
@@ -1203,7 +1202,7 @@ impl Registry {
     }
 
     async fn produce(&self, key: Vec<u8>, value: Option<Vec<u8>>) -> Result<i64, ControlError> {
-        let rx = self
+        let metadata = self
             .producer
             .send(ProducerRecord {
                 topic: TENANT_REGISTRY_TOPIC.to_string(),
@@ -1212,8 +1211,7 @@ impl Registry {
                 value: value.map(Bytes::from),
                 ..Default::default()
             })
-            .await;
-        let metadata = rx.await.map_err(|_| ControlError::ProducerAckDropped)??;
+            .await?;
         Ok(metadata.offset)
     }
 
@@ -1708,7 +1706,9 @@ async fn ensure_compacted_single_partition_topic(
     let mut admin =
         AdminClient::connect_with_options(&bootstrap_addrs, registry_admin_options(policy)).await?;
     let (spec, timeout) = compacted_topic_request(topic, replicas, policy);
-    let outcomes = admin.create_topics(&[spec], timeout).await?;
+    let outcomes = admin
+        .create_topics(&[spec], TopicMutationOptions::with_timeout(timeout))
+        .await?;
     if let Some(outcome) = outcomes.into_iter().next() {
         match outcome.error {
             None => {}
@@ -1756,6 +1756,7 @@ fn compacted_topic_request(
             partitions: 1,
             replicas,
             configs: BTreeMap::from([("cleanup.policy".to_string(), "compact".to_string())]),
+            replica_assignments: BTreeMap::new(),
         },
         policy.topic_create_timeout,
     )
@@ -1889,12 +1890,12 @@ fn split_bootstrap(bootstrap: &str) -> Vec<String> {
 fn registry_admin_options(policy: &RegistryPolicy) -> ConnectionOptions {
     ConnectionOptions {
         dns_timeout: policy.reader_admin_dns_timeout(),
-        connect_timeout: krabka_units::secs(5),
+        socket_connection_setup_timeout: krabka_units::secs(5),
         request_timeout: krabka_units::secs(30),
         client_id: "krabka-operator".to_string(),
         dispatch_queue_capacity: policy.dispatch_queue_capacity,
         frame_max: policy.frame_max,
-        security: None,
+        ..ConnectionOptions::default()
     }
 }
 

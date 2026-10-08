@@ -274,11 +274,12 @@ pub(crate) async fn scan_topic_with_policy(
         krabka_client_core::ConnectionOptions {
             client_id: "krabka-fdw".into(),
             dns_timeout,
-            connect_timeout: policy.connect_timeout,
+            socket_connection_setup_timeout: policy.connect_timeout,
             request_timeout: policy.request_timeout,
             dispatch_queue_capacity,
             frame_max,
             security: profile.security.clone().map(Box::new),
+            ..krabka_client_core::ConnectionOptions::default()
         },
     )
     .await
@@ -574,7 +575,7 @@ fn connection_options(
 ) -> krabka_client_core::ConnectionOptions {
     krabka_client_core::ConnectionOptions {
         client_id: "krabka-fdw".to_string(),
-        connect_timeout: policy.connect_timeout,
+        socket_connection_setup_timeout: policy.connect_timeout,
         request_timeout: policy.request_timeout,
         dispatch_queue_capacity,
         frame_max,
@@ -745,7 +746,12 @@ mod tests {
         };
         let options = connection_options(&profile, dispatch, frame_max, policy);
 
-        assert!((options.connect_timeout, options.request_timeout) == (millis(37), millis(41)));
+        assert!(
+            (
+                options.socket_connection_setup_timeout,
+                options.request_timeout
+            ) == (millis(37), millis(41))
+        );
         assert!(options.dispatch_queue_capacity == dispatch);
         assert!(options.frame_max == frame_max);
     }
