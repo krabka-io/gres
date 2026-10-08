@@ -36,8 +36,8 @@ krabka-client-producer = { version = "0.6.0" }
 krabka-gres-control = { version = "0.4.2", path = "../gres-control" }
 krabka-gres-ranges = { version = "0.4.2", path = "../gres-ranges" }
 krabka-gres-substrate = { version = "0.4.2", path = "../gres-substrate" }
-krabka-logfmt = { version = "0.7.0" }
-krabka-object-store = { version = "0.7.0" }
+krabka-logfmt = { version = "1.0.0" }
+krabka-object-store = { version = "1.0.0" }
 krabka-pgexec = { version = "0.4.2", path = "../pgexec" }
 krabka-pgkv = { version = "0.4.2", path = "../pgkv" }
 krabka-schema-serde = { version = "0.4.2" }

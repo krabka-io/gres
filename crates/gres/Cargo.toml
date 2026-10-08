@@ -30,13 +30,13 @@ krabka-gres-control = { path = "../gres-control" }
 krabka-pgcatalog = { path = "../pgcatalog" }
 krabka-gres-ranges = { path = "../gres-ranges" }
 krabka-gres-substrate = { path = "../gres-substrate" }
-krabka-object-store = { version = "0.7.0" }
+krabka-object-store = { version = "1.0.0" }
 krabka-client-admin = { version = "0.6.0" }
 krabka-client-core = { version = "0.6.0" }
 krabka-client-producer = { version = "0.6.0" }
 krabka-protocol = { version = "0.6.0", default-features = false }
 krabka-security = { version = "0.6.0" }
-krabka-telemetry = { version = "0.7.0" }
+krabka-telemetry = { version = "1.0.0" }
 krabka-units = { workspace = true }
 bytes = { workspace = true }
 clap = { workspace = true, features = ["env"] }
@@ -59,7 +59,7 @@ futures-util = { workspace = true }
 async-trait = { workspace = true }
 assert2 = { workspace = true }
 bytes = { workspace = true }
-krabka-broker = { version = "0.7.0" }
+krabka-broker = { version = "1.0.0" }
 krabka-gres-control = { path = "../gres-control" }
 krabka-pgmvcc = { path = "../pgmvcc" }
 krabka-pgtypes = { path = "../pgtypes" }
