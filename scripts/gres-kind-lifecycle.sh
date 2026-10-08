@@ -173,8 +173,8 @@ timeout 90s kind delete cluster --name "$CLUSTER" >/dev/null 2>&1 || true
 timeout 180s kind create cluster --name "$CLUSTER" --wait 120s
 
 timeout 1800s cargo build --locked --release \
-    -p krabka-cli -p krabka-operator -p krabka-broker -p krabka-gres -p krabka-gres-activator
-build_image krabka-operator "krabka-operator:$IMAGE_TAG"
+    -p krabka-gres-operator -p krabka-broker -p krabka-gres -p krabka-gres-activator
+build_image krabka-gres-operator "krabka-gres-operator:$IMAGE_TAG"
 build_image krabka-broker "krabka-broker:$IMAGE_TAG"
 build_image krabka-gres "krabka-gres:$IMAGE_TAG"
 build_image krabka-gres-activator "krabka-gres-activator:$IMAGE_TAG"
@@ -182,7 +182,7 @@ timeout 180s docker pull "$PGDOG_IMAGE"
 # PgDog publishes a multi-platform OCI index that `kind load docker-image`
 # cannot reliably flatten. Let containerd pull the exact pinned digest/tag.
 
-# The full operator starts every controller, so install every watched CRD.
+# The Gres operator watches only the Gres and GresTenant CRDs.
 kubectl apply -f deploy/crds
 
 # Real object service used by compute final-checkpoint writes and controller
@@ -230,11 +230,10 @@ spec:
       serviceAccountName: krabka-gres-operator
       containers:
         - name: operator
-          image: krabka-operator:$IMAGE_TAG
+          image: krabka-gres-operator:$IMAGE_TAG
           imagePullPolicy: Never
           args:
             - run
-            - --default-broker-image=krabka-broker:$IMAGE_TAG
             - --default-gres-image=krabka-gres:$IMAGE_TAG
             - --default-gres-activator-image=krabka-gres-activator:$IMAGE_TAG
             - --default-pgdog-image=$PGDOG_IMAGE
@@ -251,25 +250,41 @@ spec:
 YAML
 timeout 180s kubectl rollout status -n krabka-operator deploy/krabka-gres-operator --timeout=170s
 
-kubectl apply -f - <<'YAML'
-apiVersion: crabka.io/v1alpha1
-kind: Kafka
-metadata: {name: demo}
-spec: {kafkaVersion: "3.7.0"}
----
-apiVersion: crabka.io/v1alpha1
-kind: KafkaNodePool
-metadata:
-  name: brokers
-  labels: {crabka.io/cluster: demo}
+# Kafka clusters belong to krabka-operator, so this gate runs one combined
+# controller and broker node directly. The Gres CR names it by bootstrap address.
+kubectl apply -f - <<YAML
+apiVersion: v1
+kind: Service
+metadata: {name: demo-broker-headless}
 spec:
-  roles: [Controller, Broker]
+  clusterIP: None
+  selector: {app: demo-brokers}
+  ports: [{name: kafka, port: 9092, targetPort: 9092}]
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: {name: demo-brokers}
+spec:
+  serviceName: demo-broker-headless
   replicas: 1
-  nodeIdStart: 0
-  storage: {type: Ephemeral}
+  selector: {matchLabels: {app: demo-brokers}}
+  template:
+    metadata: {labels: {app: demo-brokers}}
+    spec:
+      containers:
+        - name: broker
+          image: krabka-broker:$IMAGE_TAG
+          imagePullPolicy: Never
+          args:
+            - --listen-addr=0.0.0.0:9092
+            - --advertised-listener=demo-brokers-0.demo-broker-headless.default.svc:9092
+            - --log-dir=/var/lib/crabka/data
+          ports: [{containerPort: 9092}]
+          readinessProbe: {tcpSocket: {port: 9092}, periodSeconds: 2}
+          volumeMounts: [{name: data, mountPath: /var/lib/crabka}]
+      volumes: [{name: data, emptyDir: {}}]
 YAML
-deadline_wait 300 "Kafka Ready" \
-    "[ \"\$(kubectl get kafka demo -o jsonpath='{.status.conditions[?(@.type==\"Ready\")].status}' 2>/dev/null)\" = True ]"
+timeout 300s kubectl rollout status statefulset/demo-brokers --timeout=290s
 
 # MinIO client creates the bucket before any final checkpoint can be published.
 kubectl run minio-create --restart=Never --image=quay.io/minio/mc:RELEASE.2025-04-16T18-13-26Z \
@@ -302,11 +317,12 @@ kubectl create secret generic pgdog-admin --from-literal=password=admin-secret
 kubectl create secret generic tenant-a-password --from-literal=password="$PGPASSWORD_VALUE"
 
 kubectl apply -f - <<'YAML'
-apiVersion: crabka.io/v1alpha1
+apiVersion: krabka.io/v1alpha1
 kind: Gres
 metadata: {name: fleet}
 spec:
-  kafkaCluster: demo
+  kafka:
+    bootstrapServers: demo-brokers-0.demo-broker-headless.default.svc:9092
   pgdog:
     replicas: 1
     listenPort: 6432
@@ -321,7 +337,7 @@ spec:
     checkpointFrames: 1
     idleSeconds: 15
 ---
-apiVersion: crabka.io/v1alpha1
+apiVersion: krabka.io/v1alpha1
 kind: GresTenant
 metadata: {name: tenant-a}
 spec:
@@ -357,9 +373,9 @@ timeout 180s kubectl rollout status deploy/fleet-gres-activator --timeout=170s
 # have elapsed before the route and Deployment gates below are trusted.
 deadline_wait 120 "PgDog credential grace elapsed" pgdog_grace_elapsed
 deadline_wait 240 "initial confirmed PgDog route" \
-    '[ "$(kubectl get gres fleet -o jsonpath='"'"'{.status.confirmedPgdogConfigHash}'"'"')" = "$(kubectl get secret fleet-pgdog-config -o jsonpath='"'"'{.metadata.annotations.crabka\.io/pgdog-config-hash}'"'"')" ]'
+    '[ "$(kubectl get gres fleet -o jsonpath='"'"'{.status.confirmedPgdogConfigHash}'"'"')" = "$(kubectl get secret fleet-pgdog-config -o jsonpath='"'"'{.metadata.annotations.krabka\.io/pgdog-config-hash}'"'"')" ]'
 deadline_wait 240 "initial PgDog Deployment hash" \
-    '[ "$(kubectl get deploy fleet-pgdog -o jsonpath='"'"'{.spec.template.metadata.annotations.crabka\.io/pgdog-config-hash}'"'"')" = "$(kubectl get secret fleet-pgdog-config -o jsonpath='"'"'{.metadata.annotations.crabka\.io/pgdog-rollout-hash}'"'"')" ]'
+    '[ "$(kubectl get deploy fleet-pgdog -o jsonpath='"'"'{.spec.template.metadata.annotations.krabka\.io/pgdog-config-hash}'"'"')" = "$(kubectl get secret fleet-pgdog-config -o jsonpath='"'"'{.metadata.annotations.krabka\.io/pgdog-rollout-hash}'"'"')" ]'
 timeout 180s kubectl rollout status deploy/fleet-pgdog --timeout=170s
 
 start_pgdog_port_forward
@@ -411,9 +427,9 @@ for iteration in $(seq 1 "$ITERATIONS"); do
     deadline_wait 30 "parked WAL log directory removal" \
         "kubectl exec demo-brokers-0 -- sh -c 'test -z \"\$(find /var/lib/crabka/data -maxdepth 1 -type d -name \"__gres_wal.tenant-a.r0*-0\" -print -quit)\"' >/dev/null 2>&1"
     deadline_wait 240 "confirmed PgDog activator route" \
-        '[ "$(kubectl get gres fleet -o jsonpath='"'"'{.status.confirmedPgdogConfigHash}'"'"')" = "$(kubectl get secret fleet-pgdog-config -o jsonpath='"'"'{.metadata.annotations.crabka\.io/pgdog-config-hash}'"'"')" ]'
+        '[ "$(kubectl get gres fleet -o jsonpath='"'"'{.status.confirmedPgdogConfigHash}'"'"')" = "$(kubectl get secret fleet-pgdog-config -o jsonpath='"'"'{.metadata.annotations.krabka\.io/pgdog-config-hash}'"'"')" ]'
     deadline_wait 240 "PgDog Deployment activator hash" \
-        '[ "$(kubectl get deploy fleet-pgdog -o jsonpath='"'"'{.spec.template.metadata.annotations.crabka\.io/pgdog-config-hash}'"'"')" = "$(kubectl get secret fleet-pgdog-config -o jsonpath='"'"'{.metadata.annotations.crabka\.io/pgdog-rollout-hash}'"'"')" ]'
+        '[ "$(kubectl get deploy fleet-pgdog -o jsonpath='"'"'{.spec.template.metadata.annotations.krabka\.io/pgdog-config-hash}'"'"')" = "$(kubectl get secret fleet-pgdog-config -o jsonpath='"'"'{.metadata.annotations.krabka\.io/pgdog-rollout-hash}'"'"')" ]'
     timeout 180s kubectl rollout status deploy/fleet-pgdog --timeout=170s
     [ "$(kubectl get grestenant tenant-a -o jsonpath='{.status.lifecyclePhase}')" = suspended ] || \
         fail "PgDog rollout woke tenant before a client arrived"
@@ -426,7 +442,7 @@ for iteration in $(seq 1 "$ITERATIONS"); do
     # select the older Ready pod while a rolling update is terminating it.
     start_pgdog_port_forward
     before_generation=$(kubectl get grestenant tenant-a -o jsonpath='{.status.registryVersion}')
-    before_wake_hash=$(kubectl get secret fleet-pgdog-config -o jsonpath='{.metadata.annotations.crabka\.io/pgdog-config-hash}')
+    before_wake_hash=$(kubectl get secret fleet-pgdog-config -o jsonpath='{.metadata.annotations.krabka\.io/pgdog-config-hash}')
     before_wake_revision=$(kubectl get deploy fleet-pgdog -o jsonpath='{.metadata.annotations.deployment\.kubernetes\.io/revision}')
     start_ns=$(date +%s%N)
     latency_ms=$(measure_tls_query_ms)
@@ -439,7 +455,7 @@ for iteration in $(seq 1 "$ITERATIONS"); do
     # to direct compute legitimately changes the config and rolls the pod.
     # A no-roll assertion is therefore only sound when the observation
     # provably landed inside that window.
-    after_wake_hash=$(kubectl get secret fleet-pgdog-config -o jsonpath='{.metadata.annotations.crabka\.io/pgdog-config-hash}')
+    after_wake_hash=$(kubectl get secret fleet-pgdog-config -o jsonpath='{.metadata.annotations.krabka\.io/pgdog-config-hash}')
     after_wake_revision=$(kubectl get deploy fleet-pgdog -o jsonpath='{.metadata.annotations.deployment\.kubernetes\.io/revision}')
     observed_unix_ms=$(($(date +%s%N) / 1000000))
     kubectl port-forward deploy/tenant-a-gres 17432:5432 >"$ARTIFACT_DIR/compute-port-forward.log" 2>&1 &
@@ -482,9 +498,9 @@ for iteration in $(seq 1 "$ITERATIONS"); do
     deadline_wait 240 "active PgDog tenant credential removal" \
         "! kubectl get secret fleet-pgdog-config -o jsonpath='{.data.users\\.toml}' | base64 -d | grep -q 'g5-secret-password'"
     deadline_wait 240 "confirmed direct PgDog route" \
-        '[ "$(kubectl get gres fleet -o jsonpath='"'"'{.status.confirmedPgdogConfigHash}'"'"')" = "$(kubectl get secret fleet-pgdog-config -o jsonpath='"'"'{.metadata.annotations.crabka\.io/pgdog-config-hash}'"'"')" ]'
+        '[ "$(kubectl get gres fleet -o jsonpath='"'"'{.status.confirmedPgdogConfigHash}'"'"')" = "$(kubectl get secret fleet-pgdog-config -o jsonpath='"'"'{.metadata.annotations.krabka\.io/pgdog-config-hash}'"'"')" ]'
     deadline_wait 240 "PgDog Deployment direct hash" \
-        '[ "$(kubectl get deploy fleet-pgdog -o jsonpath='"'"'{.spec.template.metadata.annotations.crabka\.io/pgdog-config-hash}'"'"')" = "$(kubectl get secret fleet-pgdog-config -o jsonpath='"'"'{.metadata.annotations.crabka\.io/pgdog-rollout-hash}'"'"')" ]'
+        '[ "$(kubectl get deploy fleet-pgdog -o jsonpath='"'"'{.spec.template.metadata.annotations.krabka\.io/pgdog-config-hash}'"'"')" = "$(kubectl get secret fleet-pgdog-config -o jsonpath='"'"'{.metadata.annotations.krabka\.io/pgdog-rollout-hash}'"'"')" ]'
     timeout 180s kubectl rollout status deploy/fleet-pgdog --timeout=170s
     kubectl get secret fleet-pgdog-config -o jsonpath='{.data.pgdog\.toml}' \
         | base64 -d | grep -q 'host = "tenant-a-gres.default.svc.cluster.local"' || \

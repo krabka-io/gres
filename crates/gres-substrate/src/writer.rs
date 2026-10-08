@@ -722,9 +722,9 @@ impl ProducerWalWriter {
             let encoded = Bytes::from(frame.encode());
             encoded_bytes =
                 encoded_bytes.saturating_add(u64::try_from(encoded.len()).unwrap_or(u64::MAX));
-            let pending = self
+            let enqueued = self
                 .producer
-                .send(ProducerRecord {
+                .enqueue(ProducerRecord {
                     topic: self.topic.clone(),
                     partition: Some(0),
                     key: Some(Bytes::copy_from_slice(&request.generation.0.to_be_bytes())),
@@ -733,6 +733,10 @@ impl ProducerWalWriter {
                     ..ProducerRecord::default()
                 })
                 .await;
+            let pending = match enqueued {
+                Ok(pending) => pending,
+                Err(error) => return self.abort_after_send_error(transaction, error).await,
+            };
             sent.push((frame.journal_seq, pending));
         }
         span.record("pg.wal.bytes", telemetry::integer(encoded_bytes));
@@ -743,16 +747,8 @@ impl ProducerWalWriter {
                 return self.abort_after_send_error(transaction, error).await;
             }
             let metadata = match pending.await {
-                Ok(Ok(metadata)) => metadata,
-                Ok(Err(error)) => return self.abort_after_send_error(transaction, error).await,
-                Err(error) => {
-                    return self
-                        .abort_with_error(
-                            transaction,
-                            SubstrateError::Unavailable(format!("producer dropped ack: {error}")),
-                        )
-                        .await;
-                }
+                Ok(metadata) => metadata,
+                Err(error) => return self.abort_after_send_error(transaction, error).await,
             };
             frames.push(WalAppendAck {
                 offset: metadata.offset,

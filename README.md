@@ -116,16 +116,14 @@ Run the same core checks used by CI:
 ```bash
 cargo +nightly-2026-08-14 fmt --all -- --check
 cargo clippy \
-  -p krabka-units -p krabka-trace-context -p krabka-pgtypes \
-  -p krabka-pgparser -p krabka-pgwire -p krabka-pgkv \
+  -p krabka-pgtypes -p krabka-pgparser -p krabka-pgwire -p krabka-pgkv \
   -p krabka-pgmvcc -p krabka-pgcatalog -p krabka-pgexec \
   -p krabka-gres-conformance --all-targets
 
 bazel test \
-  //crates/units/... //crates/trace-context/... //crates/pgtypes/... \
-  //crates/pgparser/... //crates/pgwire/... //crates/pgkv/... \
-  //crates/pgmvcc/... //crates/pgcatalog/... //crates/pgexec/... \
-  //crates/gres-conformance/...
+  //crates/pgtypes/... //crates/pgparser/... //crates/pgwire/... \
+  //crates/pgkv/... //crates/pgmvcc/... //crates/pgcatalog/... \
+  //crates/pgexec/... //crates/gres-conformance/...
 
 cargo nextest run -p krabka-pgexec --test telemetry --test telemetry_exec
 ```

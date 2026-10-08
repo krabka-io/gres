@@ -25,41 +25,11 @@ slow-timeout = { period = "60s", terminate-after = 10 }
 path = "junit.xml"
 
 [test-groups]
-broker-jvm-acceptance = { max-threads = 1 }
-broker-share-state = { max-threads = 1 }
-broker-transactions = { max-threads = 1 }
-broker-tiered-storage-rlmm = { max-threads = 1 }
-# Chapter Gres FDW roundtrip tests: each boots an in-process broker + schema
-# registry; cap concurrency to avoid broker saturation on constrained runners.
+# Gres FDW roundtrip tests each boot an in-process broker and schema registry;
+# cap concurrency to avoid broker saturation on constrained runners.
 gres-fdw = { max-threads = 2 }
 gres-ranges-process = { max-threads = 2 }
 gres-substrate = { max-threads = 2 }
-schema-registry-fixed-port-captures = { max-threads = 1 }
-
-[[profile.default.overrides]]
-filter = 'package(krabka-broker) & (binary(describe_groups_jvm) | binary(jvm_acceptance) | binary(jvm_consumer_group_next_gen) | binary(jvm_kip320_divergence))'
-test-group = 'broker-jvm-acceptance'
-threads-required = 'num-test-threads'
-
-[[profile.default.overrides]]
-filter = 'package(krabka-broker) & (binary(share_consume) | binary(share_admin_offsets))'
-test-group = 'broker-share-state'
-threads-required = 'num-test-threads'
-
-[[profile.default.overrides]]
-filter = 'package(krabka-broker) & binary(transactions)'
-test-group = 'broker-transactions'
-threads-required = 'num-test-threads'
-
-[[profile.default.overrides]]
-filter = 'package(krabka-broker) & binary(tiered_storage_topic_rlmm)'
-test-group = 'broker-tiered-storage-rlmm'
-threads-required = 'num-test-threads'
-
-[[profile.default.overrides]]
-filter = 'package(krabka-schema-registry) & (binary(interop) | binary(capture_fixtures) | binary(capture_admin_fixtures) | binary(capture_auth_fixtures) | binary(capture_compat_fixtures) | binary(capture_election_fixtures) | binary(capture_json_fixtures) | binary(capture_protobuf_fixtures) | binary(capture_references_fixtures))'
-test-group = 'schema-registry-fixed-port-captures'
-threads-required = 'num-test-threads'
 
 [[profile.default.overrides]]
 # krabka-gres-fdw's integration tests boot an in-process broker + registry.
@@ -75,31 +45,6 @@ test-group = 'gres-substrate'
 # Gres range system suites boot an in-process broker plus real compute children.
 filter = 'package(krabka-gres-ranges) & (binary(multiprocess) | binary(jepsen_bank) | binary(participant_kill_bank) | binary(range0_cascade_kill_bank) | binary(range0_leader_kill_drain) | binary(crossrange_2pc_nemesis) | binary(jepsen_elle))'
 test-group = 'gres-ranges-process'
-
-[[profile.ci.overrides]]
-filter = 'package(krabka-broker) & (binary(describe_groups_jvm) | binary(jvm_acceptance) | binary(jvm_consumer_group_next_gen) | binary(jvm_kip320_divergence))'
-test-group = 'broker-jvm-acceptance'
-threads-required = 'num-test-threads'
-
-[[profile.ci.overrides]]
-filter = 'package(krabka-broker) & (binary(share_consume) | binary(share_admin_offsets))'
-test-group = 'broker-share-state'
-threads-required = 'num-test-threads'
-
-[[profile.ci.overrides]]
-filter = 'package(krabka-broker) & binary(transactions)'
-test-group = 'broker-transactions'
-threads-required = 'num-test-threads'
-
-[[profile.ci.overrides]]
-filter = 'package(krabka-broker) & binary(tiered_storage_topic_rlmm)'
-test-group = 'broker-tiered-storage-rlmm'
-threads-required = 'num-test-threads'
-
-[[profile.ci.overrides]]
-filter = 'package(krabka-schema-registry) & (binary(interop) | binary(capture_fixtures) | binary(capture_admin_fixtures) | binary(capture_auth_fixtures) | binary(capture_compat_fixtures) | binary(capture_election_fixtures) | binary(capture_json_fixtures) | binary(capture_protobuf_fixtures) | binary(capture_references_fixtures))'
-test-group = 'schema-registry-fixed-port-captures'
-threads-required = 'num-test-threads'
 
 [[profile.ci.overrides]]
 filter = 'package(krabka-gres-substrate) & kind(test)'

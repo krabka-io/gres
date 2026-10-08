@@ -7779,7 +7779,7 @@ fn read_next_type_oid(kv: &dyn Kv) -> Result<u32, CatalogError> {
         None => FIRST_USER_TYPE_OID,
     };
     PROCESS_NEXT_USER_TYPE_OID
-        .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |next| {
+        .try_update(Ordering::SeqCst, Ordering::SeqCst, |next| {
             next.max(stored).checked_add(USER_TYPE_OID_STRIDE)
         })
         .map(|previous| previous.max(stored))

@@ -785,7 +785,7 @@ mod tests {
 
     fn take_failure(budget: &AtomicUsize) -> bool {
         budget
-            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |remaining| {
+            .try_update(Ordering::SeqCst, Ordering::SeqCst, |remaining| {
                 remaining.checked_sub(1)
             })
             .is_ok()

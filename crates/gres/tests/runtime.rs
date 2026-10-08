@@ -68,10 +68,10 @@ fn range_mtls_fixture() -> RangeMtlsFixture {
                 client_auth: krabka_security::ClientAuthMode::Required,
             },
             range_rpc_principals: BTreeSet::from([
-                "CN=test-client,OU=integration,O=crabka".to_string()
+                "CN=test-client,OU=integration,O=krabka".to_string()
             ]),
             operator_control_principals: BTreeSet::from([
-                "CN=test-client,OU=integration,O=crabka".to_string()
+                "CN=test-client,OU=integration,O=krabka".to_string()
             ]),
         },
         client: krabka_gres_ranges::RangeTlsClientConfig {
@@ -90,13 +90,17 @@ fn range_mtls_fixture() -> RangeMtlsFixture {
 fn write_range_fixture(dir: &tempfile::TempDir, name: &str, fixture: &str) -> PathBuf {
     let path = dir.path().join(name);
     let contents: &[u8] = match fixture {
-        "dev_cert.pem" => include_bytes!("../../security/tests/fixtures/dev_cert.pem"),
-        "dev_key.pem" => include_bytes!("../../security/tests/fixtures/dev_key.pem"),
-        "dev_client_ca.pem" => include_bytes!("../../security/tests/fixtures/dev_client_ca.pem"),
-        "dev_client_cert.pem" => {
-            include_bytes!("../../security/tests/fixtures/dev_client_cert.pem")
+        "dev_cert.pem" => include_bytes!("../../gres-ranges/tests/fixtures/tls/dev_cert.pem"),
+        "dev_key.pem" => include_bytes!("../../gres-ranges/tests/fixtures/tls/dev_key.pem"),
+        "dev_client_ca.pem" => {
+            include_bytes!("../../gres-ranges/tests/fixtures/tls/dev_client_ca.pem")
         }
-        "dev_client_key.pem" => include_bytes!("../../security/tests/fixtures/dev_client_key.pem"),
+        "dev_client_cert.pem" => {
+            include_bytes!("../../gres-ranges/tests/fixtures/tls/dev_client_cert.pem")
+        }
+        "dev_client_key.pem" => {
+            include_bytes!("../../gres-ranges/tests/fixtures/tls/dev_client_key.pem")
+        }
         _ => unreachable!("fixture name is fixed by this test"),
     };
     std::fs::write(&path, contents).expect("write certificate fixture");
@@ -270,9 +274,8 @@ fn test_args(listen: String, data_dir: Option<std::path::PathBuf>) -> krabka_gre
         wal_producer_request_timeout: None,
         wal_producer_retries: None,
         wal_producer_retry_backoff: None,
-        wal_producer_routing_retry_budget: None,
+        wal_producer_retry_backoff_max: None,
         wal_producer_init_retry_timeout: None,
-        wal_producer_init_max_backoff: None,
         wal_producer_transaction_timeout: None,
         wal_producer_compression: None,
         wal_producer_linger: None,
@@ -400,21 +403,16 @@ async fn produce_raw_fixture(bootstrap: &str, topic: &str, payload: &'static [u8
         .await
         .expect("fixture producer");
     let ack = producer
-        .send(ProducerRecord {
+        .enqueue(ProducerRecord {
             topic: topic.to_string(),
             partition: Some(0),
             value: Some(bytes::Bytes::from_static(payload)),
             ..Default::default()
         })
-        .await;
+        .await
+        .expect("fixture enqueue");
     producer.flush().await.expect("fixture flush");
-    assert_eq!(
-        ack.await
-            .expect("fixture ack channel")
-            .expect("fixture produce")
-            .offset,
-        0
-    );
+    assert2::assert!(ack.await.expect("fixture produce").offset == 0);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]

@@ -1259,10 +1259,16 @@ async fn provision_tenant(
             partitions: 1,
             replicas: 1,
             configs: BTreeMap::new(),
+            replica_assignments: BTreeMap::new(),
         })
         .collect::<Vec<_>>();
     let outcomes = admin
-        .create_topics(&topics, runtime_policy.topic_create_timeout)
+        .create_topics(
+            &topics,
+            krabka_client_admin::TopicMutationOptions::with_timeout(
+                runtime_policy.topic_create_timeout,
+            ),
+        )
         .await
         .context("create WAL topics")?;
     ensure!(
@@ -1270,7 +1276,7 @@ async fn provision_tenant(
         "WAL topic creation failed: {outcomes:?}"
     );
     let record = tenant_record(ranges, range_endpoints, sql_password)?;
-    let mut registry = Registry::connect_with_policy(bootstrap, registry_policy.clone())
+    let mut registry = Registry::connect_with_policy(bootstrap, registry_policy.clone(), None)
         .await
         .context("connect registry")?;
     registry.ensure_topic().await.context("registry topic")?;

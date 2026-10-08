@@ -232,11 +232,9 @@ fn build_security(
                     .to_string()
             })
             .unwrap_or_default();
-        Some(TlsConnectorConfig {
-            trust_roots_pem: None,
-            server_name,
-            client_identity: None,
-        })
+        let mut tls = TlsConnectorConfig::default();
+        tls.server_name = server_name;
+        Some(tls)
     } else {
         None
     };
@@ -269,11 +267,13 @@ fn build_security(
                 mechanism: SaslMechanism::ScramSha256,
                 username,
                 password,
+                delegation_token: false,
             },
             "SCRAM-SHA-512" => SaslCredentials::Scram {
                 mechanism: SaslMechanism::ScramSha512,
                 username,
                 password,
+                delegation_token: false,
             },
             other => {
                 return Err(KafkaFdwError::Config(format!(

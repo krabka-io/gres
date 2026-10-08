@@ -1,0 +1,1017 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: greses.krabka.io
+spec:
+  group: krabka.io
+  names:
+    kind: Gres
+    plural: greses
+    shortNames:
+    - gg
+    singular: gres
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Auto-generated derived type for GresSpec via `CustomResource`
+        properties:
+          spec:
+            description: Gres fleet specification.
+            properties:
+              activator:
+                description: Wake activator deployment and runtime policy.
+                nullable: true
+                properties:
+                  clientDispatchQueueCapacity:
+                    description: Kafka client request-dispatch queue capacity.
+                    format: uint
+                    minimum: 1.0
+                    nullable: true
+                    type: integer
+                  clientFrameMax:
+                    description: Maximum accepted Kafka client frame size.
+                    nullable: true
+                    type: string
+                  coldStartTimeout:
+                    description: Maximum duration to hold one cold-starting connection.
+                    nullable: true
+                    type: string
+                  image:
+                    description: |-
+                      Container image override. When absent, the operator uses its global
+                      activator image override or its compiled default.
+                    minLength: 1
+                    nullable: true
+                    type: string
+                  readinessProbePeriodSeconds:
+                    description: Activator readiness probe period in seconds.
+                    format: int32
+                    minimum: 1.0
+                    nullable: true
+                    type: integer
+                  registryPoll:
+                    description: Registry readiness polling interval.
+                    nullable: true
+                    type: string
+                  replicas:
+                    description: Number of activator replicas.
+                    format: int32
+                    minimum: 1.0
+                    nullable: true
+                    type: integer
+                type: object
+              balancer:
+                description: |-
+                  Dry-run Gres balancer planning knobs. The operator does not yet do
+                  live execution, and this is on purpose.
+                nullable: true
+                properties:
+                  enabled:
+                    default: true
+                    description: Enable dry-run planning status for this fleet.
+                    type: boolean
+                  goals:
+                    default:
+                      disabledGoals: []
+                    description: Per-goal enablement knobs.
+                    properties:
+                      disabledGoals:
+                        default: []
+                        description: Goals disabled for dry-run planning. Omit a goal to leave it enabled.
+                        items:
+                          description: Supported dry-run balancer goals.
+                          enum:
+                          - co_location_integrity
+                          - range_limit
+                          - range_size
+                          - load_skew
+                          - auto_shard_conversion
+                          type: string
+                        type: array
+                    type: object
+                  planSnapshot:
+                    description: |-
+                      Optional dry-run plan snapshot supplied to the operator for status
+                      reporting. The operator never executes these operations.
+                    nullable: true
+                    properties:
+                      operations:
+                        description: Operations emitted by the planner for the observed registry snapshot.
+                        items:
+                          description: Operation kinds emitted by the dry-run balancer planner.
+                          enum:
+                          - split
+                          - move
+                          - merge
+                          - convert_to_sharded
+                          type: string
+                        type: array
+                    required:
+                    - operations
+                    type: object
+                  registryLayout:
+                    default:
+                      transactionalRegistryProtocol: false
+                    description: |-
+                      Explicit capability declaration for Kafka's transactional registry
+                      protocol. This protocol does not make any physical Move, Split, or
+                      Merge operation executable. The operator reports plans only.
+                    properties:
+                      transactionalRegistryProtocol:
+                        default: false
+                        description: |-
+                          Kafka transactional registry protocol is configured and available for
+                          metadata transactions only. Physical range operations remain unavailable.
+                        type: boolean
+                    type: object
+                  thresholds:
+                    default:
+                      cooldownEpochs: 2
+                      loadSkewHysteresis: 25%
+                      maxOperations: 32
+                      mergeFloor: 64MiB
+                      sizeCeiling: 1GiB
+                      splitStrideRows: 1000000
+                    description: Threshold and cooldown knobs used by future live planner input.
+                    properties:
+                      cooldownEpochs:
+                        description: Epoch count that suppresses repeated operation kinds.
+                        format: uint64
+                        minimum: 0.0
+                        type: integer
+                      loadSkewHysteresis:
+                        description: Load skew tolerated before move planning.
+                        type: string
+                      maxOperations:
+                        description: Maximum operations in one dry-run plan.
+                        format: uint
+                        minimum: 0.0
+                        type: integer
+                      maxRangesPerCompute:
+                        description: Optional maximum ranges per compute.
+                        format: uint
+                        minimum: 0.0
+                        nullable: true
+                        type: integer
+                      mergeFloor:
+                        description: Merge adjacent ranges below this combined size.
+                        type: string
+                      sizeCeiling:
+                        description: Split ranges larger than this size.
+                        type: string
+                      splitStrideRows:
+                        description: Row stride used when a range has no upper bound.
+                        format: uint64
+                        minimum: 0.0
+                        type: integer
+                    required:
+                    - cooldownEpochs
+                    - loadSkewHysteresis
+                    - maxOperations
+                    - mergeFloor
+                    - sizeCeiling
+                    - splitStrideRows
+                    type: object
+                type: object
+              compute:
+                description: Tenant compute workload policy.
+                nullable: true
+                properties:
+                  checkpointDeleteRecordsTimeout:
+                    description: Kafka `DeleteRecords` timeout.
+                    nullable: true
+                    type: string
+                  checkpointPartSize:
+                    description: Maximum checkpoint object part size.
+                    nullable: true
+                    type: string
+                  checkpointPollInterval:
+                    description: Checkpoint threshold polling interval.
+                    nullable: true
+                    type: string
+                  checkpointRetain:
+                    description: Number of checkpoint manifests to retain.
+                    format: uint
+                    minimum: 1.0
+                    nullable: true
+                    type: integer
+                  clientDispatchQueueCapacity:
+                    description: Kafka client request-dispatch queue capacity.
+                    format: uint
+                    minimum: 1.0
+                    nullable: true
+                    type: integer
+                  clientFrameMax:
+                    description: Maximum accepted Kafka client frame size.
+                    nullable: true
+                    type: string
+                  durableInspectionFoldMaxRecords:
+                    description: Maximum records materialized by one durable inspection.
+                    format: uint
+                    minimum: 1.0
+                    nullable: true
+                    type: integer
+                  durableInspectionFoldMaxSize:
+                    description: Maximum data materialized by one durable inspection.
+                    nullable: true
+                    type: string
+                  durableInspectionTimeout:
+                    description: Deadline for one durable record inspection.
+                    nullable: true
+                    type: string
+                  fdwBrokerDnsTimeout:
+                    description: Timeout for resolving Kafka broker hostnames used by the FDW.
+                    nullable: true
+                    type: string
+                  fdwConnectTimeout:
+                    description: FDW broker TCP connection timeout.
+                    nullable: true
+                    type: string
+                  fdwFetchMaxWait:
+                    description: Maximum time a broker may hold one FDW fetch.
+                    nullable: true
+                    type: string
+                  fdwFetchMin:
+                    description: Minimum response size for FDW Kafka fetches.
+                    nullable: true
+                    type: string
+                  fdwFetchPartitionMax:
+                    description: Maximum bytes returned for one FDW partition fetch.
+                    nullable: true
+                    type: string
+                  fdwRequestTimeout:
+                    description: FDW broker request timeout.
+                    nullable: true
+                    type: string
+                  fdwSchemaFetchPoll:
+                    description: Poll cadence while awaiting a cold FDW writer schema.
+                    nullable: true
+                    type: string
+                  fdwSchemaFetchTimeout:
+                    description: Total deadline for resolving a cold FDW writer schema.
+                    nullable: true
+                    type: string
+                  idleSuspendPollInterval:
+                    description: Idle-suspend polling interval.
+                    nullable: true
+                    type: string
+                  lifecycleRequeue:
+                    description: Tenant lifecycle reconciliation interval.
+                    nullable: true
+                    type: string
+                  pgexecBlockingQueryMemory:
+                    description: Memory retained by one blocking query operator.
+                    nullable: true
+                    type: string
+                  pgexecJoinBroadcastThreshold:
+                    description: Largest estimated join input eligible for broadcast.
+                    nullable: true
+                    type: string
+                  pgexecNotifyQueueCapacity:
+                    description: Per-session LISTEN/NOTIFY queue capacity.
+                    format: uint
+                    minimum: 1.0
+                    nullable: true
+                    type: integer
+                  pgexecResultPageMax:
+                    description: Maximum encoded size of one result page.
+                    nullable: true
+                    type: string
+                  pgexecRowidReservation:
+                    description: Durable internal row-ID reservation size.
+                    format: uint64
+                    minimum: 1.0
+                    nullable: true
+                    type: integer
+                  pgexecTsGcFloorLag:
+                    description: Lag retained behind the timestamp GC floor.
+                    nullable: true
+                    type: string
+                  pgexecTsPruneVersionsPerRow:
+                    description: Maximum timestamp versions pruned per written row.
+                    format: uint
+                    minimum: 1.0
+                    nullable: true
+                    type: integer
+                  pgexecXidReservation:
+                    description: Durable XID reservation size.
+                    format: uint64
+                    minimum: 1.0
+                    nullable: true
+                    type: integer
+                  pgkvMaxMemtableSize:
+                    description: Maximum active memtable size for each on-disk substrate cache.
+                    nullable: true
+                    type: string
+                  pgkvRotateAfterOps:
+                    description: Committed operations between requested substrate-cache memtable rotations.
+                    format: uint64
+                    minimum: 1.0
+                    nullable: true
+                    type: integer
+                  pgwireMaxMessageSize:
+                    description: Maximum accepted `PostgreSQL` frontend message size.
+                    nullable: true
+                    type: string
+                  range0BarrierReplyBudget:
+                    description: Whole-reply budget for range-0 barriers.
+                    nullable: true
+                    type: string
+                  range0FollowerPollInterval:
+                    description: Periodic range-0 follower refresh cadence.
+                    nullable: true
+                    type: string
+                  range0FollowerRebuildBackoffCeiling:
+                    description: Maximum delay between consecutive range-0 follower rebuilds.
+                    nullable: true
+                    type: string
+                  range0FollowerRebuildBackoffFloor:
+                    description: Initial delay before retrying consecutive range-0 follower rebuilds.
+                    nullable: true
+                    type: string
+                  range0WaitTimeout:
+                    description: Range-0 catch-up wait timeout.
+                    nullable: true
+                    type: string
+                  rangeCrossRangeLockWaitCap:
+                    description: Lock-wait cap for cross-range transactions.
+                    nullable: true
+                    type: string
+                  rangeDecisionReleaseLagRetries:
+                    description: Decision-release lag retry count.
+                    format: uint32
+                    minimum: 1.0
+                    nullable: true
+                    type: integer
+                  rangeDecisionReleaseRetryBackoff:
+                    description: Decision-release retry backoff.
+                    nullable: true
+                    type: string
+                  rangeDurableInspectMaxRecords:
+                    description: Durable range-inspection record ceiling.
+                    format: uint32
+                    minimum: 1.0
+                    nullable: true
+                    type: integer
+                  rangeDurableInspectMaxSize:
+                    description: Durable range-inspection byte ceiling.
+                    nullable: true
+                    type: string
+                  rangeHlcHorizonHeadroom:
+                    description: Wall-clock headroom persisted by the HLC oracle.
+                    nullable: true
+                    type: string
+                  rangeJoinBroadcastRows:
+                    description: Maximum materialized broadcast rows.
+                    format: uint
+                    minimum: 1.0
+                    nullable: true
+                    type: integer
+                  rangeJoinKeyColumns:
+                    description: Maximum distributed join key columns.
+                    format: uint
+                    minimum: 1.0
+                    nullable: true
+                    type: integer
+                  rangeJoinPredicates:
+                    description: Maximum predicates per distributed join side.
+                    format: uint
+                    minimum: 1.0
+                    nullable: true
+                    type: integer
+                  rangeJoinProjectionColumns:
+                    description: Maximum distributed join projection columns.
+                    format: uint
+                    minimum: 1.0
+                    nullable: true
+                    type: integer
+                  rangeJoinResultRows:
+                    description: Maximum distributed join result rows.
+                    format: uint
+                    minimum: 1.0
+                    nullable: true
+                    type: integer
+                  rangeJoinRowMax:
+                    description: Maximum encoded distributed join row size.
+                    nullable: true
+                    type: string
+                  rangeJoinSnapshotXids:
+                    description: Maximum active XIDs in each distributed join snapshot.
+                    format: uint
+                    minimum: 1.0
+                    nullable: true
+                    type: integer
+                  rangeLogicalBasePersistStride:
+                    description: Initial logical horizon persistence stride.
+                    format: uint64
+                    minimum: 1.0
+                    nullable: true
+                    type: integer
+                  rangeLogicalMaxPersistStride:
+                    description: Maximum adaptive logical horizon persistence stride.
+                    format: uint64
+                    minimum: 1.0
+                    nullable: true
+                    type: integer
+                  rangeLogicalMinPersistInterval:
+                    description: Minimum interval between logical horizon persists.
+                    nullable: true
+                    type: string
+                  rangeRemoteSessionIdle:
+                    description: Hosted remote-session idle retention.
+                    nullable: true
+                    type: string
+                  rangeRemoteSessionMax:
+                    description: Maximum hosted remote sessions.
+                    format: uint
+                    minimum: 1.0
+                    nullable: true
+                    type: integer
+                  rangeRpcFrameMax:
+                    description: Maximum encoded range RPC frame size.
+                    nullable: true
+                    type: string
+                  rangeRpcPoolIdleTtl:
+                    description: Range RPC client-pool idle connection lifetime.
+                    nullable: true
+                    type: string
+                  rangeRpcPoolMaxIdlePerEndpoint:
+                    description: Maximum idle range RPC connections retained per endpoint.
+                    format: uint
+                    minimum: 1.0
+                    nullable: true
+                    type: integer
+                  rangeRpcRequestTimeout:
+                    description: Deadline for one range RPC request.
+                    nullable: true
+                    type: string
+                  rangeRpcServerIdleTimeout:
+                    description: Range RPC server connection idle timeout.
+                    nullable: true
+                    type: string
+                  rangeTsoHeartbeatInterval:
+                    description: Timestamp-oracle heartbeat cadence.
+                    nullable: true
+                    type: string
+                  readinessProbePeriodSeconds:
+                    description: Compute readiness probe period in seconds.
+                    format: int32
+                    minimum: 1.0
+                    nullable: true
+                    type: integer
+                  schemaFetchRetryInitialBackoff:
+                    description: Initial delay before retrying a transient Schema Registry fetch failure.
+                    nullable: true
+                    type: string
+                  schemaFetchRetryMaxBackoff:
+                    description: Maximum delay between transient Schema Registry fetch retries.
+                    nullable: true
+                    type: string
+                  walAdminConnectTimeout:
+                    description: Timeout for opening WAL admin connections.
+                    nullable: true
+                    type: string
+                  walAdminRequestTimeout:
+                    description: Timeout for WAL admin requests.
+                    nullable: true
+                    type: string
+                  walFrameMaxSize:
+                    description: Target maximum size of one encoded logical WAL frame.
+                    nullable: true
+                    type: string
+                  walProducerBatch:
+                    description: Maximum WAL producer batch size.
+                    nullable: true
+                    type: string
+                  walProducerCompression:
+                    description: WAL producer compression codec.
+                    enum:
+                    - none
+                    - gzip
+                    - snappy
+                    - lz4
+                    - zstd
+                    - null
+                    nullable: true
+                    type: string
+                  walProducerDnsTimeout:
+                    description: Timeout for resolving WAL producer broker hostnames.
+                    nullable: true
+                    type: string
+                  walProducerFlushTimeout:
+                    description: Deadline for flushing all buffered and in-flight WAL records.
+                    nullable: true
+                    type: string
+                  walProducerInitRetryTimeout:
+                    description: WAL producer-ID initialization retry timeout.
+                    nullable: true
+                    type: string
+                  walProducerLinger:
+                    description: Delay before sending a partial WAL producer batch.
+                    nullable: true
+                    type: string
+                  walProducerRequestTimeout:
+                    description: Timeout for WAL producer broker requests.
+                    nullable: true
+                    type: string
+                  walProducerRetries:
+                    description: WAL producer retries after the initial batch send.
+                    format: int32
+                    minimum: 0.0
+                    nullable: true
+                    type: integer
+                  walProducerRetryBackoff:
+                    description: |-
+                      WAL producer retry and producer-ID initial backoff
+                      (`retry.backoff.ms`).
+                    nullable: true
+                    type: string
+                  walProducerRetryBackoffMax:
+                    description: WAL producer retry backoff cap (`retry.backoff.max.ms`).
+                    nullable: true
+                    type: string
+                  walProducerTransactionTimeout:
+                    description: WAL producer transaction timeout.
+                    nullable: true
+                    type: string
+                  walRecoveryConnectTimeout:
+                    description: Timeout for opening committed-WAL recovery broker connections.
+                    nullable: true
+                    type: string
+                  walRecoveryDnsTimeout:
+                    description: Timeout for resolving committed-WAL recovery broker hostnames.
+                    nullable: true
+                    type: string
+                  walRecoveryEmptyFetchRetries:
+                    description: Consecutive empty-fetch retries after the first empty recovery fetch.
+                    format: uint
+                    minimum: 1.0
+                    nullable: true
+                    type: integer
+                  walRecoveryFetchMaxWait:
+                    description: Kafka broker long-poll wait for committed-WAL recovery fetches.
+                    nullable: true
+                    type: string
+                  walRecoveryFetchMin:
+                    description: Minimum response size for committed-WAL recovery fetches.
+                    nullable: true
+                    type: string
+                  walRecoveryFetchPartitionMax:
+                    description: Per-partition size limit for committed-WAL recovery fetches.
+                    nullable: true
+                    type: string
+                  walRecoveryFetchResponseMax:
+                    description: Whole-response size limit for committed-WAL recovery fetches.
+                    nullable: true
+                    type: string
+                  walRecoveryRequestTimeout:
+                    description: Timeout for committed-WAL recovery broker requests.
+                    nullable: true
+                    type: string
+                  walTopicEnsureTimeout:
+                    description: Timeout for ensuring a range WAL topic.
+                    nullable: true
+                    type: string
+                  walTopicReplicationFactor:
+                    description: Replication factor requested when creating a range WAL topic.
+                    format: int32
+                    maximum: 32767.0
+                    minimum: 1.0
+                    nullable: true
+                    type: integer
+                type: object
+              defaults:
+                description: |-
+                  Default tenant runtime settings. Each `GresTenant` inherits them
+                  unless it sets `spec.overrides`.
+                nullable: true
+                properties:
+                  checkpointFrames:
+                    description: Checkpoint after this many frames when set.
+                    format: uint64
+                    minimum: 0.0
+                    nullable: true
+                    type: integer
+                  checkpointSize:
+                    description: Checkpoint after this much WAL when set.
+                    nullable: true
+                    type: string
+                  idleSeconds:
+                    description: |-
+                      Idle timeout in seconds. When unset, the tenant never suspends
+                      because it is idle.
+                    format: uint64
+                    minimum: 0.0
+                    nullable: true
+                    type: integer
+                  scramIterations:
+                    description: PBKDF2 iteration count for tenant Kafka and `PostgreSQL` SCRAM credentials.
+                    format: int32
+                    maximum: 16384.0
+                    minimum: 4096.0
+                    nullable: true
+                    type: integer
+                  suspendMaxCheckpointSize:
+                    description: Keep the tenant warm when its latest checkpoint exceeds this size.
+                    nullable: true
+                    type: string
+                  walReplication:
+                    description: Replication factor for tenant WAL topics.
+                    format: int32
+                    nullable: true
+                    type: integer
+                type: object
+              kafka:
+                description: |-
+                  Kafka cluster that stores this fleet's tenant registry and WAL
+                  topics.
+                properties:
+                  bootstrapServers:
+                    description: |-
+                      Comma-separated `host:port` bootstrap list of the Kafka listener
+                      that the operator and the tenant compute pods use, for example
+                      `demo-kafka-bootstrap.kafka.svc:9092`.
+                    minLength: 1
+                    type: string
+                  credentialsSecretRef:
+                    description: |-
+                      The SCRAM-SHA-512 credentials that the operator and the activator use
+                      on a SASL listener. Required when `sasl` is `true`, and rejected
+                      otherwise. The principal must be allowed to manage topics, ACLs, and
+                      SCRAM credentials, and to read and write the tenant registry.
+                    nullable: true
+                    properties:
+                      name:
+                        description: Secret name.
+                        minLength: 1
+                        type: string
+                      passwordKey:
+                        default: password
+                        description: Secret data key of the password.
+                        type: string
+                      usernameKey:
+                        default: username
+                        description: Secret data key of the username.
+                        type: string
+                    required:
+                    - name
+                    type: object
+                  registry:
+                    description: Creation and reader policy for the Gres tenant registry topic.
+                    nullable: true
+                    properties:
+                      fetchMaxWait:
+                        description: Maximum time a registry fetch waits for data.
+                        nullable: true
+                        type: string
+                      fetchPartitionMax:
+                        description: Maximum bytes fetched from the registry partition.
+                        nullable: true
+                        type: string
+                      producerDnsTimeout:
+                        description: DNS lookup deadline for the registry producer.
+                        nullable: true
+                        type: string
+                      readerAdminDnsTimeout:
+                        description: DNS lookup deadline for registry reader and admin paths.
+                        nullable: true
+                        type: string
+                      readerFetchMin:
+                        description: Minimum response size for registry reader fetches.
+                        nullable: true
+                        type: string
+                      readerRetryBackoff:
+                        description: Registry reader retry delay.
+                        nullable: true
+                        type: string
+                      replicationFactor:
+                        description: Registry topic replication factor.
+                        format: int32
+                        maximum: 32767.0
+                        minimum: 1.0
+                        nullable: true
+                        type: integer
+                      topicCreateTimeout:
+                        description: Kafka topic creation timeout.
+                        nullable: true
+                        type: string
+                    type: object
+                  sasl:
+                    default: false
+                    description: |-
+                      Whether the listener requires SASL/SCRAM. When it is `true`, the
+                      operator upserts a `gres-<tenant>` SCRAM credential for each tenant,
+                      and each compute pod authenticates with it. The operator and the
+                      activator authenticate with `credentialsSecretRef`.
+                    type: boolean
+                required:
+                - bootstrapServers
+                type: object
+              pgdog:
+                description: '`PgDog` front-door deployment settings.'
+                properties:
+                  adminSecretRef:
+                    description: Secret key reference for `PgDog` admin credentials.
+                    properties:
+                      key:
+                        description: Secret data key.
+                        type: string
+                      name:
+                        description: Secret name.
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
+                  connectAttempts:
+                    description: Number of backend connection attempts.
+                    format: uint16
+                    maximum: 65535.0
+                    minimum: 1.0
+                    nullable: true
+                    type: integer
+                  directBootstrapGrace:
+                    description: Direct-route credential retention grace.
+                    nullable: true
+                    type: string
+                  idleTimeout:
+                    description: Idle pooled-server disconnect window.
+                    nullable: true
+                    type: string
+                  image:
+                    description: |-
+                      Container image override. When absent, the operator uses
+                      `--default-pgdog-image`.
+                    nullable: true
+                    type: string
+                  listenPort:
+                    description: '`PgDog` client listen port.'
+                    format: int32
+                    maximum: 65535.0
+                    minimum: 1.0
+                    type: integer
+                  poolerMode:
+                    description: Pooling modes accepted by the Gres CRD.
+                    enum:
+                    - transaction
+                    - session
+                    nullable: true
+                    type: string
+                  readinessProbePeriodSeconds:
+                    description: '`PgDog` readiness probe period in seconds.'
+                    format: int32
+                    minimum: 1.0
+                    nullable: true
+                    type: integer
+                  replicas:
+                    description: Number of `PgDog` replicas.
+                    format: int32
+                    maximum: 1000.0
+                    minimum: 0.0
+                    type: integer
+                  serverLifetime:
+                    description: Maximum lifetime for pooled backend connections.
+                    nullable: true
+                    type: string
+                  suspensionIdleTimeout:
+                    description: Idle timeout used while at least one tenant can suspend.
+                    nullable: true
+                    type: string
+                  tlsSecretRef:
+                    description: Optional TLS Secret mounted by the future `PgDog` controller.
+                    nullable: true
+                    properties:
+                      name:
+                        description: Secret name.
+                        type: string
+                    required:
+                    - name
+                    type: object
+                required:
+                - adminSecretRef
+                - listenPort
+                - replicas
+                type: object
+              tracing:
+                description: |-
+                  Distributed-tracing wiring for this fleet's tenant compute pods.
+
+                  When this field is set, the `GresTenant` reconciler renders the
+                  `KRABKA_OTLP_*` and `OTEL_SERVICE_NAME` env contract on every
+                  compute container, and `krabka-gres` installs the OTLP exporter at
+                  startup. When the field is absent, the reconciler writes no OTLP env
+                  var at all. That is what keeps tracing off. An empty endpoint would
+                  still switch the exporter on, and the exporter would then fail to
+                  reach a collector.
+
+                  This field has the schema of `Kafka.spec.tracing` in
+                  `krabka-operator`. The two fleets therefore have one shape and the
+                  field names that an operator already knows.
+
+                  The field is fleet-scoped and not per-`GresTenant`, and this is on
+                  purpose. The collector endpoint, the protocol, and the export
+                  timeout are cluster infrastructure. A tenant-writable copy would
+                  make telemetry routing a tenant decision.
+                nullable: true
+                properties:
+                  otlp:
+                    description: OTLP-backend tuning. Required when `kind == Otlp`.
+                    nullable: true
+                    properties:
+                      endpoint:
+                        description: |-
+                          Required. OTLP collector endpoint in the form `scheme://host:port`.
+                          The operator renders it as `KRABKA_OTLP_ENDPOINT`. A set field also
+                          sets `KRABKA_OTLP_ENABLED=true`.
+                        type: string
+                      protocol:
+                        description: |-
+                          OTLP wire protocol selector. It has the same shape as the broker's
+                          internal `OtlpProtocol` enum and the `OTEL_EXPORTER_OTLP_PROTOCOL` spec
+                          values.
+                        enum:
+                        - grpc
+                        - http_protobuf
+                        nullable: true
+                        type: string
+                      sampleRatio:
+                        description: |-
+                          Optional sampling ratio in `[0.0, 1.0]`. The operator renders it as
+                          `KRABKA_OTLP_SAMPLE_RATIO`. An unset field leaves the binary's own
+                          default of `1.0`, which samples every trace.
+                        format: double
+                        nullable: true
+                        type: number
+                      serviceName:
+                        description: |-
+                          Optional `service.name` resource attribute. The operator renders it as
+                          `OTEL_SERVICE_NAME`. An unset field leaves the binary's own name, which
+                          is `"krabka-gres"`.
+                        nullable: true
+                        type: string
+                      timeout:
+                        description: |-
+                          Optional export timeout. The operator renders it as
+                          `KRABKA_OTLP_TIMEOUT`. An unset field leaves the binary's own default
+                          of `10s`.
+                        nullable: true
+                        type: string
+                    required:
+                    - endpoint
+                    type: object
+                  type:
+                    description: Tracing backend selector.
+                    enum:
+                    - Otlp
+                    type: string
+                required:
+                - type
+                type: object
+            required:
+            - kafka
+            - pgdog
+            type: object
+          status:
+            description: Observed Gres fleet state.
+            nullable: true
+            properties:
+              balancer:
+                description: |-
+                  Last balancer planning summary. The operator does not execute range
+                  changes from this status.
+                nullable: true
+                properties:
+                  disabledGoals:
+                    description: Goals disabled by spec or by the top-level balancer switch.
+                    items:
+                      type: string
+                    type: array
+                  dryRunOnly:
+                    description: |-
+                      True while the operator reports planner status and does not execute
+                      live changes.
+                    type: boolean
+                  enabled:
+                    description: Whether planner status is enabled by spec.
+                    type: boolean
+                  enabledGoals:
+                    description: Goals active for dry-run planning.
+                    items:
+                      type: string
+                    type: array
+                  executableOperationKinds:
+                    description: |-
+                      Distinct planned operation kinds executable by the operator. Empty
+                      until the operator implements physical orchestration.
+                    items:
+                      type: string
+                    type: array
+                  executableOperations:
+                    description: |-
+                      Number of planned operations executable by the operator. Always zero:
+                      the transactional registry protocol cannot execute physical operations.
+                    format: uint
+                    minimum: 0.0
+                    type: integer
+                  message:
+                    description: Human-readable dry-run status reason.
+                    type: string
+                  mutationDisabledReason:
+                    description: Why mutations are disabled even when a dry-run plan is available.
+                    type: string
+                  plannedOperationKinds:
+                    description: Distinct operation kinds in the reported dry-run plan snapshot.
+                    items:
+                      type: string
+                    type: array
+                  plannedOperations:
+                    description: Number of operations in the reported dry-run plan snapshot.
+                    format: uint
+                    minimum: 0.0
+                    type: integer
+                  transactionalRegistryProtocolAvailable:
+                    description: |-
+                      Whether Kafka's transactional registry protocol was explicitly
+                      configured as available for metadata transactions. It does not enable
+                      physical range operations.
+                    type: boolean
+                  unsupportedOperationKinds:
+                    description: |-
+                      Distinct planned operation kinds the operator will not classify as
+                      executable. `convert_to_sharded` remains unsupported.
+                    items:
+                      type: string
+                    type: array
+                  unsupportedOperations:
+                    description: Number of planned operations the operator intentionally will not execute.
+                    format: uint
+                    minimum: 0.0
+                    type: integer
+                required:
+                - disabledGoals
+                - dryRunOnly
+                - enabled
+                - enabledGoals
+                - executableOperationKinds
+                - executableOperations
+                - message
+                - mutationDisabledReason
+                - plannedOperationKinds
+                - plannedOperations
+                - transactionalRegistryProtocolAvailable
+                - unsupportedOperationKinds
+                - unsupportedOperations
+                type: object
+              conditions:
+                default: []
+                description: Kubernetes-style condition list.
+                items:
+                  description: One entry of a `status.conditions` list.
+                  properties:
+                    lastTransitionTime:
+                      description: RFC3339 timestamp.
+                      type: string
+                    message:
+                      description: Human-readable message.
+                      type: string
+                    reason:
+                      description: CamelCase machine reason.
+                      type: string
+                    status:
+                      description: '`True`, `False`, or `Unknown`.'
+                      type: string
+                    type:
+                      description: For example, `Ready`.
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+              confirmedPgdogConfigHash:
+                description: Last `PgDog` config hash that was confirmed through the admin surface.
+                nullable: true
+                type: string
+              observedGeneration:
+                description: '`metadata.generation` of the last successfully-reconciled spec.'
+                format: int64
+                nullable: true
+                type: integer
+              serviceUrl:
+                description: In-cluster service URL for the `PgDog` front door.
+                nullable: true
+                type: string
+            type: object
+        required:
+        - spec
+        title: Gres
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

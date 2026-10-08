@@ -780,9 +780,8 @@ async fn recover_live_for_range_inner(
             .flush_timeout(config.producer_flush_timeout().duration())
             .retries(config.producer_retry_policy.retries())
             .retry_backoff(config.producer_retry_policy.retry_backoff())
-            .routing_retry_budget(config.producer_retry_policy.routing_retry_budget())
+            .retry_backoff_max(config.producer_retry_policy.retry_backoff_max())
             .init_retry_timeout(config.producer_retry_policy.init_retry_timeout())
-            .init_max_backoff(config.producer_retry_policy.init_max_backoff())
             .max_in_flight_per_connection(config.producer_throughput_policy.max_in_flight())
             .transactional_id(config.transactional_id())
             .transaction_timeout(config.producer_retry_policy.transaction_timeout())
@@ -936,11 +935,12 @@ fn wal_admin_connection_options(config: &LiveRecoveryConfig) -> ConnectionOption
     ConnectionOptions {
         dns_timeout: krabka_client_core::ClientDnsTimeout::default(),
         client_id: config.client_id(),
-        connect_timeout: config.wal_admin_policy.connect_timeout(),
+        socket_connection_setup_timeout: config.wal_admin_policy.connect_timeout(),
         request_timeout: config.wal_admin_policy.request_timeout(),
         dispatch_queue_capacity: config.dispatch_queue_capacity,
         frame_max: config.frame_max,
         security: config.security.clone().map(Box::new),
+        ..ConnectionOptions::default()
     }
 }
 
@@ -1051,11 +1051,12 @@ fn wal_connection_options(
     ConnectionOptions {
         dns_timeout: krabka_client_core::ClientDnsTimeout::default(),
         client_id: client_id.to_string(),
-        connect_timeout: read_policy.connect_timeout(),
+        socket_connection_setup_timeout: read_policy.connect_timeout(),
         request_timeout: read_policy.request_timeout(),
         dispatch_queue_capacity,
         frame_max,
         security: security.map(Box::new),
+        ..ConnectionOptions::default()
     }
 }
 
@@ -2169,7 +2170,7 @@ mod tests {
             wal_connection_options("replay-client", Some(security), policy, dispatch, frame_max);
 
         assert!(options.client_id == "replay-client");
-        assert!(options.connect_timeout == millis(77));
+        assert!(options.socket_connection_setup_timeout == millis(77));
         assert!(options.request_timeout == millis(88));
         assert!(options.dispatch_queue_capacity == dispatch);
         assert!(options.frame_max == frame_max);
@@ -2227,9 +2228,9 @@ mod tests {
         let tenant = TenantName::parse("tenant-a").expect("tenant");
         let config =
             LiveRecoveryConfig::new("localhost:9092", tenant.clone(), RangeId::new(7), None);
-        assert_eq!(
-            config.producer_retry_policy(),
-            krabka_client_producer::ProducerRetryPolicy::default()
+        assert!(
+            config.producer_retry_policy()
+                == krabka_client_producer::ProducerRetryPolicy::default()
         );
 
         let replacement = krabka_client_producer::ProducerRetryPolicy::new(
@@ -2239,14 +2240,13 @@ mod tests {
             Duration::from_millis(34),
             Duration::from_millis(35),
             Duration::from_millis(36),
-            Duration::from_millis(37),
         )
         .expect("valid policy");
-        assert_eq!(
+        assert!(
             LiveRecoveryConfig::new("localhost:9092", tenant, RangeId::new(7), None)
                 .with_producer_retry_policy(replacement)
-                .producer_retry_policy(),
-            replacement
+                .producer_retry_policy()
+                == replacement
         );
     }
 
@@ -2367,7 +2367,7 @@ mod tests {
         let options = wal_admin_connection_options(&config);
 
         assert!(options.client_id == "krabka-gres-tenant-a-r7");
-        assert!(options.connect_timeout == millis(33));
+        assert!(options.socket_connection_setup_timeout == millis(33));
         assert!(options.request_timeout == millis(44));
         assert!(
             options.security.expect("security").sasl_host.as_deref() == Some("broker.internal")

@@ -28,10 +28,10 @@ krabka-pgexec = { version = "0.4.2", path = "../pgexec" }
 krabka-pgkv = { version = "0.4.2", path = "../pgkv" }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "io-util", "time", "sync", "test-util"] }
 thiserror = { workspace = true }
-krabka-client-core = { version = "0.4.2", path = "../client-core" }
-krabka-client-admin = { version = "0.4.2", path = "../client-admin" }
-krabka-protocol = { version = "0.4.2", path = "../protocol" }
-krabka-schema-serde = { version = "0.4.2", path = "../schema-serde", features = ["avro", "json", "protobuf"] }
+krabka-client-core = { version = "0.6.0" }
+krabka-client-admin = { version = "0.6.0" }
+krabka-protocol = { version = "0.6.0" }
+krabka-schema-serde = { version = "0.4.2", features = ["avro", "json", "protobuf"] }
 krabka-security = { workspace = true }
 krabka-units = { workspace = true }
 apache-avro = { workspace = true }
@@ -45,9 +45,9 @@ protox = { workspace = true }
 
 [dev-dependencies]
 assert2 = { workspace = true }
-krabka-broker = { version = "0.4.2", path = "../broker" }
-krabka-schema-registry = { version = "0.4.2", path = "../schema-registry" }
-krabka-client-producer = { version = "0.4.2", path = "../client-producer" }
+krabka-broker = { version = "1.0.0" }
+krabka-schema-registry = { version = "0.4.2" }
+krabka-client-producer = { version = "0.6.0" }
 krabka-pgwire = { version = "0.4.2", path = "../pgwire" }
 tokio-postgres = { workspace = true }
 tokio-util = { workspace = true }

@@ -217,9 +217,13 @@ where
                 ("cleanup.policy".to_string(), "delete".to_string()),
                 ("retention.ms".to_string(), "-1".to_string()),
             ]),
+            replica_assignments: BTreeMap::new(),
         }];
         let outcomes = self
-            .create_topics(&specs, timeout)
+            .create_topics(
+                &specs,
+                krabka_client_admin::TopicMutationOptions::with_timeout(timeout),
+            )
             .await
             .map_err(|error| SubstrateError::Topic(error.to_string()))?;
         let failed = outcomes.iter().find(|outcome| {

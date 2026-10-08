@@ -26,7 +26,7 @@ tracing = { workspace = true }
 # W3C trace-context ingress. The only tracing crate a *published* wire-protocol
 # crate may depend on: `krabka-telemetry` is `publish = false` and drags in a web
 # server, a CLI parser and a profiler.
-krabka-trace-context = { version = "0.4.2", path = "../trace-context" }
+krabka-trace-context = { version = "0.6.0" }
 # Exact, lint-clean `f64 -> u64` truncation for the `TraceIdRatioBased`
 # resampling bound, which has to agree bit-for-bit with `opentelemetry_sdk`.
 num-traits = { workspace = true }

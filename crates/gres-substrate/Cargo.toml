@@ -30,16 +30,16 @@ required-features = ["checkpoint-test-hooks"]
 krabka-pgexec = { version = "0.4.2", path = "../pgexec" }
 krabka-pgkv = { version = "0.4.2", path = "../pgkv" }
 krabka-pgmvcc = { version = "0.4.2", path = "../pgmvcc" }
-krabka-client-core = { version = "0.4.2", path = "../client-core" }
-krabka-client-producer = { version = "0.4.2", path = "../client-producer" }
-krabka-client-admin = { version = "0.4.2", path = "../client-admin" }
-krabka-protocol = { version = "0.4.2", path = "../protocol" }
+krabka-client-core = { version = "0.6.0" }
+krabka-client-producer = { version = "0.6.0" }
+krabka-client-admin = { version = "0.6.0" }
+krabka-protocol = { version = "0.6.0" }
 krabka-security = { workspace = true }
 krabka-gres-ranges = { version = "0.4.2", path = "../gres-ranges" }
-krabka-object-store = { version = "0.4.2", path = "../object-store" }
+krabka-object-store = { version = "1.0.0" }
 # W3C trace-context propagation only. Deliberately *not* `krabka-telemetry`,
 # which drags in axum/clap/pprof/tonic/opentelemetry-otlp.
-krabka-trace-context = { version = "0.4.2", path = "../trace-context" }
+krabka-trace-context = { version = "0.6.0" }
 krabka-units = { workspace = true }
 async-trait = { workspace = true }
 bytes = { workspace = true }
@@ -57,8 +57,8 @@ tracing = { workspace = true }
 krabka-pgcatalog = { version = "0.4.2", path = "../pgcatalog" }
 assert2 = { workspace = true }
 proptest = { workspace = true }
-krabka-broker = { version = "0.4.2", path = "../broker", features = ["test-helpers"] }
-krabka-raft = { version = "0.4.2", path = "../raft" }
+krabka-broker = { version = "1.0.0", features = ["test-helpers"] }
+krabka-raft = { version = "1.0.0" }
 krabka-pgtypes = { version = "0.4.2", path = "../pgtypes" }
 opentelemetry = { workspace = true, features = ["trace"] }
 opentelemetry_sdk = { workspace = true, features = ["trace", "testing"] }

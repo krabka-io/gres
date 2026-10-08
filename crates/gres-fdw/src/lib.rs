@@ -248,7 +248,7 @@ impl ForeignScanner for KafkaFdw {
                     security: profile.security.clone().map(Box::new),
                     ..krabka_client_core::ConnectionOptions::default()
                 };
-                options.connect_timeout = krabka_units::secs(5);
+                options.socket_connection_setup_timeout = krabka_units::secs(5);
                 options.request_timeout = krabka_units::secs(30);
                 let mut admin = AdminClient::connect_with_options(&profile.bootstrap, options)
                     .await

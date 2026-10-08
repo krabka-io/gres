@@ -3501,7 +3501,7 @@ const MAX_NESTED_PLPGSQL_TABLE_CALLS: usize = 4;
 impl PlPgSqlCallDepthGuard {
     fn enter(depth: Arc<AtomicUsize>, limit: usize) -> Result<Self, ExecError> {
         depth
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |current| {
+            .try_update(Ordering::AcqRel, Ordering::Acquire, |current| {
                 (current < limit).then_some(current + 1)
             })
             .map_err(|_| ExecError::StackDepthExceeded)?;

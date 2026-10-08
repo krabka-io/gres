@@ -17,10 +17,7 @@ use krabka_gres_control::{
     HashPlacement, RangeBoundary, RangeRetirementPhase, Registry, SplitOperationPhase,
     SplitOperationRecord, TenantName, TenantRecord,
 };
-use krabka_gres_ranges::{
-    AuthorizedSplitIntent, RangeControlOperation, RangeControlReq, RangeControlResp, RangeId,
-};
-use krabka_operator::{
+use krabka_gres_operator::{
     context::{GresControlHandle, GresControlLike, GresControlWriteError},
     controller::{
         gres_split_operation::{
@@ -29,6 +26,9 @@ use krabka_operator::{
         },
         gres_tenant::{RangeRetirementAdmin, reconcile_one_retiring_range_wal},
     },
+};
+use krabka_gres_ranges::{
+    AuthorizedSplitIntent, RangeControlOperation, RangeControlReq, RangeControlResp, RangeId,
 };
 use krabka_units::convert::ByteSizeExt as _;
 use serde::{Deserialize, Serialize};
@@ -676,7 +676,13 @@ impl RangeRetirementAdmin for CountingRetirementAdmin {
             ));
         }
         self.ledger.lock().expect("delete ledger").exact_calls += 1;
-        let result = self.inner.delete_topics(names, timeout).await?;
+        let result = self
+            .inner
+            .delete_topics(
+                names,
+                krabka_client_admin::TopicMutationOptions::with_timeout(timeout),
+            )
+            .await?;
         if self.fail_after_delete && result.iter().all(|outcome| outcome.error.is_none()) {
             self.fail_after_delete = false;
             let mut ledger = self.ledger.lock().expect("delete ledger");
@@ -4460,8 +4466,9 @@ async fn prepare_split_system(
                 partitions: 1,
                 replicas: 1,
                 configs: BTreeMap::new(),
+                replica_assignments: BTreeMap::new(),
             }],
-            krabka_units::secs(30),
+            krabka_client_admin::TopicMutationOptions::with_timeout(krabka_units::secs(30)),
         )
         .await
         .expect("create sentinel topic");

@@ -3,7 +3,7 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use bytes::Bytes;
-use krabka_object_store::{ObjectOps, ObjectStoreError};
+use krabka_object_store::{ObjectOps, ObjectStoreError, PutRequest};
 use object_store::path::Path;
 use tokio::sync::RwLock;
 
@@ -96,8 +96,9 @@ impl ObjectOpsCheckpointStore {
 impl CheckpointStore for ObjectOpsCheckpointStore {
     async fn put(&self, key: &str, bytes: Vec<u8>) -> Result<(), SubstrateError> {
         self.ops
-            .put(&Path::from(key), Bytes::from(bytes))
+            .put(&Path::from(key), Bytes::from(bytes), PutRequest::default())
             .await
+            .map(|_| ())
             .map_err(|error| map_object_error(&error))
     }
 

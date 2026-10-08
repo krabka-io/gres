@@ -570,7 +570,7 @@ expect_sql_equals "tenant A SCRAM" "$TENANT_A_CONN" alice-secret 'SELECT 1' 1
 expect_sql_equals "tenant B SCRAM" "$TENANT_B_CONN" bob-secret 'SELECT 1' 1
 expect_tls_negotiated "$TENANT_A_CONN" alice-secret
 expect_sql_fails "plaintext-client" "host=localhost port=${PGDOG_PORT} dbname=tenant-a user=alice sslmode=disable" alice-secret 'SELECT 1'
-expect_sql_fails "incorrect-tls-trust" "host=localhost port=${PGDOG_PORT} dbname=tenant-a user=alice sslmode=verify-full sslrootcert=${PWD}/crates/security/tests/fixtures/dev_client_ca.pem" alice-secret 'SELECT 1'
+expect_sql_fails "incorrect-tls-trust" "host=localhost port=${PGDOG_PORT} dbname=tenant-a user=alice sslmode=verify-full sslrootcert=${PWD}/crates/gres-ranges/tests/fixtures/tls/dev_client_ca.pem" alice-secret 'SELECT 1'
 expect_sql_fails "wrong-password" "$TENANT_A_CONN" wrong-secret 'SELECT 1'
 expect_sql_fails "wrong-tenant-credentials" "$WRONG_TENANT_CONN" alice-secret 'SELECT 1'
 for _ in $(seq 40); do

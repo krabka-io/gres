@@ -30,13 +30,13 @@ krabka-gres-control = { path = "../gres-control" }
 krabka-pgcatalog = { path = "../pgcatalog" }
 krabka-gres-ranges = { path = "../gres-ranges" }
 krabka-gres-substrate = { path = "../gres-substrate" }
-krabka-object-store = { version = "0.4.2", path = "../object-store" }
-krabka-client-admin = { version = "0.4.2", path = "../client-admin" }
-krabka-client-core = { version = "0.4.2", path = "../client-core" }
-krabka-client-producer = { version = "0.4.2", path = "../client-producer" }
-krabka-protocol = { version = "0.4.2", path = "../protocol", default-features = false }
-krabka-security = { path = "../security" }
-krabka-telemetry = { version = "0.4.2", path = "../telemetry" }
+krabka-object-store = { version = "1.0.0" }
+krabka-client-admin = { version = "0.6.0" }
+krabka-client-core = { version = "0.6.0" }
+krabka-client-producer = { version = "0.6.0" }
+krabka-protocol = { version = "0.6.0", default-features = false }
+krabka-security = { version = "0.6.0" }
+krabka-telemetry = { version = "1.0.0" }
 krabka-units = { workspace = true }
 bytes = { workspace = true }
 clap = { workspace = true, features = ["env"] }
@@ -54,16 +54,16 @@ serde = { workspace = true, features = ["derive"] }
 async-trait = { workspace = true }
 
 [dev-dependencies]
-krabka-operator = { path = "../operator" }
+krabka-gres-operator = { path = "../gres-operator" }
 futures-util = { workspace = true }
 async-trait = { workspace = true }
 assert2 = { workspace = true }
 bytes = { workspace = true }
-krabka-broker = { path = "../broker" }
+krabka-broker = { version = "1.0.0" }
 krabka-gres-control = { path = "../gres-control" }
 krabka-pgmvcc = { path = "../pgmvcc" }
 krabka-pgtypes = { path = "../pgtypes" }
-krabka-security = { path = "../security" }
+krabka-security = { version = "0.6.0" }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["full", "test-util"] }
 tokio-postgres = { workspace = true }

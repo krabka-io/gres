@@ -67,10 +67,10 @@ impl MtlsFixture {
                     client_auth: krabka_security::ClientAuthMode::Required,
                 },
                 range_rpc_principals: BTreeSet::from([
-                    "CN=test-client,OU=integration,O=crabka".to_string()
+                    "CN=test-client,OU=integration,O=krabka".to_string()
                 ]),
                 operator_control_principals: BTreeSet::from([
-                    "CN=test-client,OU=integration,O=crabka".to_string(),
+                    "CN=test-client,OU=integration,O=krabka".to_string(),
                 ]),
             },
             client: RangeTlsClientConfig {
@@ -90,13 +90,13 @@ impl MtlsFixture {
 fn write_fixture(dir: &tempfile::TempDir, name: &str, fixture: &str) -> PathBuf {
     let path = dir.path().join(name);
     let contents: &[u8] = match fixture {
-        "dev_cert.pem" => include_bytes!("../../security/tests/fixtures/dev_cert.pem"),
-        "dev_key.pem" => include_bytes!("../../security/tests/fixtures/dev_key.pem"),
-        "dev_client_ca.pem" => include_bytes!("../../security/tests/fixtures/dev_client_ca.pem"),
+        "dev_cert.pem" => include_bytes!("fixtures/tls/dev_cert.pem"),
+        "dev_key.pem" => include_bytes!("fixtures/tls/dev_key.pem"),
+        "dev_client_ca.pem" => include_bytes!("fixtures/tls/dev_client_ca.pem"),
         "dev_client_cert.pem" => {
-            include_bytes!("../../security/tests/fixtures/dev_client_cert.pem")
+            include_bytes!("fixtures/tls/dev_client_cert.pem")
         }
-        "dev_client_key.pem" => include_bytes!("../../security/tests/fixtures/dev_client_key.pem"),
+        "dev_client_key.pem" => include_bytes!("fixtures/tls/dev_client_key.pem"),
         _ => unreachable!("fixture name is fixed by this test"),
     };
     std::fs::write(&path, contents).expect("write certificate fixture");

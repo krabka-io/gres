@@ -32,11 +32,8 @@ mod tests {
         install_default_provider();
 
         // krabka-client-core builds its ClientConfig from the process default:
-        let tls = krabka_client_core::security::TlsConnectorConfig {
-            trust_roots_pem: None,
-            server_name: "localhost".into(),
-            client_identity: None,
-        };
+        let mut tls = krabka_client_core::security::TlsConnectorConfig::default();
+        tls.server_name = "localhost".into();
         let client_cfg = tls.build();
         assert!(
             client_cfg.is_ok(),
