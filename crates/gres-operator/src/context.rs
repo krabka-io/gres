@@ -929,7 +929,7 @@ impl Context {
             return Ok(client.clone());
         }
         let admin = AdminClient::connect_with_options(
-            &[bootstrap.to_string()],
+            &bootstrap_addrs(bootstrap),
             krabka_client_core::ConnectionOptions {
                 dispatch_queue_capacity: krabka_client_core::ConnectionDispatchQueueCapacity::new(
                     self.config.client_dispatch_queue_capacity,
@@ -1099,6 +1099,17 @@ fn checkpoint_manifest_verifier(config: &OperatorConfig) -> CheckpointManifestVe
     }
 }
 
+/// Splits a comma-separated `bootstrapServers` value into its trimmed,
+/// non-empty `host:port` entries.
+fn bootstrap_addrs(bootstrap: &str) -> Vec<String> {
+    bootstrap
+        .split(',')
+        .map(str::trim)
+        .filter(|entry| !entry.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use assert2::assert;
@@ -1109,6 +1120,15 @@ mod tests {
 
     fn fixture_password() -> String {
         std::process::id().to_string()
+    }
+
+    #[test]
+    fn bootstrap_addrs_splits_a_comma_separated_list() {
+        assert!(
+            bootstrap_addrs(" broker-a:9092, broker-b:9092 ,,")
+                == ["broker-a:9092", "broker-b:9092"]
+        );
+        assert!(bootstrap_addrs("broker-a:9092") == ["broker-a:9092"]);
     }
 
     #[derive(Parser)]
