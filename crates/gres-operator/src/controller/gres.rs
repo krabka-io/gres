@@ -885,6 +885,33 @@ fn render_deployment(
     }))?)
 }
 
+/// The activator's SASL username and password, read by the kubelet from the
+/// fleet's Kafka credentials Secret, so neither appears in the Deployment.
+fn activator_kafka_sasl_env(
+    credentials: Option<&crate::crd::KafkaCredentialsSecretRef>,
+) -> Vec<serde_json::Value> {
+    credentials.map_or_else(Vec::new, |credentials| {
+        [
+            (
+                "KRABKA_GRES_ACTIVATOR_KAFKA_SASL_USERNAME",
+                &credentials.username_key,
+            ),
+            (
+                "KRABKA_GRES_ACTIVATOR_KAFKA_SASL_PASSWORD",
+                &credentials.password_key,
+            ),
+        ]
+        .into_iter()
+        .map(|(name, key)| {
+            json!({
+                "name": name,
+                "valueFrom": { "secretKeyRef": { "name": credentials.name, "key": key } }
+            })
+        })
+        .collect()
+    })
+}
+
 fn render_activator_deployment(
     obj: &Gres,
     bootstrap: &str,
@@ -972,6 +999,12 @@ fn render_activator_deployment(
             namespace = obj.namespace().unwrap_or_else(|| "default".into())
         ),
     ]);
+    let env = activator_kafka_sasl_env(
+        obj.spec
+            .kafka
+            .credentials()
+            .map_err(ReconcileError::Malformed)?,
+    );
     Ok(serde_json::from_value(json!({
         "metadata": { "name": activator_deployment_name(&name), "namespace": obj.namespace(), "labels": activator_meta_labels(obj), "ownerReferences": [owner_ref::<Gres>(obj)?] },
         "spec": {
@@ -985,6 +1018,7 @@ fn render_activator_deployment(
                         "name": "gres-activator",
                         "image": image,
                         "args": args,
+                        "env": env,
                         "ports": [{ "name": "postgres", "containerPort": ACTIVATOR_PORT, "protocol": "TCP" }],
                         "readinessProbe": { "tcpSocket": { "port": ACTIVATOR_PORT }, "periodSeconds": readiness_period_seconds }
                     }]
@@ -1222,6 +1256,7 @@ mod tests {
                 kafka: crate::crd::GresKafkaSpec {
                     bootstrap_servers: "demo:9092".into(),
                     sasl: false,
+                    credentials_secret_ref: None,
                     registry: None,
                 },
                 pgdog: PgdogSpec {
@@ -1419,6 +1454,74 @@ mod tests {
                 "--backend-endpoint-template",
                 "{tenant}-gres.ns.svc:5432",
             ]
+        );
+    }
+
+    #[test]
+    fn activator_reads_kafka_sasl_credentials_from_the_secret() {
+        let render = |obj: &Gres| {
+            render_activator_deployment(
+                obj,
+                "registry.demo.svc:9092",
+                "krabka-gres-activator:e2e",
+                &krabka_gres_control::RegistryPolicy::default(),
+                None,
+            )
+            .expect("render activator deployment")
+            .spec
+            .expect("spec")
+            .template
+            .spec
+            .expect("pod spec")
+            .containers
+            .remove(0)
+            .env
+            .unwrap_or_default()
+        };
+        assert!(render(&gres()).is_empty());
+
+        let mut obj = gres();
+        obj.spec.kafka.sasl = true;
+        obj.spec.kafka.credentials_secret_ref = Some(crate::crd::KafkaCredentialsSecretRef {
+            name: "gres-operator-kafka".into(),
+            username_key: "user".into(),
+            password_key: "pass".into(),
+        });
+        let env = render(&obj)
+            .into_iter()
+            .map(|var| {
+                let reference = var
+                    .value_from
+                    .and_then(|source| source.secret_key_ref)
+                    .expect("secret reference");
+                (var.name, reference.name, reference.key)
+            })
+            .collect::<Vec<_>>();
+        assert!(
+            env == [
+                (
+                    "KRABKA_GRES_ACTIVATOR_KAFKA_SASL_USERNAME".to_owned(),
+                    "gres-operator-kafka".to_owned(),
+                    "user".to_owned(),
+                ),
+                (
+                    "KRABKA_GRES_ACTIVATOR_KAFKA_SASL_PASSWORD".to_owned(),
+                    "gres-operator-kafka".to_owned(),
+                    "pass".to_owned(),
+                ),
+            ]
+        );
+
+        obj.spec.kafka.credentials_secret_ref = None;
+        assert!(
+            render_activator_deployment(
+                &obj,
+                "registry.demo.svc:9092",
+                "krabka-gres-activator:e2e",
+                &krabka_gres_control::RegistryPolicy::default(),
+                None,
+            )
+            .is_err()
         );
     }
 

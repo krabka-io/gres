@@ -84,6 +84,7 @@ fn gres() -> Gres {
             kafka: GresKafkaSpec {
                 bootstrap_servers: BOOTSTRAP.into(),
                 sasl: false,
+                credentials_secret_ref: None,
                 registry: None,
             },
             pgdog: PgdogSpec {

@@ -635,6 +635,29 @@ spec:
                       `demo-kafka-bootstrap.kafka.svc:9092`.
                     minLength: 1
                     type: string
+                  credentialsSecretRef:
+                    description: |-
+                      The SCRAM-SHA-512 credentials that the operator and the activator use
+                      on a SASL listener. Required when `sasl` is `true`, and rejected
+                      otherwise. The principal must be allowed to manage topics, ACLs, and
+                      SCRAM credentials, and to read and write the tenant registry.
+                    nullable: true
+                    properties:
+                      name:
+                        description: Secret name.
+                        minLength: 1
+                        type: string
+                      passwordKey:
+                        default: password
+                        description: Secret data key of the password.
+                        type: string
+                      usernameKey:
+                        default: username
+                        description: Secret data key of the username.
+                        type: string
+                    required:
+                    - name
+                    type: object
                   registry:
                     description: Creation and reader policy for the Gres tenant registry topic.
                     nullable: true
@@ -680,7 +703,8 @@ spec:
                     description: |-
                       Whether the listener requires SASL/SCRAM. When it is `true`, the
                       operator upserts a `gres-<tenant>` SCRAM credential for each tenant,
-                      and each compute pod authenticates with it.
+                      and each compute pod authenticates with it. The operator and the
+                      activator authenticate with `credentialsSecretRef`.
                     type: boolean
                 required:
                 - bootstrapServers

@@ -12,12 +12,13 @@ use std::{
 use bytes::Bytes;
 use krabka_client_admin::{AdminClient, CreateTopicSpec, TopicMutationOptions};
 use krabka_client_core::{
-    ClientDnsTimeout, ClientFrameMax, Connection, ConnectionDispatchQueueCapacity,
-    ConnectionOptions, DEFAULT_FETCH_RESPONSE_MAX, FetchMinBytes, IsolatedFetch,
+    ClientDnsTimeout, ClientFrameMax, ClientSecurity, Connection, ConnectionDispatchQueueCapacity,
+    ConnectionOptions, DEFAULT_FETCH_RESPONSE_MAX, FetchMinBytes, IsolatedFetch, SaslCredentials,
     fetch_partition_with_isolation_progress,
 };
 use krabka_client_producer::{Acks, Producer, ProducerError, ProducerRecord, Transaction};
 use krabka_protocol::primitives::uuid::Uuid as WireUuid;
+use krabka_security::{ListenerProtocol, SaslMechanism};
 use krabka_units::{
     ByteSize, Time,
     convert::{ByteSizeExt as _, TimeExt as _},
@@ -762,6 +763,9 @@ pub struct Registry {
     applied_rx: watch::Receiver<i64>,
     applied_tx: watch::Sender<i64>,
     write_gate: Mutex<()>,
+    /// TLS and SASL settings of every registry connection. `None` connects
+    /// over plaintext without authentication.
+    security: Option<ClientSecurity>,
     /// Background reader task that keeps `tenants` and `split_operations`
     /// fresh. It aborts when the registry drops, so a short-lived holder such
     /// as CLI provisioning or a test harness does not leak a poll loop that
@@ -783,16 +787,20 @@ impl Registry {
     ///
     /// Returns an error when the requested operation cannot be completed.
     pub async fn connect(bootstrap: &str) -> Result<Self, ControlError> {
-        Self::connect_with_policy(bootstrap, RegistryPolicy::default()).await
+        Self::connect_with_policy(bootstrap, RegistryPolicy::default(), None).await
     }
 
     /// Connects registry resources using an explicit shared topic policy.
+    ///
+    /// `security` applies to the producer, the reader, and the admin
+    /// connections. `None` connects over plaintext without authentication.
     /// # Errors
     ///
     /// Returns an error when the requested operation cannot be completed.
     pub async fn connect_with_policy(
         bootstrap: &str,
         policy: RegistryPolicy,
+        security: Option<ClientSecurity>,
     ) -> Result<Self, ControlError> {
         let producer = Producer::builder()
             .bootstrap(bootstrap.to_string())
@@ -803,6 +811,7 @@ impl Registry {
             .enable_idempotence(true)
             .acks(Acks::All)
             .transactional_id(REGISTRY_TRANSACTIONAL_ID)
+            .maybe_security(security.clone())
             .build()
             .await?;
         let (applied_tx, applied_rx) = watch::channel(-1_i64);
@@ -815,6 +824,7 @@ impl Registry {
             applied_rx,
             applied_tx,
             write_gate: Mutex::new(()),
+            security,
             reader: None,
         })
     }
@@ -830,7 +840,8 @@ impl Registry {
     ///
     /// Returns an error when the requested operation cannot be completed.
     pub async fn ensure_topic(&mut self) -> Result<(), ControlError> {
-        let topic_id = ensure_registry_topic(&self.bootstrap, &self.policy).await?;
+        let topic_id =
+            ensure_registry_topic(&self.bootstrap, &self.policy, self.security.as_ref()).await?;
         if self.reader.is_some() {
             return Ok(());
         }
@@ -841,6 +852,7 @@ impl Registry {
             Arc::clone(&self.split_operations),
             self.applied_tx.clone(),
             self.policy.clone(),
+            self.security.clone(),
         ));
         Ok(())
     }
@@ -1053,6 +1065,7 @@ impl Registry {
             &producer_record.topic,
             replicas,
             &self.policy,
+            self.security.as_ref(),
         )
         .await?;
         self.producer.send(producer_record).await?;
@@ -1355,7 +1368,7 @@ impl Registry {
         let bootstrap_addrs = split_bootstrap(&self.bootstrap);
         let mut admin = AdminClient::connect_with_options(
             &bootstrap_addrs,
-            registry_admin_options(&self.policy),
+            registry_admin_options(&self.policy, self.security.as_ref()),
         )
         .await?;
         let metadata = admin.metadata(&[TENANT_REGISTRY_TOPIC]).await?;
@@ -1376,6 +1389,7 @@ impl Registry {
             client_id: "krabka-gres-control-refresh".to_string(),
             dispatch_queue_capacity: self.policy.dispatch_queue_capacity,
             frame_max: self.policy.frame_max,
+            security: self.security.clone().map(Box::new),
             ..Default::default()
         };
         let conn = Connection::connect_with_options(addr, opts).await?;
@@ -1674,12 +1688,14 @@ fn is_merge_already_applied(current: &TenantRecord, merge: &RangeLayoutMerge) ->
 async fn ensure_registry_topic(
     bootstrap: &str,
     policy: &RegistryPolicy,
+    security: Option<&ClientSecurity>,
 ) -> Result<WireUuid, ControlError> {
     let entry = ensure_compacted_single_partition_topic(
         bootstrap,
         TENANT_REGISTRY_TOPIC,
         policy.replication_factor,
         policy,
+        security,
     )
     .await?;
     validate_registry_replication(entry.replication_factor, policy.replication_factor)?;
@@ -1701,10 +1717,14 @@ async fn ensure_compacted_single_partition_topic(
     topic: &str,
     replicas: i32,
     policy: &RegistryPolicy,
+    security: Option<&ClientSecurity>,
 ) -> Result<krabka_client_admin::TopicMetadataEntry, ControlError> {
     let bootstrap_addrs = split_bootstrap(bootstrap);
-    let mut admin =
-        AdminClient::connect_with_options(&bootstrap_addrs, registry_admin_options(policy)).await?;
+    let mut admin = AdminClient::connect_with_options(
+        &bootstrap_addrs,
+        registry_admin_options(policy, security),
+    )
+    .await?;
     let (spec, timeout) = compacted_topic_request(topic, replicas, policy);
     let outcomes = admin
         .create_topics(&[spec], TopicMutationOptions::with_timeout(timeout))
@@ -1798,6 +1818,7 @@ fn spawn_reader(
     split_operations: Arc<RwLock<BTreeMap<(String, String), SplitOperationRecord>>>,
     applied_tx: watch::Sender<i64>,
     policy: RegistryPolicy,
+    security: Option<ClientSecurity>,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let mut next_offset = 0_i64;
@@ -1817,6 +1838,7 @@ fn spawn_reader(
                 client_id: "krabka-gres-control-reader".to_string(),
                 dispatch_queue_capacity: policy.dispatch_queue_capacity,
                 frame_max: policy.frame_max,
+                security: security.clone().map(Box::new),
                 ..Default::default()
             };
             let conn = match Connection::connect_with_options(addr, opts).await {
@@ -1887,7 +1909,27 @@ fn split_bootstrap(bootstrap: &str) -> Vec<String> {
         .collect()
 }
 
-fn registry_admin_options(policy: &RegistryPolicy) -> ConnectionOptions {
+/// The client security of a `SASL_PLAINTEXT` listener that authenticates
+/// with SCRAM-SHA-512, as the Gres control plane and compute pods use it.
+#[must_use]
+pub fn scram_sha512_security(username: String, password: String) -> ClientSecurity {
+    ClientSecurity {
+        protocol: ListenerProtocol::SaslPlaintext,
+        tls: None,
+        sasl: Some(SaslCredentials::Scram {
+            mechanism: SaslMechanism::ScramSha512,
+            username,
+            password,
+            delegation_token: false,
+        }),
+        sasl_host: None,
+    }
+}
+
+fn registry_admin_options(
+    policy: &RegistryPolicy,
+    security: Option<&ClientSecurity>,
+) -> ConnectionOptions {
     ConnectionOptions {
         dns_timeout: policy.reader_admin_dns_timeout(),
         socket_connection_setup_timeout: krabka_units::secs(5),
@@ -1895,6 +1937,7 @@ fn registry_admin_options(policy: &RegistryPolicy) -> ConnectionOptions {
         client_id: "krabka-operator".to_string(),
         dispatch_queue_capacity: policy.dispatch_queue_capacity,
         frame_max: policy.frame_max,
+        security: security.cloned().map(Box::new),
         ..ConnectionOptions::default()
     }
 }
@@ -2091,10 +2134,33 @@ mod tests {
         assert!(policy.dispatch_queue_capacity == dispatch);
         assert!(policy.frame_max == frame_max);
         assert!(policy.reader_fetch_min == fetch_min);
-        let admin = registry_admin_options(&policy);
+        let admin = registry_admin_options(&policy, None);
         assert!(admin.dispatch_queue_capacity == dispatch);
         assert!(admin.frame_max == frame_max);
+        assert!(admin.security.is_none());
         assert!(registry_fetch(0, WireUuid::ZERO, &policy).fetch_min == fetch_min);
+    }
+
+    #[test]
+    fn registry_admin_options_carry_scram_security() {
+        let security = scram_sha512_security("gres-operator".into(), "secret".into());
+        let admin = registry_admin_options(&RegistryPolicy::default(), Some(&security));
+        let carried = admin.security.expect("SASL security");
+
+        assert!(carried.protocol == ListenerProtocol::SaslPlaintext);
+        assert!(carried.tls.is_none());
+        let Some(SaslCredentials::Scram {
+            mechanism,
+            username,
+            password,
+            delegation_token,
+        }) = carried.sasl
+        else {
+            panic!("SCRAM credentials");
+        };
+        assert!(mechanism == SaslMechanism::ScramSha512);
+        assert!((username.as_str(), password.as_str()) == ("gres-operator", "secret"));
+        assert!(!delegation_token);
     }
 
     #[test]
@@ -2477,7 +2543,7 @@ mod tests {
         let policy =
             RegistryPolicy::new(1, millis(12_345), millis(678), millis(901), bytes(234_567))
                 .unwrap();
-        let mut registry = Registry::connect_with_policy(&bootstrap, policy.clone())
+        let mut registry = Registry::connect_with_policy(&bootstrap, policy.clone(), None)
             .await
             .expect("registry connect");
         assert!(registry.policy() == &policy);

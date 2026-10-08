@@ -37,5 +37,5 @@ pub use record::{
 };
 pub use registry::{
     InMemoryRegistryStore, PositiveI32, PositiveMillis, Registry, RegistryPolicy,
-    RegistryReplicationFactor, TenantRegistryStore, fold,
+    RegistryReplicationFactor, TenantRegistryStore, fold, scram_sha512_security,
 };

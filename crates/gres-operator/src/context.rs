@@ -781,7 +781,49 @@ struct KafkaGresControl {
 struct CachedGresControl {
     bootstrap: String,
     policy: krabka_gres_control::RegistryPolicy,
+    credentials: Option<KafkaCredentials>,
     control: GresControlHandle,
+}
+
+/// The SCRAM-SHA-512 credentials that the operator uses on a SASL Kafka
+/// listener, read from `Gres.spec.kafka.credentialsSecretRef`.
+#[derive(Clone, PartialEq, Eq)]
+pub struct KafkaCredentials {
+    username: String,
+    password: String,
+}
+
+impl KafkaCredentials {
+    /// Credentials for `username` and `password`.
+    #[must_use]
+    pub const fn new(username: String, password: String) -> Self {
+        Self { username, password }
+    }
+
+    /// The client security of a `SASL_PLAINTEXT` connection with these
+    /// credentials.
+    #[must_use]
+    pub fn security(&self) -> krabka_client_core::security::ClientSecurity {
+        krabka_gres_control::scram_sha512_security(self.username.clone(), self.password.clone())
+    }
+
+    /// A cache-key component that changes when either credential changes and
+    /// does not reveal the password.
+    fn fingerprint(&self) -> String {
+        use sha2::Digest as _;
+        let digest = sha2::Sha256::digest(self.password.as_bytes());
+        format!("{}\0{}", self.username, hex::encode(digest))
+    }
+}
+
+impl std::fmt::Debug for KafkaCredentials {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("KafkaCredentials")
+            .field("username", &self.username)
+            .field("password", &"[hidden]")
+            .finish()
+    }
 }
 
 #[async_trait::async_trait]
@@ -922,9 +964,15 @@ impl Context {
         &self,
         fleet: &str,
         bootstrap: &str,
+        credentials: Option<&KafkaCredentials>,
     ) -> Result<AdminClientHandle, krabka_client_admin::AdminError> {
         let mut map = self.admin_clients.lock().await;
-        let key = format!("{fleet}\0{bootstrap}");
+        let key = format!(
+            "{fleet}\0{bootstrap}\0{}",
+            credentials
+                .map(KafkaCredentials::fingerprint)
+                .unwrap_or_default()
+        );
         if let Some(client) = map.get(&key).or_else(|| map.get(fleet)) {
             return Ok(client.clone());
         }
@@ -939,6 +987,7 @@ impl Context {
                     self.config.client_frame_max,
                 )
                 .map_err(krabka_client_admin::AdminError::Protocol)?,
+                security: credentials.map(|credentials| Box::new(credentials.security())),
                 ..krabka_client_core::ConnectionOptions::default()
             },
         )
@@ -977,7 +1026,7 @@ impl Context {
     /// Looks up the Gres control-plane handle of a fleet, or connects one.
     ///
     /// The cache is keyed by namespace and `Gres` name. A changed bootstrap
-    /// list or registry policy replaces the cached handle.
+    /// list, registry policy, or credential replaces the cached handle.
     ///
     /// # Errors
     ///
@@ -989,14 +1038,22 @@ impl Context {
         fleet: &str,
         bootstrap: &str,
         policy: &krabka_gres_control::RegistryPolicy,
+        credentials: Option<&KafkaCredentials>,
     ) -> Result<GresControlHandle, GresControlWriteError> {
         let bootstrap_owned = bootstrap.to_owned();
         let policy_owned = policy.clone();
+        let security = credentials.map(KafkaCredentials::security);
         let checkpoint_manifest_verifier = Arc::clone(&self.checkpoint_manifest_verifier);
-        self.gres_control_for_with(namespace, fleet, bootstrap, policy, async move {
+        let target = ControlTarget {
+            bootstrap,
+            policy,
+            credentials,
+        };
+        self.gres_control_for_with(namespace, fleet, &target, async move {
             let mut registry = Box::pin(krabka_gres_control::Registry::connect_with_policy(
                 &bootstrap_owned,
                 policy_owned,
+                security,
             ))
             .await?;
             Box::pin(registry.ensure_topic()).await?;
@@ -1012,8 +1069,7 @@ impl Context {
         &self,
         namespace: &str,
         fleet: &str,
-        bootstrap: &str,
-        policy: &krabka_gres_control::RegistryPolicy,
+        target: &ControlTarget<'_>,
         build: F,
     ) -> Result<GresControlHandle, GresControlWriteError>
     where
@@ -1021,8 +1077,7 @@ impl Context {
     {
         let key = (namespace.to_owned(), fleet.to_owned());
         if let Some(entry) = self.gres_controls.lock().await.get(&key)
-            && entry.bootstrap == bootstrap
-            && entry.policy == *policy
+            && target.matches(entry)
         {
             return Ok(Arc::clone(&entry.control));
         }
@@ -1030,16 +1085,16 @@ impl Context {
         let control = build.await?;
         let mut map = self.gres_controls.lock().await;
         if let Some(entry) = map.get(&key)
-            && entry.bootstrap == bootstrap
-            && entry.policy == *policy
+            && target.matches(entry)
         {
             return Ok(Arc::clone(&entry.control));
         }
         map.insert(
             key,
             CachedGresControl {
-                bootstrap: bootstrap.to_owned(),
-                policy: policy.clone(),
+                bootstrap: target.bootstrap.to_owned(),
+                policy: target.policy.clone(),
+                credentials: target.credentials.cloned(),
                 control: Arc::clone(&control),
             },
         );
@@ -1080,9 +1135,25 @@ impl Context {
             CachedGresControl {
                 bootstrap: bootstrap.to_owned(),
                 policy,
+                credentials: None,
                 control,
             },
         );
+    }
+}
+
+/// What a cached Gres control handle must have connected with.
+struct ControlTarget<'a> {
+    bootstrap: &'a str,
+    policy: &'a krabka_gres_control::RegistryPolicy,
+    credentials: Option<&'a KafkaCredentials>,
+}
+
+impl ControlTarget<'_> {
+    fn matches(&self, entry: &CachedGresControl) -> bool {
+        entry.bootstrap == self.bootstrap
+            && entry.policy == *self.policy
+            && entry.credentials.as_ref() == self.credentials
     }
 }
 
@@ -1198,18 +1269,34 @@ mod tests {
         let defaults = krabka_gres_control::RegistryPolicy::default();
         let first: GresControlHandle = Arc::new(TestGresControl);
         let observed = ctx
-            .gres_control_for_with("ns-a", "demo", "a:9092", &defaults, async {
-                assert!(ctx.gres_controls.try_lock().is_ok());
-                Ok(Arc::clone(&first))
-            })
+            .gres_control_for_with(
+                "ns-a",
+                "demo",
+                &ControlTarget {
+                    bootstrap: "a:9092",
+                    policy: &defaults,
+                    credentials: None,
+                },
+                async {
+                    assert!(ctx.gres_controls.try_lock().is_ok());
+                    Ok(Arc::clone(&first))
+                },
+            )
             .await
             .expect("first control");
         assert!(Arc::ptr_eq(&observed, &first));
 
         let reused = ctx
-            .gres_control_for_with("ns-a", "demo", "a:9092", &defaults, async {
-                unreachable!("equal cache inputs must not rebuild")
-            })
+            .gres_control_for_with(
+                "ns-a",
+                "demo",
+                &ControlTarget {
+                    bootstrap: "a:9092",
+                    policy: &defaults,
+                    credentials: None,
+                },
+                async { unreachable!("equal cache inputs must not rebuild") },
+            )
             .await
             .expect("reused control");
         assert!(Arc::ptr_eq(&reused, &first));
@@ -1220,9 +1307,16 @@ mod tests {
             .expect("reader/admin DNS timeout");
         let changed_reader_admin_dns_control: GresControlHandle = Arc::new(TestGresControl);
         let replaced = ctx
-            .gres_control_for_with("ns-a", "demo", "a:9092", &changed_reader_admin_dns, async {
-                Ok(Arc::clone(&changed_reader_admin_dns_control))
-            })
+            .gres_control_for_with(
+                "ns-a",
+                "demo",
+                &ControlTarget {
+                    bootstrap: "a:9092",
+                    policy: &changed_reader_admin_dns,
+                    credentials: None,
+                },
+                async { Ok(Arc::clone(&changed_reader_admin_dns_control)) },
+            )
             .await
             .expect("reader/admin DNS policy replacement");
         assert!(Arc::ptr_eq(&replaced, &changed_reader_admin_dns_control));
@@ -1233,9 +1327,16 @@ mod tests {
             .expect("DNS timeout");
         let changed_dns_control: GresControlHandle = Arc::new(TestGresControl);
         let replaced = ctx
-            .gres_control_for_with("ns-a", "demo", "a:9092", &changed_dns, async {
-                Ok(Arc::clone(&changed_dns_control))
-            })
+            .gres_control_for_with(
+                "ns-a",
+                "demo",
+                &ControlTarget {
+                    bootstrap: "a:9092",
+                    policy: &changed_dns,
+                    credentials: None,
+                },
+                async { Ok(Arc::clone(&changed_dns_control)) },
+            )
             .await
             .expect("DNS policy replacement");
         assert!(Arc::ptr_eq(&replaced, &changed_dns_control));
@@ -1250,31 +1351,108 @@ mod tests {
         .expect("policy");
         let changed_policy: GresControlHandle = Arc::new(TestGresControl);
         let replaced = ctx
-            .gres_control_for_with("ns-a", "demo", "a:9092", &custom, async {
-                Ok(Arc::clone(&changed_policy))
-            })
+            .gres_control_for_with(
+                "ns-a",
+                "demo",
+                &ControlTarget {
+                    bootstrap: "a:9092",
+                    policy: &custom,
+                    credentials: None,
+                },
+                async { Ok(Arc::clone(&changed_policy)) },
+            )
             .await
             .expect("policy replacement");
         assert!(Arc::ptr_eq(&replaced, &changed_policy));
 
         let changed_bootstrap: GresControlHandle = Arc::new(TestGresControl);
         let replaced = ctx
-            .gres_control_for_with("ns-a", "demo", "b:9092", &custom, async {
-                Ok(Arc::clone(&changed_bootstrap))
-            })
+            .gres_control_for_with(
+                "ns-a",
+                "demo",
+                &ControlTarget {
+                    bootstrap: "b:9092",
+                    policy: &custom,
+                    credentials: None,
+                },
+                async { Ok(Arc::clone(&changed_bootstrap)) },
+            )
             .await
             .expect("bootstrap replacement");
         assert!(Arc::ptr_eq(&replaced, &changed_bootstrap));
 
         let other_namespace: GresControlHandle = Arc::new(TestGresControl);
         let isolated = ctx
-            .gres_control_for_with("ns-b", "demo", "b:9092", &custom, async {
-                Ok(Arc::clone(&other_namespace))
-            })
+            .gres_control_for_with(
+                "ns-b",
+                "demo",
+                &ControlTarget {
+                    bootstrap: "b:9092",
+                    policy: &custom,
+                    credentials: None,
+                },
+                async { Ok(Arc::clone(&other_namespace)) },
+            )
             .await
             .expect("namespace-isolated control");
         assert!(Arc::ptr_eq(&isolated, &other_namespace));
         assert!(ctx.gres_controls.lock().await.len() == 2);
+    }
+
+    #[tokio::test]
+    async fn gres_control_cache_reconnects_when_kafka_credentials_change() {
+        let ctx = test_context();
+        let policy = krabka_gres_control::RegistryPolicy::default();
+        let original = KafkaCredentials::new("gres-operator".into(), "first".into());
+        let rotated = KafkaCredentials::new("gres-operator".into(), "second".into());
+        let target = |credentials| ControlTarget {
+            bootstrap: "a:9092",
+            policy: &policy,
+            credentials,
+        };
+
+        let plaintext: GresControlHandle = Arc::new(TestGresControl);
+        ctx.gres_control_for_with("ns", "demo", &target(None), async {
+            Ok(Arc::clone(&plaintext))
+        })
+        .await
+        .expect("plaintext control");
+        let authenticated: GresControlHandle = Arc::new(TestGresControl);
+        let observed = ctx
+            .gres_control_for_with("ns", "demo", &target(Some(&original)), async {
+                Ok(Arc::clone(&authenticated))
+            })
+            .await
+            .expect("authenticated control");
+        assert!(Arc::ptr_eq(&observed, &authenticated));
+        let reused = ctx
+            .gres_control_for_with("ns", "demo", &target(Some(&original)), async {
+                unreachable!("equal credentials must not reconnect")
+            })
+            .await
+            .expect("reused control");
+        assert!(Arc::ptr_eq(&reused, &authenticated));
+        let reconnected: GresControlHandle = Arc::new(TestGresControl);
+        let observed = ctx
+            .gres_control_for_with("ns", "demo", &target(Some(&rotated)), async {
+                Ok(Arc::clone(&reconnected))
+            })
+            .await
+            .expect("rotated control");
+        assert!(Arc::ptr_eq(&observed, &reconnected));
+    }
+
+    #[test]
+    fn kafka_credentials_hide_the_password() {
+        let credentials = KafkaCredentials::new("gres-operator".into(), "hunter2".into());
+        let debug = format!("{credentials:?}");
+        assert!(debug.contains("gres-operator"));
+        assert!(!debug.contains("hunter2"));
+        assert!(!credentials.fingerprint().contains("hunter2"));
+        assert!(
+            credentials.fingerprint()
+                != KafkaCredentials::new("gres-operator".into(), "other".into()).fingerprint()
+        );
     }
 
     fn checkpoint_config(kind: GresCheckpointStoreKind) -> OperatorConfig {

@@ -23,6 +23,7 @@ krabka-client-admin = { version = "0.6.0" }
 krabka-client-core = { version = "0.6.0" }
 krabka-client-producer = { version = "0.6.0" }
 krabka-protocol = { version = "0.6.0", default-features = false }
+krabka-security = { workspace = true }
 krabka-units = { workspace = true }
 refined_type = { workspace = true }
 serde = { workspace = true, features = ["derive"] }

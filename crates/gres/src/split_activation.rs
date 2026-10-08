@@ -1679,9 +1679,14 @@ pub(super) async fn reconcile_before_readiness(
     if topology_is_recovered(engines, &receipt) {
         return Ok((Some(receipt.split.target_map), false));
     }
-    complete_post_activation(config, engines, checkpoint_store, receipt)
-        .await
-        .map(|map| (Some(map), false))
+    Box::pin(complete_post_activation(
+        config,
+        engines,
+        checkpoint_store,
+        receipt,
+    ))
+    .await
+    .map(|map| (Some(map), false))
 }
 
 const fn should_defer_timestamp_recovery(

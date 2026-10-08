@@ -14,7 +14,8 @@ pub use gres::{
     Gres, GresActivatorSpec, GresBalancerGoal, GresBalancerGoals, GresBalancerOperationKind,
     GresBalancerPlanSnapshot, GresBalancerRegistryLayout, GresBalancerSpec, GresBalancerStatus,
     GresBalancerThresholds, GresKafkaSpec, GresRegistrySpec, GresSpec, GresStatus,
-    PgdogPoolerModeSpec, PgdogSpec, SecretKeyRef, SecretRef, TenantDefaults,
+    KafkaCredentialsSecretRef, PgdogPoolerModeSpec, PgdogSpec, SecretKeyRef, SecretRef,
+    TenantDefaults,
 };
 pub use gres_tenant::{
     GresTenant, GresTenantRangeKey, GresTenantRangeSpec, GresTenantSpec, GresTenantStatus,

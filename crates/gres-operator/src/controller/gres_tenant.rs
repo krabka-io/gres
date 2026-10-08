@@ -44,7 +44,7 @@ use serde_json::json;
 use sha2::{Digest as _, Sha256};
 
 use crate::{
-    context::Context,
+    context::{Context, KafkaCredentials},
     controller::{
         common::{
             self, FIELD_MANAGER, ReconcileError, apply_object, condition, diff_acls,
@@ -121,6 +121,7 @@ struct ReadyTenant {
     cluster: String,
     bootstrap: String,
     policy: krabka_gres_control::RegistryPolicy,
+    kafka_credentials: Option<KafkaCredentials>,
     defaults: EffectiveDefaults,
     compute_image: String,
     compute_policy: EffectiveGresComputePolicy,
@@ -241,15 +242,18 @@ async fn prepare_tenant(
         .kafka
         .registry_reader_fetch_min()
         .map_err(ReconcileError::Malformed)?;
+    let kafka_credentials = load_kafka_credentials(ctx, &namespace, &gres.spec.kafka).await?;
     if obj.meta().deletion_timestamp.is_some() {
         cleanup_tenant(
             ctx,
             &namespace,
             &cluster,
-            &bootstrap,
-            &policy,
+            &KafkaTarget {
+                bootstrap: &bootstrap,
+                policy: &policy,
+                credentials: kafka_credentials.as_ref(),
+            },
             &tenant_name,
-            &name,
         )
         .await;
         remove_finalizer(&tenant_api, &name).await?;
@@ -267,6 +271,7 @@ async fn prepare_tenant(
         cluster,
         bootstrap,
         policy,
+        kafka_credentials,
         defaults: effective_defaults(gres.spec.defaults.as_ref(), obj.spec.overrides.as_ref())?,
         compute_image,
         compute_policy,
@@ -322,6 +327,7 @@ async fn reconcile_inner(
         cluster,
         bootstrap,
         policy,
+        kafka_credentials,
         defaults,
         compute_image,
         compute_policy,
@@ -331,7 +337,10 @@ async fn reconcile_inner(
     } = *ready;
     let (wal_topic, cfg_topic) = (wal_topic(&tenant_name), tenant_config_topic(&tenant_name));
     let spec_ranges = effective_ranges(&obj.spec.ranges)?;
-    let control = Context::gres_control_for(&ctx, &ns, &cluster, &bootstrap, &policy).await?;
+    let credentials = kafka_credentials.as_ref();
+    let control = ctx
+        .gres_control_for(&ns, &cluster, &bootstrap, &policy, credentials)
+        .await?;
     let current_record = control.get_tenant(&tenant_name).await?;
     let split_operations = active_operations(control.list_split_operations(&tenant_name).await?);
     let active_split = split_operations.first().cloned();
@@ -374,7 +383,9 @@ async fn reconcile_inner(
         } else {
             None
         };
-        let admin_handle = ctx.admin_client_for(&cluster, &bootstrap).await?;
+        let admin_handle = ctx
+            .admin_client_for(&cluster, &bootstrap, credentials)
+            .await?;
         let mut admin = admin_handle.lock().await;
         let password = provision_tenant_resources(
             &mut admin,
@@ -392,12 +403,7 @@ async fn reconcile_inner(
             },
         )
         .await?;
-        let record_version = match current_record.as_ref() {
-            None => 1,
-            Some(record) => record.record_version.checked_add(1).ok_or_else(|| {
-                ReconcileError::Malformed("tenant registry record version overflowed".to_string())
-            })?,
-        };
+        let record_version = next_record_version(current_record.as_ref())?;
         let mut record = build_tenant_record(
             &obj,
             &tenant_name,
@@ -503,6 +509,15 @@ async fn reconcile_inner(
             Err(error)
         }
     }
+}
+
+/// The version of the next registry record after `current`.
+fn next_record_version(current: Option<&TenantRecord>) -> Result<u64, ReconcileError> {
+    current.map_or(Ok(1), |record| {
+        record.record_version.checked_add(1).ok_or_else(|| {
+            ReconcileError::Malformed("tenant registry record version overflowed".to_string())
+        })
+    })
 }
 
 fn reconcile_tenant_ranges(
@@ -1282,23 +1297,37 @@ where
         .is_some_and(|entry| entry.error.is_none()))
 }
 
+/// The Kafka listener, registry policy, and credentials of one fleet.
+struct KafkaTarget<'a> {
+    bootstrap: &'a str,
+    policy: &'a krabka_gres_control::RegistryPolicy,
+    credentials: Option<&'a KafkaCredentials>,
+}
+
 async fn cleanup_tenant(
     ctx: &Context,
     namespace: &str,
     kafka_name: &str,
-    bootstrap: &str,
-    policy: &krabka_gres_control::RegistryPolicy,
+    kafka: &KafkaTarget<'_>,
     tenant: &TenantName,
-    _tenant_name: &str,
 ) {
     if let Ok(control) = ctx
-        .gres_control_for(namespace, kafka_name, bootstrap, policy)
+        .gres_control_for(
+            namespace,
+            kafka_name,
+            kafka.bootstrap,
+            kafka.policy,
+            kafka.credentials,
+        )
         .await
         && let Err(err) = control.delete_tenant(tenant).await
     {
         tracing::warn!(error = %err, tenant = %tenant, "gres tenant tombstone write failed");
     }
-    let Ok(admin_handle) = ctx.admin_client_for(kafka_name, bootstrap).await else {
+    let Ok(admin_handle) = ctx
+        .admin_client_for(kafka_name, kafka.bootstrap, kafka.credentials)
+        .await
+    else {
         return;
     };
     let mut admin = admin_handle.lock().await;
@@ -1383,6 +1412,24 @@ async fn missing_topics(
         })
         .cloned()
         .collect())
+}
+
+/// Reads `spec.kafka.credentialsSecretRef`, if the fleet uses SASL.
+async fn load_kafka_credentials(
+    ctx: &Context,
+    ns: &str,
+    kafka: &crate::crd::GresKafkaSpec,
+) -> Result<Option<KafkaCredentials>, ReconcileError> {
+    let Some(reference) = kafka.credentials().map_err(ReconcileError::Malformed)? else {
+        return Ok(None);
+    };
+    let key = |key: &str| SecretKeyRef {
+        name: reference.name.clone(),
+        key: key.to_owned(),
+    };
+    let username = read_password_secret(ctx, ns, &key(&reference.username_key)).await?;
+    let password = read_password_secret(ctx, ns, &key(&reference.password_key)).await?;
+    Ok(Some(KafkaCredentials::new(username, password)))
 }
 
 async fn read_password_secret(

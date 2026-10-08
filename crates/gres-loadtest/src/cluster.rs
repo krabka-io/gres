@@ -1276,7 +1276,7 @@ async fn provision_tenant(
         "WAL topic creation failed: {outcomes:?}"
     );
     let record = tenant_record(ranges, range_endpoints, sql_password)?;
-    let mut registry = Registry::connect_with_policy(bootstrap, registry_policy.clone())
+    let mut registry = Registry::connect_with_policy(bootstrap, registry_policy.clone(), None)
         .await
         .context("connect registry")?;
     registry.ensure_topic().await.context("registry topic")?;

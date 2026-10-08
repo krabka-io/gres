@@ -10,7 +10,7 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-use krabka_client_core::security::{ClientSecurity, SaslCredentials};
+use krabka_client_core::security::ClientSecurity;
 use krabka_gres_control::{
     CheckpointPartBytes, DEFAULT_CHECKPOINT_BYTES, DEFAULT_CHECKPOINT_DELETE_RECORDS_TIMEOUT,
     DEFAULT_CHECKPOINT_FRAMES, DEFAULT_CHECKPOINT_POLL_INTERVAL,
@@ -30,9 +30,7 @@ use krabka_pgwire::{
     session::{AuthMode, SessionConfig},
     telemetry::{DEFAULT_SAMPLE_RATIO, IngressTracePolicy},
 };
-use krabka_security::{
-    ClientAuthMode, ListenerProtocol, SaslMechanism, TlsConfig, scram::PgScramVerifier,
-};
+use krabka_security::{ClientAuthMode, TlsConfig, scram::PgScramVerifier};
 use krabka_units::{
     ByteSize, Time,
     convert::{ByteSizeExt as _, StdDurationExt as _, TimeExt as _},
@@ -3354,20 +3352,10 @@ fn split_bootstrap(bootstrap: &str) -> Vec<String> {
 fn tenant_kafka_security_from_env(tenant: &str) -> Option<ClientSecurity> {
     let username =
         std::env::var("GRES_KAFKA_USERNAME").unwrap_or_else(|_| format!("gres-{tenant}"));
-    let Ok(password) = std::env::var("GRES_KAFKA_PASSWORD") else {
-        return None;
-    };
-    Some(ClientSecurity {
-        protocol: ListenerProtocol::SaslPlaintext,
-        tls: None,
-        sasl: Some(SaslCredentials::Scram {
-            mechanism: SaslMechanism::ScramSha512,
-            username,
-            password,
-            delegation_token: false,
-        }),
-        sasl_host: None,
-    })
+    let password = std::env::var("GRES_KAFKA_PASSWORD").ok()?;
+    Some(krabka_gres_control::scram_sha512_security(
+        username, password,
+    ))
 }
 
 fn resolve_bootstrap_addr(bootstrap: &str) -> Option<SocketAddr> {
@@ -3522,6 +3510,7 @@ pub fn serve_listener_with_tenant_config_loader(
             let mut registry = krabka_gres_control::Registry::connect_with_policy(
                 bootstrap,
                 args.registry.policy(),
+                None,
             )
             .await
             .map_err(|error| std::io::Error::other(format!("tenant registry connect: {error}")))?;
@@ -4646,6 +4635,7 @@ impl krabka_gres_ranges::control::SplitIntentAuthority for LiveSplitIntentAuthor
         let mut registry = krabka_gres_control::Registry::connect_with_policy(
             &self.bootstrap,
             self.policy.clone(),
+            None,
         )
         .await
         .map_err(|error| format!("connect split intent registry: {error}"))?;
@@ -7518,7 +7508,7 @@ impl krabka_gres_ranges::RangeTransferCapability for LiveMultiRangeTransfer {
     async fn activate_serving_topology(
         &self,
     ) -> Result<(), krabka_gres_ranges::RangeTransferError> {
-        split_activation::activate_serving_topology(self).await
+        Box::pin(split_activation::activate_serving_topology(self)).await
     }
     fn finish_serving_topology_publication(&self) {
         self.range_service.finish_publication();
@@ -8865,6 +8855,8 @@ mod tests {
 
     use assert2::assert;
     use clap::CommandFactory as _;
+    use krabka_client_core::security::SaslCredentials;
+    use krabka_security::{ListenerProtocol, SaslMechanism};
 
     use super::*;
 

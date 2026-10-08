@@ -187,16 +187,67 @@ pub struct GresKafkaSpec {
 
     /// Whether the listener requires SASL/SCRAM. When it is `true`, the
     /// operator upserts a `gres-<tenant>` SCRAM credential for each tenant,
-    /// and each compute pod authenticates with it.
+    /// and each compute pod authenticates with it. The operator and the
+    /// activator authenticate with `credentialsSecretRef`.
     #[serde(default)]
     pub sasl: bool,
+
+    /// The SCRAM-SHA-512 credentials that the operator and the activator use
+    /// on a SASL listener. Required when `sasl` is `true`, and rejected
+    /// otherwise. The principal must be allowed to manage topics, ACLs, and
+    /// SCRAM credentials, and to read and write the tenant registry.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub credentials_secret_ref: Option<KafkaCredentialsSecretRef>,
 
     /// Creation and reader policy for the Gres tenant registry topic.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub registry: Option<GresRegistrySpec>,
 }
 
+/// A Secret in the `Gres` namespace that holds a SCRAM username and password.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct KafkaCredentialsSecretRef {
+    /// Secret name.
+    #[schemars(length(min = 1))]
+    pub name: String,
+
+    /// Secret data key of the username.
+    #[serde(default = "default_username_key")]
+    pub username_key: String,
+
+    /// Secret data key of the password.
+    #[serde(default = "default_password_key")]
+    pub password_key: String,
+}
+
+fn default_username_key() -> String {
+    "username".into()
+}
+
+fn default_password_key() -> String {
+    "password".into()
+}
+
 impl GresKafkaSpec {
+    /// The credentials Secret, checked against `sasl`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when `sasl` is `true` without `credentialsSecretRef`,
+    /// or when `credentialsSecretRef` is set without `sasl`.
+    pub fn credentials(&self) -> Result<Option<&KafkaCredentialsSecretRef>, String> {
+        match (self.sasl, self.credentials_secret_ref.as_ref()) {
+            (true, None) => Err(
+                "spec.kafka.credentialsSecretRef is required when spec.kafka.sasl is true".into(),
+            ),
+            (false, Some(_)) => {
+                Err("spec.kafka.credentialsSecretRef requires spec.kafka.sasl to be true".into())
+            }
+            (_, credentials) => Ok(credentials),
+        }
+    }
+
     /// The validated bootstrap list.
     ///
     /// # Errors
@@ -2052,6 +2103,11 @@ mod tests {
             kafka: GresKafkaSpec {
                 bootstrap_servers: "demo-kafka-bootstrap.kafka.svc:9092".into(),
                 sasl: true,
+                credentials_secret_ref: Some(KafkaCredentialsSecretRef {
+                    name: "gres-operator-kafka".into(),
+                    username_key: "username".into(),
+                    password_key: "password".into(),
+                }),
                 registry: None,
             },
             pgdog: PgdogSpec {
@@ -2119,7 +2175,7 @@ mod tests {
         let json = serde_json::to_string(&spec).unwrap();
         assert!(
             json.contains(
-                "\"kafka\":{\"bootstrapServers\":\"demo-kafka-bootstrap.kafka.svc:9092\",\"sasl\":true}"
+                "\"kafka\":{\"bootstrapServers\":\"demo-kafka-bootstrap.kafka.svc:9092\",\"sasl\":true,\"credentialsSecretRef\":{\"name\":\"gres-operator-kafka\",\"usernameKey\":\"username\",\"passwordKey\":\"password\"}}"
             ),
             "got: {json}"
         );
@@ -2180,6 +2236,60 @@ mod tests {
         assert!(kafka["required"] == serde_json::json!(["bootstrapServers"]));
         assert!(kafka["properties"]["bootstrapServers"]["minLength"].as_u64() == Some(1));
         assert!(kafka["properties"]["sasl"]["type"] == "boolean");
+    }
+
+    #[test]
+    fn kafka_credentials_must_match_sasl() {
+        let reference = KafkaCredentialsSecretRef {
+            name: "gres-operator-kafka".into(),
+            username_key: "username".into(),
+            password_key: "password".into(),
+        };
+        let cases = [
+            (false, None, Ok(None)),
+            (true, Some(reference.clone()), Ok(Some(reference.clone()))),
+            (
+                true,
+                None,
+                Err(
+                    "spec.kafka.credentialsSecretRef is required when spec.kafka.sasl is true"
+                        .to_owned(),
+                ),
+            ),
+            (
+                false,
+                Some(reference.clone()),
+                Err(
+                    "spec.kafka.credentialsSecretRef requires spec.kafka.sasl to be true"
+                        .to_owned(),
+                ),
+            ),
+        ];
+        for (sasl, credentials_secret_ref, expected) in cases {
+            let spec = GresKafkaSpec {
+                bootstrap_servers: "demo:9092".into(),
+                sasl,
+                credentials_secret_ref,
+                ..GresKafkaSpec::default()
+            };
+            assert!(spec.credentials().map(Option::<&_>::cloned) == expected);
+        }
+    }
+
+    #[test]
+    fn kafka_credentials_keys_default_to_username_and_password() {
+        let parsed: GresKafkaSpec = serde_json::from_str(
+            r#"{"bootstrapServers":"demo:9092","sasl":true,"credentialsSecretRef":{"name":"ops"}}"#,
+        )
+        .expect("credentials");
+        assert!(
+            parsed.credentials_secret_ref
+                == Some(KafkaCredentialsSecretRef {
+                    name: "ops".into(),
+                    username_key: "username".into(),
+                    password_key: "password".into(),
+                })
+        );
     }
 
     #[test]

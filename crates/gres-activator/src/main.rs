@@ -4,7 +4,9 @@ use clap::Parser;
 use krabka_gres_activator::{
     ActivatorConfig, ControlRegistryWakeRegistry, NonEmptyValue, WakeCoordinator, serve_conn,
 };
-use krabka_gres_control::{Registry, RegistryPolicy, RegistryReplicationFactor};
+use krabka_gres_control::{
+    Registry, RegistryPolicy, RegistryReplicationFactor, scram_sha512_security,
+};
 use krabka_units::{ByteSize, Time};
 use tokio::net::TcpListener;
 
@@ -37,6 +39,41 @@ struct Args {
         default_value = "{tenant}:5432"
     )]
     backend_endpoint_template: NonEmptyValue,
+    #[command(flatten)]
+    kafka_sasl: KafkaSaslOptions,
+}
+
+/// SASL/SCRAM-SHA-512 credentials for a Kafka listener that requires them.
+/// Both are set or neither is; neither connects without authentication.
+#[derive(Debug, clap::Args)]
+struct KafkaSaslOptions {
+    #[arg(
+        long = "kafka-sasl-username",
+        env = "KRABKA_GRES_ACTIVATOR_KAFKA_SASL_USERNAME",
+        requires = "kafka_sasl_password"
+    )]
+    kafka_sasl_username: Option<NonEmptyValue>,
+    #[arg(
+        long = "kafka-sasl-password",
+        env = "KRABKA_GRES_ACTIVATOR_KAFKA_SASL_PASSWORD",
+        requires = "kafka_sasl_username",
+        hide_env_values = true
+    )]
+    kafka_sasl_password: Option<NonEmptyValue>,
+}
+
+impl KafkaSaslOptions {
+    fn security(&self) -> Option<krabka_client_core::security::ClientSecurity> {
+        let (Some(username), Some(password)) =
+            (&self.kafka_sasl_username, &self.kafka_sasl_password)
+        else {
+            return None;
+        };
+        Some(scram_sha512_security(
+            username.clone().into_value(),
+            password.clone().into_value(),
+        ))
+    }
 }
 
 #[derive(Debug, clap::Args)]
@@ -189,8 +226,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         cold_start_timeout: args.cold_start_timeout,
         backend_endpoint_template: args.backend_endpoint_template.into_value(),
     };
-    let mut registry =
-        Registry::connect_with_policy(&cfg.bootstrap, args.registry.policy()).await?;
+    let mut registry = Registry::connect_with_policy(
+        &cfg.bootstrap,
+        args.registry.policy(),
+        args.kafka_sasl.security(),
+    )
+    .await?;
     registry.ensure_topic().await?;
     let coordinator = Arc::new(WakeCoordinator::new(ControlRegistryWakeRegistry::new(
         registry,
@@ -222,7 +263,7 @@ mod tests {
     use super::Args;
 
     static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-    const CLEAN_CONFIG_ENV: [(&str, Option<&str>); 15] = [
+    const CLEAN_CONFIG_ENV: [(&str, Option<&str>); 17] = [
         ("KRABKA_GRES_ACTIVATOR_LISTEN", None),
         ("KRABKA_GRES_ACTIVATOR_BOOTSTRAP", None),
         ("KRABKA_GRES_ACTIVATOR_REGISTRY_POLL", None),
@@ -238,7 +279,50 @@ mod tests {
         ("KRABKA_GRES_REGISTRY_PRODUCER_DNS_TIMEOUT", None),
         ("KRABKA_GRES_REGISTRY_READER_ADMIN_DNS_TIMEOUT", None),
         ("KRABKA_GRES_ACTIVATOR_BACKEND_ENDPOINT_TEMPLATE", None),
+        ("KRABKA_GRES_ACTIVATOR_KAFKA_SASL_USERNAME", None),
+        ("KRABKA_GRES_ACTIVATOR_KAFKA_SASL_PASSWORD", None),
     ];
+
+    #[test]
+    fn kafka_sasl_credentials_build_scram_security_only_as_a_pair() {
+        let _guard = ENV_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("environment lock");
+        temp_env::with_vars(CLEAN_CONFIG_ENV, || {
+            let base = [
+                "krabka-gres-activator",
+                "--listen=127.0.0.1:6433",
+                "--bootstrap=broker:9092",
+            ];
+            let plaintext = Args::try_parse_from(base).expect("plaintext");
+            assert!(plaintext.kafka_sasl.security().is_none());
+
+            let sasl = Args::try_parse_from(base.into_iter().chain([
+                "--kafka-sasl-username=gres-operator",
+                "--kafka-sasl-password=secret",
+            ]))
+            .expect("SASL");
+            let security = sasl.kafka_sasl.security().expect("SASL security");
+            assert!(security.protocol == krabka_security::ListenerProtocol::SaslPlaintext);
+            assert!(matches!(
+                security.sasl,
+                Some(krabka_client_core::security::SaslCredentials::Scram {
+                    mechanism: krabka_security::SaslMechanism::ScramSha512,
+                    ref username,
+                    ref password,
+                    delegation_token: false,
+                }) if username == "gres-operator" && password == "secret"
+            ));
+
+            for lone in [
+                "--kafka-sasl-username=gres-operator",
+                "--kafka-sasl-password=secret",
+            ] {
+                assert!(Args::try_parse_from(base.into_iter().chain([lone])).is_err());
+            }
+        });
+    }
 
     #[test]
     fn validated_input_boundaries() {

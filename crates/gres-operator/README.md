@@ -61,6 +61,25 @@ and WAL parking.
        adminSecretRef: { name: pgdog-admin, key: password }
    ```
 
+### SASL Kafka listeners
+
+On a listener that requires SASL/SCRAM-SHA-512, set `spec.kafka.sasl: true`
+and point `spec.kafka.credentialsSecretRef` at a Secret with the operator's
+own SCRAM credentials. The operator uses them for its admin and registry
+connections, and the activator reads them from the same Secret. The
+`usernameKey` and `passwordKey` keys default to `username` and `password`.
+That principal must be able to manage topics, ACLs, and SCRAM credentials,
+and to read and write `__gres_tenants`. Each tenant compute pod
+authenticates with its own `gres-<tenant>` credential instead.
+
+```yaml
+spec:
+  kafka:
+    bootstrapServers: demo-kafka-bootstrap.kafka.svc:9092
+    sasl: true
+    credentialsSecretRef: { name: gres-operator-kafka }
+```
+
 ## Configuration
 
 Each option is a `run` flag and an environment variable. The flag wins.
