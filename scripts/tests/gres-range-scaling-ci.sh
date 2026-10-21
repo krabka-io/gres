@@ -22,7 +22,7 @@ def job_block(source):
 def validate(source, benchmark=script):
     job = job_block(source)
     required_job = [
-        'runs-on: ubuntu-latest', 'timeout-minutes: 30',
+        'runs-on: ubuntu-26.04', 'timeout-minutes: 30',
         'dtolnay/rust-toolchain@stable', 'Swatinem/rust-cache@v2',
         'postgresql-client', 'bash scripts/tests/gres-range-scaling-ci.sh',
         'KRABKA_GRES_RANGE_SCALING_MODE=fast',
