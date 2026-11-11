@@ -22,10 +22,10 @@ default = []
 roundtrip = []
 
 [dependencies]
-krabka-pgcatalog = { version = "0.4.2", path = "../pgcatalog" }
-krabka-pgtypes = { version = "0.4.2", path = "../pgtypes" }
-krabka-pgexec = { version = "0.4.2", path = "../pgexec" }
-krabka-pgkv = { version = "0.4.2", path = "../pgkv" }
+krabka-pgcatalog = { version = "0.4.3", path = "../pgcatalog" }
+krabka-pgtypes = { version = "0.4.3", path = "../pgtypes" }
+krabka-pgexec = { version = "0.4.3", path = "../pgexec" }
+krabka-pgkv = { version = "0.4.3", path = "../pgkv" }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "io-util", "time", "sync", "test-util"] }
 thiserror = { workspace = true }
 krabka-client-core = { version = "0.6.0" }
@@ -48,7 +48,7 @@ assert2 = { workspace = true }
 krabka-broker = { version = "1.0.0" }
 krabka-schema-registry = { version = "0.4.2" }
 krabka-client-producer = { version = "0.6.0" }
-krabka-pgwire = { version = "0.4.2", path = "../pgwire" }
+krabka-pgwire = { version = "0.4.3", path = "../pgwire" }
 tokio-postgres = { workspace = true }
 tokio-util = { workspace = true }
 tempfile = { workspace = true }

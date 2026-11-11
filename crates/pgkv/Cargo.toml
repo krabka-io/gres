@@ -18,7 +18,7 @@ workspace = true
 
 [dependencies]
 thiserror = { workspace = true }
-krabka-pgtypes = { version = "0.4.2", path = "../pgtypes" }
+krabka-pgtypes = { version = "0.4.3", path = "../pgtypes" }
 serde = { workspace = true }
 fjall = { workspace = true }
 zerocopy = { workspace = true }

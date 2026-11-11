@@ -20,8 +20,8 @@ async-trait = { workspace = true }
 bytes = { workspace = true }
 clap = { workspace = true, features = ["derive", "env"] }
 krabka-client-core = { version = "0.6.0" }
-krabka-gres-control = { version = "0.4.2", path = "../gres-control" }
-krabka-pgwire = { version = "0.4.2", path = "../pgwire" }
+krabka-gres-control = { version = "0.4.3", path = "../gres-control" }
+krabka-pgwire = { version = "0.4.3", path = "../pgwire" }
 krabka-units = { workspace = true }
 futures-util = { workspace = true }
 refined_type = { workspace = true }
@@ -33,7 +33,7 @@ tracing-subscriber = { workspace = true, features = ["env-filter", "fmt"] }
 [dev-dependencies]
 krabka-security = { workspace = true }
 assert2 = { workspace = true }
-krabka-gres = { version = "0.4.2", path = "../gres" }
-krabka-gres-substrate = { version = "0.4.2", path = "../gres-substrate" }
-krabka-pgkv = { version = "0.4.2", path = "../pgkv" }
+krabka-gres = { version = "0.4.3", path = "../gres" }
+krabka-gres-substrate = { version = "0.4.3", path = "../gres-substrate" }
+krabka-pgkv = { version = "0.4.3", path = "../pgkv" }
 temp-env = "0.3"

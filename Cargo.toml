@@ -6,7 +6,7 @@ members = ["crates/*"]
 exclude = [".agents/skills/rust-skills/checks", "tools/mutants"]
 
 [workspace.package]
-version = "0.4.2"
+version = "0.4.3"
 edition = "2024"
 license = "Apache-2.0"
 authors = ["The Crabka Authors"]

@@ -3132,7 +3132,7 @@ dependencies = [
 
 [[package]]
 name = "krabka-gres"
-version = "0.4.2"
+version = "0.4.3"
 dependencies = [
  "assert2",
  "async-trait",
@@ -3177,7 +3177,7 @@ dependencies = [
 
 [[package]]
 name = "krabka-gres-activator"
-version = "0.4.2"
+version = "0.4.3"
 dependencies = [
  "assert2",
  "async-trait",
@@ -3202,7 +3202,7 @@ dependencies = [
 
 [[package]]
 name = "krabka-gres-balancer"
-version = "0.4.2"
+version = "0.4.3"
 dependencies = [
  "assert2",
  "krabka-gres-control",
@@ -3214,7 +3214,7 @@ dependencies = [
 
 [[package]]
 name = "krabka-gres-conformance"
-version = "0.4.2"
+version = "0.4.3"
 dependencies = [
  "assert2",
  "bytes",
@@ -3239,7 +3239,7 @@ dependencies = [
 
 [[package]]
 name = "krabka-gres-control"
-version = "0.4.2"
+version = "0.4.3"
 dependencies = [
  "assert2",
  "bytes",
@@ -3265,7 +3265,7 @@ dependencies = [
 
 [[package]]
 name = "krabka-gres-fdw"
-version = "0.4.2"
+version = "0.4.3"
 dependencies = [
  "apache-avro 0.21.0",
  "assert2",
@@ -3300,7 +3300,7 @@ dependencies = [
 
 [[package]]
 name = "krabka-gres-loadtest"
-version = "0.4.2"
+version = "0.4.3"
 dependencies = [
  "anyhow",
  "assert2",
@@ -3331,7 +3331,7 @@ dependencies = [
 
 [[package]]
 name = "krabka-gres-operator"
-version = "0.4.2"
+version = "0.4.3"
 dependencies = [
  "anyhow",
  "assert2",
@@ -3386,7 +3386,7 @@ dependencies = [
 
 [[package]]
 name = "krabka-gres-ranges"
-version = "0.4.2"
+version = "0.4.3"
 dependencies = [
  "arc-swap",
  "assert2",
@@ -3427,7 +3427,7 @@ dependencies = [
 
 [[package]]
 name = "krabka-gres-substrate"
-version = "0.4.2"
+version = "0.4.3"
 dependencies = [
  "assert2",
  "async-trait",
@@ -3581,7 +3581,7 @@ dependencies = [
 
 [[package]]
 name = "krabka-pgcatalog"
-version = "0.4.2"
+version = "0.4.3"
 dependencies = [
  "assert2",
  "krabka-pgkv",
@@ -3595,7 +3595,7 @@ dependencies = [
 
 [[package]]
 name = "krabka-pgexec"
-version = "0.4.2"
+version = "0.4.3"
 dependencies = [
  "assert2",
  "async-trait",
@@ -3637,7 +3637,7 @@ dependencies = [
 
 [[package]]
 name = "krabka-pgkv"
-version = "0.4.2"
+version = "0.4.3"
 dependencies = [
  "assert2",
  "fjall",
@@ -3654,7 +3654,7 @@ dependencies = [
 
 [[package]]
 name = "krabka-pgmvcc"
-version = "0.4.2"
+version = "0.4.3"
 dependencies = [
  "assert2",
  "krabka-pgkv",
@@ -3666,7 +3666,7 @@ dependencies = [
 
 [[package]]
 name = "krabka-pgparser"
-version = "0.4.2"
+version = "0.4.3"
 dependencies = [
  "assert2",
  "krabka-pgtypes",
@@ -3677,7 +3677,7 @@ dependencies = [
 
 [[package]]
 name = "krabka-pgtypes"
-version = "0.4.2"
+version = "0.4.3"
 dependencies = [
  "assert2",
  "bigdecimal",
@@ -3690,7 +3690,7 @@ dependencies = [
 
 [[package]]
 name = "krabka-pgwire"
-version = "0.4.2"
+version = "0.4.3"
 dependencies = [
  "assert2",
  "async-trait",

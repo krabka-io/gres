@@ -33,13 +33,13 @@ k8s-openapi = { workspace = true, features = ["schemars"] }
 krabka-client-admin = { version = "0.6.0" }
 krabka-client-core = { version = "0.6.0" }
 krabka-client-producer = { version = "0.6.0" }
-krabka-gres-control = { version = "0.4.2", path = "../gres-control" }
-krabka-gres-ranges = { version = "0.4.2", path = "../gres-ranges" }
-krabka-gres-substrate = { version = "0.4.2", path = "../gres-substrate" }
+krabka-gres-control = { version = "0.4.3", path = "../gres-control" }
+krabka-gres-ranges = { version = "0.4.3", path = "../gres-ranges" }
+krabka-gres-substrate = { version = "0.4.3", path = "../gres-substrate" }
 krabka-logfmt = { version = "1.0.0" }
 krabka-object-store = { version = "1.0.0" }
-krabka-pgexec = { version = "0.4.2", path = "../pgexec" }
-krabka-pgkv = { version = "0.4.2", path = "../pgkv" }
+krabka-pgexec = { version = "0.4.3", path = "../pgexec" }
+krabka-pgkv = { version = "0.4.3", path = "../pgkv" }
 krabka-schema-serde = { version = "0.4.2" }
 krabka-security = { workspace = true }
 krabka-units = { workspace = true }

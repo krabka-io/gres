@@ -18,8 +18,8 @@ workspace = true
 
 [dependencies]
 thiserror = { workspace = true }
-krabka-pgkv = { version = "0.4.2", path = "../pgkv" }
-krabka-pgtypes = { version = "0.4.2", path = "../pgtypes" }
+krabka-pgkv = { version = "0.4.3", path = "../pgkv" }
+krabka-pgtypes = { version = "0.4.3", path = "../pgtypes" }
 zerocopy = { workspace = true }
 
 [dev-dependencies]

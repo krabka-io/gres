@@ -2,6 +2,7 @@ name: ci
 
 on:
   pull_request:
+  merge_group:
   push:
     branches: [main]
   workflow_dispatch:
@@ -105,14 +106,31 @@ jobs:
           ./tools/check-pg-compat-matrix.sh --self-test
           ./tools/check-pg-compat-matrix.sh
 
-  gate:
-    name: gate
-    if: always()
-    needs: [verify, coverage, pg-compat]
+
+  image:
+    name: build
     runs-on: ubuntu-26.04
+    timeout-minutes: 90
     steps:
       - name: Keep temporary files off the size-limited /tmp tmpfs
         run: echo "TMPDIR=${RUNNER_TEMP}" >> "${GITHUB_ENV}"
-      - env:
-          RESULTS: ${{ join(needs.*.result, ' ') }}
-        run: test "$RESULTS" = "success success success"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/free-disk-space
+      - uses: aspect-build/setup-aspect@1ccd1e095c68556648eb5482231283e445e3dc5e # 2026.34
+        with:
+          bazelisk-cache: true
+          repository-cache: true
+      - name: build delivery image
+        run: bazel build -c opt //packaging/apko:image_manifest_blob
+
+  gate:
+    name: gate
+    if: always()
+    needs: [verify, coverage, pg-compat, image]
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: krabka-io/tooling/actions/gate@1fb9d942c2def2fcfa20c19ed8ae8a7d8f220f65
+        with:
+          results: ${{ toJSON(needs) }}

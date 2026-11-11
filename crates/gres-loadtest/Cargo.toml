@@ -25,7 +25,7 @@ krabka-client-core = { version = "0.6.0" }
 anyhow = { workspace = true }
 clap = { workspace = true, features = ["env"] }
 krabka-client-admin = { version = "0.6.0" }
-krabka-gres-control = { version = "0.4.2", path = "../gres-control" }
+krabka-gres-control = { version = "0.4.3", path = "../gres-control" }
 krabka-security = { version = "0.6.0" }
 krabka-units = { workspace = true }
 futures = { workspace = true }
