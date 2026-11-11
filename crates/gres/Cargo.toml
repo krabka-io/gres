@@ -22,9 +22,9 @@ name = "krabka-gres"
 path = "src/main.rs"
 
 [dependencies]
-krabka-pgexec = { version = "0.4.2", path = "../pgexec" }
-krabka-pgkv = { version = "0.4.2", path = "../pgkv" }
-krabka-pgwire = { version = "0.4.2", path = "../pgwire" }
+krabka-pgexec = { version = "0.4.3", path = "../pgexec" }
+krabka-pgkv = { version = "0.4.3", path = "../pgkv" }
+krabka-pgwire = { version = "0.4.3", path = "../pgwire" }
 krabka-gres-fdw = { path = "../gres-fdw" }
 krabka-gres-control = { path = "../gres-control" }
 krabka-pgcatalog = { path = "../pgcatalog" }

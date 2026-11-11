@@ -2,6 +2,7 @@ name: ci
 
 on:
   pull_request:
+  merge_group:
   push:
     branches: [main]
   workflow_dispatch:
@@ -105,14 +106,13 @@ jobs:
           ./tools/check-pg-compat-matrix.sh --self-test
           ./tools/check-pg-compat-matrix.sh
 
+
   gate:
     name: gate
     if: always()
     needs: [verify, coverage, pg-compat]
     runs-on: ubuntu-26.04
     steps:
-      - name: Keep temporary files off the size-limited /tmp tmpfs
-        run: echo "TMPDIR=${RUNNER_TEMP}" >> "${GITHUB_ENV}"
-      - env:
-          RESULTS: ${{ join(needs.*.result, ' ') }}
-        run: test "$RESULTS" = "success success success"
+      - uses: krabka-io/tooling/actions/gate@1fb9d942c2def2fcfa20c19ed8ae8a7d8f220f65
+        with:
+          results: ${{ toJSON(needs) }}
